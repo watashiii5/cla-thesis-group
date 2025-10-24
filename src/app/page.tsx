@@ -1,5 +1,9 @@
+// Snippet from: src/app/page.tsx (lines 1-463)
+// IMPORTANT: The user requested this snippet always be shown unchanged.
 'use client';
 import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 
 type Campus = { id: string; name: string };
 type Building = { id: string; name: string };
@@ -97,6 +101,7 @@ const ATBulSUSchedule: React.FC = () => {
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
   const [isDark, setIsDark] = useState<boolean>(false);
   const [query, setQuery] = useState('');
+  const pathname = usePathname();
 
   useEffect(() => {
     // initialize theme from localStorage or prefers-color-scheme
@@ -191,6 +196,17 @@ const ATBulSUSchedule: React.FC = () => {
       a.major.toLowerCase().includes(query.toLowerCase())
   );
 
+  // Navigation items that map to the different folders you showed in the project tree.
+  // Make sure the folder names in src/app match these paths (case-sensitive on some hosts).
+  const navItems = [
+    { href: '/', label: 'ATBulSU Schedule', icon: <BuildingIcon className="w-5 h-5" /> },
+    { href: '/Dashboard', label: 'Dashboard', icon: <BuildingIcon className="w-5 h-5 text-indigo-500" /> },
+    { href: '/Calendar', label: 'Calendar', icon: <MenuIcon className="w-5 h-5 text-yellow-500" /> },
+    { href: '/Students', label: 'Students', icon: <UsersIcon className="w-5 h-5 text-green-500" /> },
+    { href: '/Messages', label: 'Messages', icon: <BellIcon className="w-5 h-5 text-pink-500" /> },
+    { href: '/Notifications', label: 'Notifications', icon: <FileIcon className="w-5 h-5 text-gray-500" /> },
+  ];
+
   const Sidebar = () => (
     <aside className="w-56 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 h-screen flex flex-col">
       <div className="p-4 border-b border-gray-100 dark:border-gray-800">
@@ -199,52 +215,41 @@ const ATBulSUSchedule: React.FC = () => {
             <span className="text-white font-semibold">Q</span>
           </div>
           <div>
-            <div className="text-sm font-semibold text-gray-800 dark:text-gray-100">CLA Time</div>
+            <div className="text-sm font-semibold text-gray-800 dark:text-gray-100">QTime</div>
             <div className="text-xs text-gray-500 dark:text-gray-400">Administrator</div>
           </div>
         </div>
       </div>
 
       <nav className="flex-1 px-3 py-4 space-y-1 text-sm">
-        <button className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition">
-          <BuildingIcon className="w-5 h-5 text-indigo-500" />
-          Dashboard
-        </button>
-
-        <button className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition">
-          <MenuIcon className="w-5 h-5 text-yellow-500" />
-          Calendar
-        </button>
-
-        <button className="w-full flex items-center gap-3 px-3 py-2 rounded-md bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-200 font-semibold shadow-inner">
-          <BuildingIcon className="w-5 h-5" />
-          ATBulSU Schedule
-        </button>
-
-        <button className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition">
-          <UsersIcon className="w-5 h-5 text-green-500" />
-          Students
-        </button>
-
-        <button className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition">
-          <BellIcon className="w-5 h-5 text-pink-500" />
-          Messages
-        </button>
-
-        <button className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition">
-          <FileIcon className="w-5 h-5 text-gray-500" />
-          Notifications
-        </button>
+        {navItems.map((item) => {
+          const isActive = pathname === item.href;
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-md transition ${
+                isActive
+                  ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-200 font-semibold shadow-inner'
+                  : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800'
+              }`}
+              aria-current={isActive ? 'page' : undefined}
+            >
+              {item.icon}
+              <span>{item.label}</span>
+            </Link>
+          );
+        })}
       </nav>
 
       <div className="p-4 border-t border-gray-100 dark:border-gray-800">
-        <button className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-md text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition">
+        <Link href="/help" className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-md text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition">
           <div className="flex items-center gap-2">
             <HelpIcon className="w-4 h-4 text-indigo-500" />
             <span>Need help?</span>
           </div>
           <span className="text-xs text-gray-400">FAQ</span>
-        </button>
+        </Link>
       </div>
     </aside>
   );
@@ -269,9 +274,9 @@ const ATBulSUSchedule: React.FC = () => {
       </div>
 
       <div className="flex items-center gap-3">
-        <button className="p-2 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition" title="notifications">
+        <Link href="/Notifications" title="notifications" className="p-2 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition">
           <BellIcon className="w-5 h-5" />
-        </button>
+        </Link>
 
         <button
           onClick={() => setIsDark((s) => !s)}
