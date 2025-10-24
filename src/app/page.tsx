@@ -1,255 +1,330 @@
-'use client';
+import React, { useState } from 'react';
 
-import { useState, useRef } from 'react';
+type Campus = { id: string; name: string };
+type Building = { id: string; name: string };
+type Room = { id: string; capacity: string };
+type Applicant = { appNo: string; course: string; major: string; time: string };
 
-export default function Page() {
-  const [file, setFile] = useState<File | null>(null);
-  const [result, setResult] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+const ATBulSUSchedule = () => {
+  const [currentView, setCurrentView] = useState<'campuses' | 'buildings' | 'rooms' | 'applicants'>('campuses');
+  const [selectedCampus, setSelectedCampus] = useState<Campus | null>(null);
+  const [selectedBuilding, setSelectedBuilding] = useState<Building | null>(null);
+  const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
 
-  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0] || null;
-    
-    if (selectedFile) {
-      // Validate file type
-      const validTypes = ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-excel'];
-      if (!validTypes.includes(selectedFile.type) && !selectedFile.name.match(/\.(xlsx|xls)$/i)) {
-        setMessage({ type: 'error', text: 'Please select a valid Excel file (.xlsx or .xls)' });
-        return;
-      }
-      
-      // Validate file size (max 10MB)
-      if (selectedFile.size > 10 * 1024 * 1024) {
-        setMessage({ type: 'error', text: 'File size must be less than 10MB' });
-        return;
-      }
-    }
-    
-    setFile(selectedFile);
-    setMessage(null);
-    setResult([]);
+  const campuses: Campus[] = [
+    { id: 'main', name: 'MAIN CAMPUS' },
+    { id: 'sarmiento', name: 'SARMIENTO' },
+    { id: 'hagonoy', name: 'HAGONOY' },
+    { id: 'sanrafael', name: 'SAN RAFAEL' },
+    { id: 'meneses', name: 'MENESES' },
+    { id: 'bustos', name: 'BUSTOS' }
+  ];
+
+  const buildings: Record<string, Building[]> = {
+    main: [
+      { id: 'fed', name: 'FED HALL' },
+      { id: 'alvarado', name: 'ALVARADO HALL' },
+      { id: 'roxas', name: 'roxas hall' },
+      { id: 'pimentel', name: 'pimentel' }
+    ]
   };
 
-  const upload = async () => {
-    if (!file) {
-      setMessage({ type: 'error', text: 'Please select an Excel file first' });
-      return;
-    }
+  const rooms: Record<string, Room[]> = {
+    fed: [
+      { id: '101', capacity: '30/30' },
+      { id: '102', capacity: '30/30' },
+      { id: '103', capacity: '30/30' },
+      { id: '104', capacity: '30/30' },
+      { id: '105', capacity: '30/30' },
+      { id: '201', capacity: '30/30' },
+      { id: '202', capacity: '30/30' },
+      { id: '203', capacity: '30/30' },
+      { id: '204', capacity: '30/30' },
+      { id: '205', capacity: '30/30' },
+      { id: '301', capacity: '30/30' },
+      { id: '302', capacity: '30/30' },
+      { id: '303', capacity: '30/30' },
+      { id: '304', capacity: '30/30' },
+      { id: '305', capacity: '30/30' }
+    ]
+  };
 
-    setLoading(true);
-    setMessage(null);
+  const applicants: Applicant[] = [
+    { appNo: '2024-0001', course: 'BS MATH', major: 'Comscie', time: '8:00 -12:00' },
+    { appNo: '2024-0001', course: 'BS MATH', major: 'Comscie', time: '8:00 -12:00' },
+    { appNo: '2024-0001', course: 'BS MATH', major: 'Comscie', time: '8:00 -12:00' },
+    { appNo: '2024-0001', course: 'BS MATH', major: 'Comscie', time: '8:00 -12:00' },
+    { appNo: '2024-0001', course: 'BS MATH', major: 'Comscie', time: '8:00 -12:00' },
+    { appNo: '2024-0001', course: 'BS MATH', major: 'Comscie', time: '8:00 -12:00' },
+    { appNo: '2024-0001', course: 'BS MATH', major: '', time: '' },
+    { appNo: '2024-0001', course: 'BS MATH', major: '', time: '' },
+    { appNo: '2024-0001', course: 'BS MATH', major: '', time: '' },
+    { appNo: '2024-0001', course: 'BS MATH', major: '', time: '' },
+    { appNo: '2024-0001', course: 'BS MATH', major: '', time: '' },
+    { appNo: '2024-0001', course: 'BS MATH', major: '', time: '' },
+    { appNo: '2024-0001', course: 'BS MATH', major: '', time: '' },
+    { appNo: '2024-0001', course: 'BS MATH', major: '', time: '' },
+    { appNo: '2024-0001', course: 'BS MATH', major: '', time: '' },
+  ];
 
-    const fd = new FormData();
-    fd.append('file', file);
+  const handleCampusSelect = (campus: Campus) => {
+    setSelectedCampus(campus);
+    setCurrentView('buildings');
+  };
 
-    try {
-      const res = await fetch('http://127.0.0.1:8080/upload-excel/', {
-        method: 'POST',
-        body: fd,
-      });
+  const handleBuildingSelect = (building: Building) => {
+    setSelectedBuilding(building);
+    setCurrentView('rooms');
+  };
 
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`Server returned ${res.status}: ${text}`);
-      }
+  const handleRoomSelect = (room: Room) => {
+    setSelectedRoom(room);
+    setCurrentView('applicants');
+  };
 
-      const json = await res.json();
-      
-      if (json.status !== 'success') {
-        setMessage({ type: 'error', text: json.message || 'An error occurred while processing the file' });
-      } else {
-        const scheduleData = json.data || [];
-        setResult(scheduleData);
-        setMessage({ 
-          type: 'success', 
-          text: `Successfully scheduled ${json.count} appointment${json.count !== 1 ? 's' : ''}` 
-        });
-        
-        // Store data in sessionStorage for the building view
-        if (scheduleData.length > 0) {
-          sessionStorage.setItem('scheduleData', JSON.stringify(scheduleData));
-        }
-      }
-    } catch (err: any) {
-      console.error('Upload failed:', err);
-      setMessage({ 
-        type: 'error', 
-        text: err.message || 'Failed to upload file. Please check your connection and try again.' 
-      });
-    } finally {
-      setLoading(false);
+  const handleBack = () => {
+    if (currentView === 'applicants') {
+      setCurrentView('rooms');
+      setSelectedRoom(null);
+    } else if (currentView === 'rooms') {
+      setCurrentView('buildings');
+      setSelectedBuilding(null);
+    } else if (currentView === 'buildings') {
+      setCurrentView('campuses');
+      setSelectedCampus(null);
     }
   };
 
-  const resetForm = () => {
-    setFile(null);
-    setResult([]);
-    setMessage(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
+  const SearchIcon = () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <circle cx="11" cy="11" r="8"></circle>
+      <path d="m21 21-4.35-4.35"></path>
+    </svg>
+  );
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-slate-800 to-gray-900 py-12 px-4">
-      <div className="max-w-5xl mx-auto">
-        <div className="bg-slate-800 rounded-2xl shadow-2xl border border-slate-700 p-8">
-          {/* Header */}
-          <div className="mb-8 flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-white mb-2">Appointment Scheduler</h1>
-              <p className="text-gray-400">Upload an Excel file to schedule multiple appointments at once</p>
-            </div>
-            {result.length > 0 ? (
-              <a
-                href="/building-view"
-                className="px-6 py-3 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                </svg>
-                View Buildings
-              </a>
-            ) : (
-              <div className="relative group">
-                <button
-                  disabled
-                  className="px-6 py-3 bg-slate-600 text-gray-400 font-medium rounded-lg cursor-not-allowed flex items-center gap-2 opacity-50"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                  </svg>
-                  View Buildings
-                </button>
-                <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block">
-                  <div className="bg-slate-900 text-white text-xs rounded py-2 px-3 whitespace-nowrap">
-                    Please upload and schedule data first
-                    <div className="absolute top-full right-6 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-slate-900"></div>
-                  </div>
-                </div>
-              </div>
-            )}
+  const BellIcon = () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+      <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+    </svg>
+  );
+
+  const UserIcon = () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+      <circle cx="12" cy="7" r="4"></circle>
+    </svg>
+  );
+
+  const MenuIcon = () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  );
+
+  const HelpIcon = () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <circle cx="12" cy="12" r="10"></circle>
+      <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+      <line x1="12" y1="17" x2="12.01" y2="17"></line>
+    </svg>
+  );
+
+  const Sidebar = () => (
+    <div className="w-32 bg-gray-200 h-screen flex flex-col">
+      <div className="p-4 border-b border-gray-300">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 bg-indigo-600 rounded-full flex items-center justify-center">
+            <span className="text-white font-bold text-sm">Q</span>
           </div>
+          <span className="font-semibold text-sm">time</span>
+        </div>
+      </div>
+      
+      <nav className="flex-1 py-4">
+        <div className="px-3 py-2 text-sm flex items-center gap-2 text-gray-700 hover:bg-gray-300 cursor-pointer">
+          <div className="w-4 h-4 bg-gray-400 rounded"></div>
+          <span>Dashboard</span>
+        </div>
+        <div className="px-3 py-2 text-sm flex items-center gap-2 text-gray-700 hover:bg-gray-300 cursor-pointer">
+          <div className="w-4 h-4 bg-gray-400 rounded"></div>
+          <span>Calendar</span>
+        </div>
+        <div className="px-3 py-2 text-sm flex items-center gap-2 bg-gray-300 cursor-pointer">
+          <div className="w-4 h-4 bg-gray-600 rounded"></div>
+          <span>ATBulSU Schedule</span>
+        </div>
+        <div className="px-3 py-2 text-sm flex items-center gap-2 text-gray-700 hover:bg-gray-300 cursor-pointer">
+          <div className="w-4 h-4 bg-gray-400 rounded"></div>
+          <span>Students</span>
+        </div>
+        <div className="px-3 py-2 text-sm flex items-center gap-2 text-gray-700 hover:bg-gray-300 cursor-pointer">
+          <div className="w-4 h-4 bg-gray-400 rounded"></div>
+          <span>Messages</span>
+        </div>
+        <div className="px-3 py-2 text-sm flex items-center gap-2 text-gray-700 hover:bg-gray-300 cursor-pointer">
+          <div className="w-4 h-4 bg-gray-400 rounded"></div>
+          <span>Notifications</span>
+        </div>
+        <div className="px-3 py-2 text-sm flex items-center gap-2 text-gray-700 hover:bg-gray-300 cursor-pointer">
+          <div className="w-4 h-4 bg-gray-400 rounded"></div>
+          <span>Setting</span>
+        </div>
+      </nav>
 
-          {/* Upload Section */}
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Select Excel File
-            </label>
-            <div className="flex items-center gap-3">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".xlsx,.xls"
-                onChange={handleFile}
-                className="block w-full text-sm text-gray-300 border border-slate-600 rounded-lg cursor-pointer bg-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700"
-              />
-              {file && (
-                <button
-                  onClick={resetForm}
-                  className="px-4 py-2 text-sm font-medium text-gray-300 bg-slate-700 rounded-lg hover:bg-slate-600 border border-slate-600 transition-colors"
-                >
-                  Clear
-                </button>
-              )}
-            </div>
-            {file && (
-              <p className="mt-2 text-sm text-gray-400">
-                Selected: <span className="font-medium text-gray-300">{file.name}</span> ({(file.size / 1024).toFixed(2)} KB)
-              </p>
-            )}
-          </div>
+      <div className="p-4 border-t border-gray-300">
+        <button className="flex items-center gap-2 text-sm text-gray-700 hover:text-gray-900">
+          <HelpIcon />
+          <span>need help?</span>
+        </button>
+      </div>
+    </div>
+  );
 
-          {/* Action Button */}
+  const Header = () => (
+    <div className="bg-gray-100 border-b border-gray-300 px-6 py-3 flex items-center justify-between">
+      <h1 className="text-xl font-semibold">ATBulSU Schedule</h1>
+      <div className="flex items-center gap-4">
+        <div className="text-gray-600 cursor-pointer"><SearchIcon /></div>
+        <div className="text-gray-600 cursor-pointer"><BellIcon /></div>
+        <div className="text-gray-600 cursor-pointer"><UserIcon /></div>
+        <div className="text-gray-600 cursor-pointer"><MenuIcon /></div>
+      </div>
+    </div>
+  );
+
+  const CampusesView = () => (
+    <div className="p-8">
+      <h2 className="text-2xl font-bold mb-6 text-center">CAMPUSES</h2>
+      <div className="grid grid-cols-3 gap-4 max-w-4xl mx-auto">
+        {campuses.map((campus) => (
           <button
-            onClick={upload}
-            disabled={loading || !file}
-            className="w-full sm:w-auto px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 focus:ring-offset-slate-800 disabled:bg-slate-600 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+            key={campus.id}
+            onClick={() => handleCampusSelect(campus)}
+            className="bg-gray-300 hover:bg-gray-400 p-8 text-xl font-bold transition-colors"
           >
-            {loading ? (
-              <>
-                <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                Scheduling...
-              </>
-            ) : (
-              <>
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                </svg>
-                Upload & Schedule
-              </>
-            )}
+            {campus.name}
           </button>
-
-          {/* Message Display */}
-          {message && (
-            <div className={`mt-6 p-4 rounded-lg ${
-              message.type === 'success' ? 'bg-green-900/30 border border-green-700' :
-              message.type === 'error' ? 'bg-red-900/30 border border-red-700' :
-              'bg-blue-900/30 border border-blue-700'
-            }`}>
-              <div className="flex items-start gap-3">
-                {message.type === 'success' && (
-                  <svg className="w-5 h-5 text-green-400 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                  </svg>
-                )}
-                {message.type === 'error' && (
-                  <svg className="w-5 h-5 text-red-400 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                  </svg>
-                )}
-                <p className={`text-sm ${
-                  message.type === 'success' ? 'text-green-300' :
-                  message.type === 'error' ? 'text-red-300' :
-                  'text-blue-300'
-                }`}>
-                  {message.text}
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* Results Table */}
-          {result.length > 0 && (
-            <div className="mt-8">
-              <h2 className="text-xl font-semibold text-white mb-4">Scheduled Appointments</h2>
-              <div className="overflow-x-auto rounded-lg border border-slate-600">
-                <table className="min-w-full divide-y divide-slate-600">
-                  <thead className="bg-slate-700">
-                    <tr>
-                      {Object.keys(result[0]).map((k) => (
-                        <th
-                          key={k}
-                          className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider"
-                        >
-                          {k}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="bg-slate-800 divide-y divide-slate-700">
-                    {result.map((row, i) => (
-                      <tr key={i} className="hover:bg-slate-700 transition-colors">
-                        {Object.values(row).map((v, j) => (
-                          <td key={j} className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
-                            {String(v)}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
+        ))}
+      </div>
+      <div className="mt-8 text-center space-y-2">
+        <div className="space-x-2">
+          <button className="px-4 py-2 bg-gray-300 hover:bg-gray-400 text-sm">choose file</button>
+          <span className="text-sm">dataset.csv</span>
+        </div>
+        <div className="space-x-2">
+          <button className="px-4 py-2 bg-gray-300 hover:bg-gray-400 text-sm">Generate schedule</button>
+          <button className="px-4 py-2 bg-gray-300 hover:bg-gray-400 text-sm">export schedule</button>
         </div>
       </div>
     </div>
   );
-}
+
+  const BuildingsView = () => (
+    <div className="p-8">
+      <h2 className="text-2xl font-bold mb-2 text-center">BUILDINGS</h2>
+      <p className="text-center text-gray-600 mb-6">{selectedCampus?.name}</p>
+      <div className="grid grid-cols-4 gap-4 max-w-4xl mx-auto">
+        {selectedCampus && buildings[selectedCampus.id]?.map((building) => (
+          <button
+            key={building.id}
+            onClick={() => handleBuildingSelect(building)}
+            className="bg-gray-300 hover:bg-gray-400 p-8 text-lg font-semibold transition-colors"
+          >
+            {building.name}
+          </button>
+        ))}
+      </div>
+      <div className="mt-8 text-center">
+        <button onClick={handleBack} className="px-6 py-2 bg-gray-300 hover:bg-gray-400 font-semibold">
+          BACK
+        </button>
+      </div>
+    </div>
+  );
+
+  const RoomsView = () => (
+    <div className="p-8">
+      <h2 className="text-2xl font-bold mb-2 text-center">ROOMS</h2>
+      <p className="text-center text-gray-600 mb-1">{selectedCampus?.name}</p>
+      <p className="text-center text-gray-600 mb-6">{selectedBuilding?.name}</p>
+      <div className="grid grid-cols-5 gap-4 max-w-4xl mx-auto">
+        {selectedBuilding && rooms[selectedBuilding.id]?.map((room) => (
+          <button
+            key={room.id}
+            onClick={() => handleRoomSelect(room)}
+            className="bg-gray-300 hover:bg-gray-400 p-6 transition-colors"
+          >
+            <div className="text-2xl font-bold mb-1">{room.id}</div>
+            <div className="text-sm text-gray-600">{room.capacity}</div>
+          </button>
+        ))}
+      </div>
+      <div className="mt-8 text-center">
+        <button onClick={handleBack} className="px-6 py-2 bg-gray-300 hover:bg-gray-400 font-semibold">
+          BACK
+        </button>
+      </div>
+    </div>
+  );
+
+  const ApplicantsView = () => (
+    <div className="p-8">
+      <div className="text-xs text-gray-500 mb-2">ADMIN HOME UI</div>
+      <h2 className="text-2xl font-bold mb-2 text-center">APPLICANTS LIST</h2>
+      <p className="text-center text-gray-600 mb-1">{selectedCampus?.name}</p>
+      <p className="text-center text-gray-600 mb-6">{selectedBuilding?.name}-{selectedRoom?.id}</p>
+      
+      <div className="max-w-5xl mx-auto bg-white border border-gray-300">
+        <table className="w-full">
+          <thead className="bg-gray-200">
+            <tr>
+              <th className="px-4 py-2 text-left text-sm font-semibold">application no.</th>
+              <th className="px-4 py-2 text-left text-sm font-semibold">course</th>
+              <th className="px-4 py-2 text-left text-sm font-semibold">major</th>
+              <th className="px-4 py-2 text-left text-sm font-semibold">time</th>
+            </tr>
+          </thead>
+          <tbody>
+            {applicants.map((applicant, index) => (
+              <tr key={index} className="border-t border-gray-300">
+                <td className="px-4 py-2 text-sm">{applicant.appNo}</td>
+                <td className="px-4 py-2 text-sm">{applicant.course}</td>
+                <td className="px-4 py-2 text-sm">{applicant.major}</td>
+                <td className="px-4 py-2 text-sm">{applicant.time}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="mt-6 text-center space-x-4">
+        <button onClick={handleBack} className="px-6 py-2 bg-gray-300 hover:bg-gray-400 font-semibold">
+          BACK
+        </button>
+        <button className="px-6 py-2 bg-gray-300 hover:bg-gray-400 font-semibold">
+          export
+        </button>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="flex h-screen bg-gray-100 overflow-hidden">
+      <Sidebar />
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <Header />
+        <div className="flex-1 overflow-y-auto">
+          {currentView === 'campuses' && <CampusesView />}
+          {currentView === 'buildings' && <BuildingsView />}
+          {currentView === 'rooms' && <RoomsView />}
+          {currentView === 'applicants' && <ApplicantsView />}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default ATBulSUSchedule;
