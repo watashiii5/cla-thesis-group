@@ -1,0 +1,256 @@
+from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
+from typing import List, Optional
+import csv
+import io
+from datetime import datetime
+
+app = FastAPI(title="ATBulSU Scheduling API")
+
+# CORS middleware for Next.js frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://localhost:3001"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Pydantic models
+class Applicant(BaseModel):
+    appNo: str
+    name: str
+    course: str
+    major: Optional[str] = ""
+    isPWD: bool = False
+    roomId: Optional[str] = None
+    timeSlot: Optional[str] = None
+
+class Room(BaseModel):
+    id: str
+    capacity: int
+    buildingId: str
+
+class ScheduleRequest(BaseModel):
+    applicants: List[Applicant]
+    rooms: List[Room]
+
+class ScheduleResult(BaseModel):
+    success: bool
+    scheduled: List[Applicant]
+    unscheduled: List[Applicant]
+    summary: dict
+
+# Time slots for scheduling
+TIME_SLOTS = [
+    "8:00-10:00",
+    "10:00-12:00",
+    "1:00-3:00",
+    "3:00-5:00"
+]
+
+def schedule_applicants(applicants: List[Applicant], rooms: List[Room]) -> ScheduleResult:
+    """
+    Schedule applicants with PWD priority algorithm
+    
+    Algorithm:
+    1. Separate PWD and non-PWD applicants
+    2. Sort PWD applicants first (priority)
+    3. Create time slots for each room
+    4. Assign applicants to available slots
+    5. Track scheduled and unscheduled applicants
+    """
+    
+    # Separate PWD and non-PWD applicants
+    pwd_applicants = [a for a in applicants if a.isPWD]
+    non_pwd_applicants = [a for a in applicants if not a.isPWD]
+    
+    # PWD applicants get priority
+    sorted_applicants = pwd_applicants + non_pwd_applicants
+    
+    # Create room-time slot combinations
+    slots = []
+    for room in rooms:
+        for time_slot in TIME_SLOTS:
+            slots.append({
+                'room': room,
+                'time': time_slot,
+                'capacity': room.capacity,
+                'assigned': []
+            })
+    
+    scheduled = []
+    unscheduled = []
+    
+    # Assign applicants to slots
+    for applicant in sorted_applicants:
+        assigned = False
+        
+        for slot in slots:
+            if len(slot['assigned']) < slot['capacity']:
+                # Create scheduled applicant
+                scheduled_applicant = Applicant(
+                    appNo=applicant.appNo,
+                    name=applicant.name,
+                    course=applicant.course,
+                    major=applicant.major,
+                    isPWD=applicant.isPWD,
+                    roomId=slot['room'].id,
+                    timeSlot=slot['time']
+                )
+                scheduled.append(scheduled_applicant)
+                slot['assigned'].append(scheduled_applicant)
+                assigned = True
+                break
+        
+        if not assigned:
+            unscheduled.append(applicant)
+    
+    # Calculate summary statistics
+    summary = {
+        'totalApplicants': len(applicants),
+        'totalScheduled': len(scheduled),
+        'pwdScheduled': len([a for a in scheduled if a.isPWD]),
+        'totalUnscheduled': len(unscheduled),
+        'roomsUsed': len([s for s in slots if len(s['assigned']) > 0]),
+        'utilizationRate': round((len(scheduled) / len(applicants) * 100), 2) if applicants else 0
+    }
+    
+    return ScheduleResult(
+        success=True,
+        scheduled=scheduled,
+        unscheduled=unscheduled,
+        summary=summary
+    )
+
+@app.post("/api/schedule", response_model=ScheduleResult)
+async def generate_schedule(request: ScheduleRequest):
+    """
+    Generate schedule from applicants and rooms data
+    """
+    try:
+        if not request.applicants:
+            raise HTTPException(status_code=400, detail="No applicants provided")
+        
+        if not request.rooms:
+            raise HTTPException(status_code=400, detail="No rooms provided")
+        
+        result = schedule_applicants(request.applicants, request.rooms)
+        return result
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/schedule/upload")
+async def upload_and_schedule(
+    file: UploadFile = File(...),
+    rooms_json: str = None
+):
+    """
+    Upload CSV file and generate schedule
+    """
+    try:
+        # Read CSV file
+        contents = await file.read()
+        decoded = contents.decode('utf-8')
+        csv_reader = csv.DictReader(io.StringIO(decoded))
+        
+        # Parse applicants
+        applicants = []
+        for row in csv_reader:
+            applicants.append(Applicant(
+                appNo=row.get('Application No', ''),
+                name=row.get('Name', ''),
+                course=row.get('Course', ''),
+                major=row.get('Major', ''),
+                isPWD=row.get('PWD', '').lower() in ['true', 'yes', '1']
+            ))
+        
+        # Mock rooms if not provided (replace with actual room data)
+        rooms = [
+            Room(id="A101", capacity=30, buildingId="b1"),
+            Room(id="A102", capacity=40, buildingId="b1"),
+            Room(id="A103", capacity=35, buildingId="b1"),
+            Room(id="B201", capacity=30, buildingId="b2"),
+            Room(id="B202", capacity=35, buildingId="b2"),
+        ]
+        
+        result = schedule_applicants(applicants, rooms)
+        return result
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/schedule/export")
+async def export_schedule(result: ScheduleResult):
+    """
+    Export schedule result as CSV
+    """
+    try:
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Write headers
+        writer.writerow([
+            'Application No',
+            'Name',
+            'Course',
+            'Major',
+            'PWD',
+            'Room',
+            'Time Slot'
+        ])
+        
+        # Write scheduled applicants
+        for applicant in result.scheduled:
+            writer.writerow([
+                applicant.appNo,
+                applicant.name,
+                applicant.course,
+                applicant.major or '',
+                'Yes' if applicant.isPWD else 'No',
+                applicant.roomId or '',
+                applicant.timeSlot or ''
+            ])
+        
+        # Create response
+        output.seek(0)
+        return StreamingResponse(
+            iter([output.getvalue()]),
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": f"attachment; filename=schedule_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+            }
+        )
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/health")
+async def health_check():
+    """
+    Health check endpoint
+    """
+    return {"status": "healthy", "timestamp": datetime.now().isoformat()}
+
+@app.get("/")
+async def root():
+    """
+    Root endpoint with API information
+    """
+    return {
+        "name": "ATBulSU Scheduling API",
+        "version": "1.0.0",
+        "endpoints": {
+            "POST /api/schedule": "Generate schedule from applicants and rooms",
+            "POST /api/schedule/upload": "Upload CSV and generate schedule",
+            "POST /api/schedule/export": "Export schedule as CSV",
+            "GET /api/health": "Health check"
+        }
+    }
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)

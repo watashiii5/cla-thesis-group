@@ -1,0 +1,191 @@
+import csv
+import random
+from datetime import datetime
+
+# Sample data pools
+FIRST_NAMES = [
+    "Juan", "Maria", "Pedro", "Ana", "Jose", "Linda", "Carlos", "Sofia",
+    "Miguel", "Elena", "Ricardo", "Carmen", "Fernando", "Isabel", "Diego",
+    "Lucia", "Antonio", "Rosa", "Manuel", "Patricia", "Roberto", "Angela",
+    "Eduardo", "Teresa", "Francisco", "Margarita", "Luis", "Gloria"
+]
+
+LAST_NAMES = [
+    "Dela Cruz", "Santos", "Reyes", "Garcia", "Mendoza", "Torres", "Ramos",
+    "Cruz", "Rodriguez", "Gonzales", "Hernandez", "Lopez", "Martinez",
+    "Perez", "Rivera", "Flores", "Castillo", "Morales", "Aquino", "Bautista"
+]
+
+COURSES = [
+    "BS Computer Science",
+    "BS Information Technology", 
+    "BS Mathematics",
+    "BS Physics",
+    "BS Chemistry",
+    "BS Biology",
+    "BS Psychology",
+    "BS Accountancy"
+]
+
+MAJORS = {
+    "BS Computer Science": ["Software Engineering", "Data Science", "Cybersecurity", ""],
+    "BS Information Technology": ["Web Development", "Network Administration", "Database Management", ""],
+    "BS Mathematics": ["Applied Mathematics", "Pure Mathematics", "Statistics", ""],
+    "BS Physics": ["Theoretical Physics", "Applied Physics", ""],
+    "BS Chemistry": ["Analytical Chemistry", "Organic Chemistry", ""],
+    "BS Biology": ["Microbiology", "Zoology", "Botany", ""],
+    "BS Psychology": ["Clinical Psychology", "Industrial Psychology", ""],
+    "BS Accountancy": ["", ""]
+}
+
+def generate_application_number(index, year=2024):
+    """Generate application number in format YYYY-XXXX"""
+    return f"{year}-{str(index).zfill(4)}"
+
+def generate_full_name():
+    """Generate random full name"""
+    first = random.choice(FIRST_NAMES)
+    last = random.choice(LAST_NAMES)
+    return f"{first} {last}"
+
+def generate_course_and_major():
+    """Generate course and corresponding major"""
+    course = random.choice(COURSES)
+    major = random.choice(MAJORS[course])
+    return course, major
+
+def generate_pwd_status(pwd_percentage=15):
+    """
+    Generate PWD status with specified percentage
+    pwd_percentage: percentage of applicants who are PWD (default 15%)
+    """
+    return random.random() < (pwd_percentage / 100)
+
+def generate_sample_csv(
+    filename="sample_applicants.csv",
+    num_applicants=100,
+    year=2024,
+    pwd_percentage=15
+):
+    """
+    Generate sample CSV file with applicant data
+    
+    Args:
+        filename: Output CSV filename
+        num_applicants: Number of applicants to generate
+        year: Year for application numbers
+        pwd_percentage: Percentage of PWD applicants
+    """
+    
+    print(f"Generating {num_applicants} sample applicants...")
+    
+    with open(filename, 'w', newline='', encoding='utf-8') as csvfile:
+        fieldnames = ['Application No', 'Name', 'Course', 'Major', 'PWD']
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        
+        writer.writeheader()
+        
+        pwd_count = 0
+        for i in range(1, num_applicants + 1):
+            course, major = generate_course_and_major()
+            is_pwd = generate_pwd_status(pwd_percentage)
+            
+            if is_pwd:
+                pwd_count += 1
+            
+            writer.writerow({
+                'Application No': generate_application_number(i, year),
+                'Name': generate_full_name(),
+                'Course': course,
+                'Major': major,
+                'PWD': 'true' if is_pwd else 'false'
+            })
+    
+    print(f"✓ Generated {filename}")
+    print(f"  Total applicants: {num_applicants}")
+    print(f"  PWD applicants: {pwd_count} ({(pwd_count/num_applicants*100):.1f}%)")
+    print(f"  Regular applicants: {num_applicants - pwd_count}")
+
+def generate_multiple_datasets():
+    """Generate multiple test datasets of different sizes"""
+    
+    datasets = [
+        {"filename": "small_sample_10.csv", "count": 10, "pwd_pct": 20},
+        {"filename": "medium_sample_50.csv", "count": 50, "pwd_pct": 15},
+        {"filename": "large_sample_100.csv", "count": 100, "pwd_pct": 15},
+        {"filename": "xlarge_sample_200.csv", "count": 200, "pwd_pct": 12},
+    ]
+    
+    print("=" * 60)
+    print("CSV Test Data Generator for ATBulSU Scheduling System")
+    print("=" * 60)
+    print()
+    
+    for dataset in datasets:
+        generate_sample_csv(
+            filename=dataset["filename"],
+            num_applicants=dataset["count"],
+            pwd_percentage=dataset["pwd_pct"]
+        )
+        print()
+    
+    print("=" * 60)
+    print("All test datasets generated successfully!")
+    print("=" * 60)
+
+def generate_with_custom_parameters():
+    """Interactive generation with custom parameters"""
+    print("=" * 60)
+    print("Custom CSV Generator")
+    print("=" * 60)
+    print()
+    
+    try:
+        filename = input("Enter filename (default: custom_applicants.csv): ").strip()
+        if not filename:
+            filename = "custom_applicants.csv"
+        
+        if not filename.endswith('.csv'):
+            filename += '.csv'
+        
+        num_applicants = input("Enter number of applicants (default: 100): ").strip()
+        num_applicants = int(num_applicants) if num_applicants else 100
+        
+        pwd_percentage = input("Enter PWD percentage (default: 15): ").strip()
+        pwd_percentage = float(pwd_percentage) if pwd_percentage else 15
+        
+        year = input("Enter year for application numbers (default: 2024): ").strip()
+        year = int(year) if year else 2024
+        
+        print()
+        generate_sample_csv(
+            filename=filename,
+            num_applicants=num_applicants,
+            pwd_percentage=pwd_percentage,
+            year=year
+        )
+        
+    except ValueError as e:
+        print(f"Error: Invalid input - {e}")
+    except KeyboardInterrupt:
+        print("\n\nOperation cancelled by user.")
+
+if __name__ == "__main__":
+    import sys
+    
+    if len(sys.argv) > 1:
+        if sys.argv[1] == "--custom":
+            generate_with_custom_parameters()
+        elif sys.argv[1] == "--help":
+            print("CSV Generator for ATBulSU Scheduling System")
+            print()
+            print("Usage:")
+            print("  python csv_generator.py              # Generate default datasets")
+            print("  python csv_generator.py --custom     # Custom generation")
+            print("  python csv_generator.py --help       # Show this help")
+        else:
+            print(f"Unknown argument: {sys.argv[1]}")
+            print("Use --help for usage information")
+    else:
+        # Generate default test datasets
+        generate_multiple_datasets()
