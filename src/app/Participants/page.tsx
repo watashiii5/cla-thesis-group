@@ -95,7 +95,7 @@ const formatSlotLabel = (s?: ScheduledSlot, rooms?: Room[]) => {
   return `${s.date} • ${s.time} ${r ? `• ${r.name}` : ''}`;
 };
 
-const StudentsPage: React.FC = () => {
+const ParticipantsPage: React.FC = () => {
   const pathname = usePathname();
 
   // theme
@@ -182,7 +182,7 @@ const StudentsPage: React.FC = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'students.csv';
+    a.download = 'participants.csv';
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -192,7 +192,7 @@ const StudentsPage: React.FC = () => {
     { href: '/', label: 'ATBulSU Schedule', icon: <BuildingIcon className="w-5 h-5" /> },
     { href: '/Dashboard', label: 'Dashboard', icon: <BuildingIcon className="w-5 h-5 text-indigo-500" /> },
     { href: '/Calendar', label: 'Calendar', icon: <MenuIcon className="w-5 h-5 text-yellow-500" /> },
-    { href: '/Students', label: 'Students', icon: <UsersIcon className="w-5 h-5 text-green-500" /> },
+    { href: '/Participants', label: 'Participants', icon: <UsersIcon className="w-5 h-5 text-green-500" /> },
     { href: '/Messages', label: 'Messages', icon: <BellIcon className="w-5 h-5 text-pink-500" /> },
     { href: '/Notifications', label: 'Notifications', icon: <FileIcon className="w-5 h-5 text-gray-500" /> },
   ];
@@ -291,7 +291,7 @@ const StudentsPage: React.FC = () => {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <div className="text-xs text-gray-500 dark:text-gray-400">Administrator</div>
-                <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100">Students</h2>
+                <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100">Participants</h2>
                 <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Manage applicants and view assigned schedule slots</p>
               </div>
 
@@ -441,4 +441,4 @@ const StudentsPage: React.FC = () => {
   );
 };
 
-export default StudentsPage;
+export default ParticipantsPage;
