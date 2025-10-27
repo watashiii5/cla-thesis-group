@@ -116,7 +116,35 @@ const DownloadIcon = (props: React.SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
-const ATBulSUSchedule = () => {
+const PlusIcon = (props: React.SVGProps<SVGSVGElement>) => (
+  <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="12" y1="5" x2="12" y2="19" />
+    <line x1="5" y1="12" x2="19" y2="12" />
+  </svg>
+);
+
+const EditIcon = (props: React.SVGProps<SVGSVGElement>) => (
+  <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+  </svg>
+);
+
+const TrashIcon = (props: React.SVGProps<SVGSVGElement>) => (
+  <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="3 6 5 6 21 6" />
+    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+  </svg>
+);
+
+const XIcon = (props: React.SVGProps<SVGSVGElement>) => (
+  <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="18" y1="6" x2="6" y2="18" />
+    <line x1="6" y1="6" x2="18" y2="18" />
+  </svg>
+);
+
+const Scheduler = () => {
   const [currentView, setCurrentView] = useState<'campuses' | 'buildings' | 'rooms' | 'applicants'>('campuses');
   const [selectedCampus, setSelectedCampus] = useState<Campus | null>(null);
   const [selectedBuilding, setSelectedBuilding] = useState<Building | null>(null);
@@ -128,14 +156,28 @@ const ATBulSUSchedule = () => {
   const [scheduleResult, setScheduleResult] = useState<ScheduleResult | null>(null);
   const pathname = usePathname();
 
-  // Mock data
-  const [campuses] = useState<Campus[]>([
+  // Modal states
+  const [showCampusModal, setShowCampusModal] = useState(false);
+  const [showBuildingModal, setShowBuildingModal] = useState(false);
+  const [showRoomModal, setShowRoomModal] = useState(false);
+  const [editingCampus, setEditingCampus] = useState<Campus | null>(null);
+  const [editingBuilding, setEditingBuilding] = useState<Building | null>(null);
+  const [editingRoom, setEditingRoom] = useState<Room | null>(null);
+
+  // Form states
+  const [campusName, setCampusName] = useState('');
+  const [buildingName, setBuildingName] = useState('');
+  const [roomId, setRoomId] = useState('');
+  const [roomCapacity, setRoomCapacity] = useState('');
+
+  // Data states
+  const [campuses, setCampuses] = useState<Campus[]>([
     { id: '1', name: 'Main Campus' },
     { id: '2', name: 'Alangilan Campus' },
     { id: '3', name: 'Pablo Borbon Campus' }
   ]);
 
-  const [buildings] = useState<Record<string, Building[]>>({
+  const [buildings, setBuildings] = useState<Record<string, Building[]>>({
     '1': [
       { id: 'b1', name: 'Building A', campusId: '1' },
       { id: 'b2', name: 'Building B', campusId: '1' },
@@ -152,7 +194,7 @@ const ATBulSUSchedule = () => {
     ]
   });
 
-  const [rooms] = useState<Record<string, Room[]>>({
+  const [rooms, setRooms] = useState<Record<string, Room[]>>({
     'b1': [
       { id: 'A101', capacity: 30, buildingId: 'b1' },
       { id: 'A102', capacity: 40, buildingId: 'b1' },
@@ -190,13 +232,161 @@ const ATBulSUSchedule = () => {
     }
   }, [isDark]);
 
+  // Campus CRUD operations
+  const handleAddCampus = () => {
+    if (!campusName.trim()) return;
+    const newCampus: Campus = {
+      id: Date.now().toString(),
+      name: campusName
+    };
+    setCampuses([...campuses, newCampus]);
+    setCampusName('');
+    setShowCampusModal(false);
+  };
+
+  const handleEditCampus = () => {
+    if (!editingCampus || !campusName.trim()) return;
+    setCampuses(campuses.map(c => c.id === editingCampus.id ? { ...c, name: campusName } : c));
+    setCampusName('');
+    setEditingCampus(null);
+    setShowCampusModal(false);
+  };
+
+  const handleDeleteCampus = (campusId: string) => {
+    if (confirm('Are you sure you want to delete this campus? All buildings and rooms in this campus will also be deleted.')) {
+      setCampuses(campuses.filter(c => c.id !== campusId));
+      // Clean up buildings
+      const newBuildings = { ...buildings };
+      delete newBuildings[campusId];
+      setBuildings(newBuildings);
+    }
+  };
+
+  const openCampusModal = (campus?: Campus) => {
+    if (campus) {
+      setEditingCampus(campus);
+      setCampusName(campus.name);
+    } else {
+      setEditingCampus(null);
+      setCampusName('');
+    }
+    setShowCampusModal(true);
+  };
+
+  // Building CRUD operations
+  const handleAddBuilding = () => {
+    if (!selectedCampus || !buildingName.trim()) return;
+    const newBuilding: Building = {
+      id: 'b' + Date.now(),
+      name: buildingName,
+      campusId: selectedCampus.id
+    };
+    setBuildings({
+      ...buildings,
+      [selectedCampus.id]: [...(buildings[selectedCampus.id] || []), newBuilding]
+    });
+    setBuildingName('');
+    setShowBuildingModal(false);
+  };
+
+  const handleEditBuilding = () => {
+    if (!editingBuilding || !buildingName.trim() || !selectedCampus) return;
+    setBuildings({
+      ...buildings,
+      [selectedCampus.id]: buildings[selectedCampus.id].map(b => 
+        b.id === editingBuilding.id ? { ...b, name: buildingName } : b
+      )
+    });
+    setBuildingName('');
+    setEditingBuilding(null);
+    setShowBuildingModal(false);
+  };
+
+  const handleDeleteBuilding = (buildingId: string) => {
+    if (!selectedCampus) return;
+    if (confirm('Are you sure you want to delete this building? All rooms in this building will also be deleted.')) {
+      setBuildings({
+        ...buildings,
+        [selectedCampus.id]: buildings[selectedCampus.id].filter(b => b.id !== buildingId)
+      });
+      // Clean up rooms
+      const newRooms = { ...rooms };
+      delete newRooms[buildingId];
+      setRooms(newRooms);
+    }
+  };
+
+  const openBuildingModal = (building?: Building) => {
+    if (building) {
+      setEditingBuilding(building);
+      setBuildingName(building.name);
+    } else {
+      setEditingBuilding(null);
+      setBuildingName('');
+    }
+    setShowBuildingModal(true);
+  };
+
+  // Room CRUD operations
+  const handleAddRoom = () => {
+    if (!selectedBuilding || !roomId.trim() || !roomCapacity) return;
+    const newRoom: Room = {
+      id: roomId,
+      capacity: parseInt(roomCapacity),
+      buildingId: selectedBuilding.id
+    };
+    setRooms({
+      ...rooms,
+      [selectedBuilding.id]: [...(rooms[selectedBuilding.id] || []), newRoom]
+    });
+    setRoomId('');
+    setRoomCapacity('');
+    setShowRoomModal(false);
+  };
+
+  const handleEditRoom = () => {
+    if (!editingRoom || !roomId.trim() || !roomCapacity || !selectedBuilding) return;
+    setRooms({
+      ...rooms,
+      [selectedBuilding.id]: rooms[selectedBuilding.id].map(r => 
+        r.id === editingRoom.id ? { id: roomId, capacity: parseInt(roomCapacity), buildingId: selectedBuilding.id } : r
+      )
+    });
+    setRoomId('');
+    setRoomCapacity('');
+    setEditingRoom(null);
+    setShowRoomModal(false);
+  };
+
+  const handleDeleteRoom = (roomId: string) => {
+    if (!selectedBuilding) return;
+    if (confirm('Are you sure you want to delete this room?')) {
+      setRooms({
+        ...rooms,
+        [selectedBuilding.id]: rooms[selectedBuilding.id].filter(r => r.id !== roomId)
+      });
+    }
+  };
+
+  const openRoomModal = (room?: Room) => {
+    if (room) {
+      setEditingRoom(room);
+      setRoomId(room.id);
+      setRoomCapacity(room.capacity.toString());
+    } else {
+      setEditingRoom(null);
+      setRoomId('');
+      setRoomCapacity('');
+    }
+    setShowRoomModal(true);
+  };
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setUploadedFile(file);
     
-    // Parse CSV
     const text = await file.text();
     const lines = text.trim().split('\n');
     const headers = lines[0].split(',').map(h => h.trim());
@@ -220,14 +410,11 @@ const ATBulSUSchedule = () => {
     const scheduled: Applicant[] = [];
     const unscheduled: Applicant[] = [];
     
-    // Separate PWD and non-PWD applicants
     const pwdApplicants = applicants.filter(a => a.isPWD);
     const nonPwdApplicants = applicants.filter(a => !a.isPWD);
     
-    // Prioritize PWD applicants
     const sortedApplicants = [...pwdApplicants, ...nonPwdApplicants];
     
-    // Create room-time slot combinations
     const slots: Array<{room: Room, time: string, capacity: number, assigned: number}> = [];
     rooms.forEach(room => {
       timeSlots.forEach(time => {
@@ -240,7 +427,6 @@ const ATBulSUSchedule = () => {
       });
     });
 
-    // Assign applicants to slots
     sortedApplicants.forEach(applicant => {
       let assigned = false;
       
@@ -283,10 +469,8 @@ const ATBulSUSchedule = () => {
 
     setIsGenerating(true);
 
-    // Simulate API call delay
     await new Promise(resolve => setTimeout(resolve, 1500));
 
-    // Get all available rooms
     const allRooms: Room[] = [];
     Object.values(rooms).forEach(roomList => {
       allRooms.push(...roomList);
@@ -384,7 +568,7 @@ const ATBulSUSchedule = () => {
   );
 
   const navItems = [
-    { href: '/', label: 'ATBulSU Schedule', icon: <BuildingIcon className="w-5 h-5" /> },
+    { href: '/', label: 'Scheduler', icon: <BuildingIcon className="w-5 h-5" /> },
     { href: '/Dashboard', label: 'Dashboard', icon: <BuildingIcon className="w-5 h-5 text-indigo-500" /> },
     { href: '/Calendar', label: 'Calendar', icon: <MenuIcon className="w-5 h-5 text-yellow-500" /> },
     { href: '/Participants', label: 'Participants', icon: <UsersIcon className="w-5 h-5 text-green-500" /> },
@@ -441,7 +625,7 @@ const ATBulSUSchedule = () => {
   const Header = () => (
     <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-3 flex items-center justify-between gap-4">
       <div className="flex items-center gap-4">
-        <h1 className="text-lg font-semibold text-gray-800 dark:text-gray-100">ATBulSU Schedule</h1>
+        <h1 className="text-lg font-semibold text-gray-800 dark:text-gray-100">Scheduler</h1>
 
         <div className="relative">
           <input
@@ -475,9 +659,38 @@ const ATBulSUSchedule = () => {
     </header>
   );
 
+  const Modal = ({ isOpen, onClose, title, children }: { isOpen: boolean; onClose: () => void; title: string; children: React.ReactNode }) => {
+    if (!isOpen) return null;
+
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" onClick={onClose}>
+        <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
+          <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-800">
+            <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100">{title}</h3>
+            <button onClick={onClose} className="p-1 rounded-md text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition">
+              <XIcon className="w-5 h-5" />
+            </button>
+          </div>
+          <div className="p-4">
+            {children}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const CampusesView = () => (
     <div className="p-8">
-      <h2 className="text-2xl font-bold mb-6 text-gray-800 dark:text-gray-100 text-center">Schedule Management</h2>
+      <div className="flex items-center justify-between mb-6 max-w-4xl mx-auto">
+        <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100">Schedule Management</h2>
+        <button
+          onClick={() => openCampusModal()}
+          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md text-sm shadow hover:bg-indigo-700 transition"
+        >
+          <PlusIcon className="w-4 h-4" />
+          Add Campus
+        </button>
+      </div>
 
       {scheduleResult && (
         <div className="max-w-4xl mx-auto mb-6 p-6 bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 shadow-sm">
@@ -505,21 +718,39 @@ const ATBulSUSchedule = () => {
 
       <div className="grid grid-cols-3 gap-6 max-w-4xl mx-auto mb-8">
         {campuses.map((campus) => (
-          <button
+          <div
             key={campus.id}
-            onClick={() => handleCampusSelect(campus)}
-            className="flex flex-col items-start gap-2 p-6 rounded-lg bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 shadow-sm hover:shadow-md transform hover:-translate-y-1 transition"
+            className="relative group flex flex-col items-start gap-2 p-6 rounded-lg bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 shadow-sm hover:shadow-md transition"
           >
-            <div className="flex items-center gap-3">
+            <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition flex gap-1">
+              <button
+                onClick={() => openCampusModal(campus)}
+                className="p-1.5 rounded-md bg-blue-50 dark:bg-blue-900 text-blue-600 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-800 transition"
+                title="Edit campus"
+              >
+                <EditIcon className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => handleDeleteCampus(campus.id)}
+                className="p-1.5 rounded-md bg-red-50 dark:bg-red-900 text-red-600 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-800 transition"
+                title="Delete campus"
+              >
+                <TrashIcon className="w-4 h-4" />
+              </button>
+            </div>
+            <button
+              onClick={() => handleCampusSelect(campus)}
+              className="flex items-center gap-3 w-full"
+            >
               <div className="p-3 rounded-md bg-indigo-50 dark:bg-indigo-800">
                 <BuildingIcon className="w-6 h-6 text-indigo-600 dark:text-indigo-200" />
               </div>
-              <div>
+              <div className="text-left">
                 <div className="text-lg font-semibold text-gray-800 dark:text-gray-100">{campus.name}</div>
                 <div className="text-xs text-gray-500 dark:text-gray-400">View schedules</div>
               </div>
-            </div>
-          </button>
+            </button>
+          </div>
         ))}
       </div>
 
@@ -572,6 +803,35 @@ const ATBulSUSchedule = () => {
           )}
         </div>
       </div>
+
+      <Modal isOpen={showCampusModal} onClose={() => setShowCampusModal(false)} title={editingCampus ? 'Edit Campus' : 'Add Campus'}>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Campus Name</label>
+            <input
+              type="text"
+              value={campusName}
+              onChange={(e) => setCampusName(e.target.value)}
+              className="w-full px-3 py-2 rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              placeholder="Enter campus name"
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={() => setShowCampusModal(false)}
+              className="px-4 py-2 rounded-md border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={editingCampus ? handleEditCampus : handleAddCampus}
+              className="px-4 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 transition"
+            >
+              {editingCampus ? 'Update' : 'Add'}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 
@@ -583,25 +843,83 @@ const ATBulSUSchedule = () => {
             <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100">Buildings</h2>
             <p className="text-sm text-gray-500 dark:text-gray-400">{selectedCampus?.name}</p>
           </div>
-          <button onClick={handleBack} className="px-4 py-2 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200">Back</button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => openBuildingModal()}
+              className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md text-sm shadow hover:bg-indigo-700 transition"
+            >
+              <PlusIcon className="w-4 h-4" />
+              Add Building
+            </button>
+            <button onClick={handleBack} className="px-4 py-2 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200">Back</button>
+          </div>
         </div>
 
         <div className="grid grid-cols-4 gap-5">
           {selectedCampus && (buildings[selectedCampus.id] || []).map((building) => (
-            <button
+            <div
               key={building.id}
-              onClick={() => handleBuildingSelect(building)}
-              className="flex flex-col items-start gap-2 p-5 rounded-lg bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 shadow-sm hover:shadow-md transition transform hover:-translate-y-1"
+              className="relative group flex flex-col items-start gap-2 p-5 rounded-lg bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 shadow-sm hover:shadow-md transition"
             >
-              <div className="rounded-md p-3 bg-yellow-50 dark:bg-yellow-900">
-                <BuildingIcon className="w-6 h-6 text-yellow-600 dark:text-yellow-300" />
+              <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition flex gap-1">
+                <button
+                  onClick={() => openBuildingModal(building)}
+                  className="p-1.5 rounded-md bg-blue-50 dark:bg-blue-900 text-blue-600 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-800 transition"
+                  title="Edit building"
+                >
+                  <EditIcon className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => handleDeleteBuilding(building.id)}
+                  className="p-1.5 rounded-md bg-red-50 dark:bg-red-900 text-red-600 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-800 transition"
+                  title="Delete building"
+                >
+                  <TrashIcon className="w-3.5 h-3.5" />
+                </button>
               </div>
-              <div className="text-sm font-semibold text-gray-800 dark:text-gray-100">{building.name}</div>
-              <div className="text-xs text-gray-500 dark:text-gray-400">View rooms</div>
-            </button>
+              <button
+                onClick={() => handleBuildingSelect(building)}
+                className="w-full"
+              >
+                <div className="rounded-md p-3 bg-yellow-50 dark:bg-yellow-900">
+                  <BuildingIcon className="w-6 h-6 text-yellow-600 dark:text-yellow-300" />
+                </div>
+                <div className="text-sm font-semibold text-gray-800 dark:text-gray-100 mt-2">{building.name}</div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">View rooms</div>
+              </button>
+            </div>
           ))}
         </div>
       </div>
+
+      <Modal isOpen={showBuildingModal} onClose={() => setShowBuildingModal(false)} title={editingBuilding ? 'Edit Building' : 'Add Building'}>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Building Name</label>
+            <input
+              type="text"
+              value={buildingName}
+              onChange={(e) => setBuildingName(e.target.value)}
+              className="w-full px-3 py-2 rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              placeholder="Enter building name"
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={() => setShowBuildingModal(false)}
+              className="px-4 py-2 rounded-md border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={editingBuilding ? handleEditBuilding : handleAddBuilding}
+              className="px-4 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 transition"
+            >
+              {editingBuilding ? 'Update' : 'Add'}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 
@@ -613,29 +931,98 @@ const ATBulSUSchedule = () => {
             <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100">Rooms</h2>
             <p className="text-sm text-gray-500 dark:text-gray-400">{selectedCampus?.name} • {selectedBuilding?.name}</p>
           </div>
-          <button onClick={handleBack} className="px-4 py-2 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200">Back</button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => openRoomModal()}
+              className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md text-sm shadow hover:bg-indigo-700 transition"
+            >
+              <PlusIcon className="w-4 h-4" />
+              Add Room
+            </button>
+            <button onClick={handleBack} className="px-4 py-2 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200">Back</button>
+          </div>
         </div>
 
         <div className="grid grid-cols-5 gap-4">
           {selectedBuilding && (rooms[selectedBuilding.id] || []).map((room) => (
-            <button
+            <div
               key={room.id}
-              onClick={() => handleRoomSelect(room)}
-              className="p-4 rounded-lg bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 shadow-sm hover:shadow-md transition transform hover:-translate-y-0.5"
+              className="relative group p-4 rounded-lg bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 shadow-sm hover:shadow-md transition"
             >
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-xl font-bold text-gray-800 dark:text-gray-100">{room.id}</div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400">Cap: {room.capacity}</div>
-                </div>
-                <div className="p-2 rounded-md bg-indigo-50 dark:bg-indigo-900">
-                  <RoomIcon className="w-5 h-5 text-indigo-600 dark:text-indigo-200" />
-                </div>
+              <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition flex gap-1">
+                <button
+                  onClick={() => openRoomModal(room)}
+                  className="p-1 rounded-md bg-blue-50 dark:bg-blue-900 text-blue-600 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-800 transition"
+                  title="Edit room"
+                >
+                  <EditIcon className="w-3 h-3" />
+                </button>
+                <button
+                  onClick={() => handleDeleteRoom(room.id)}
+                  className="p-1 rounded-md bg-red-50 dark:bg-red-900 text-red-600 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-800 transition"
+                  title="Delete room"
+                >
+                  <TrashIcon className="w-3 h-3" />
+                </button>
               </div>
-            </button>
+              <button
+                onClick={() => handleRoomSelect(room)}
+                className="w-full"
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-xl font-bold text-gray-800 dark:text-gray-100">{room.id}</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">Cap: {room.capacity}</div>
+                  </div>
+                  <div className="p-2 rounded-md bg-indigo-50 dark:bg-indigo-900">
+                    <RoomIcon className="w-5 h-5 text-indigo-600 dark:text-indigo-200" />
+                  </div>
+                </div>
+              </button>
+            </div>
           ))}
         </div>
       </div>
+
+      <Modal isOpen={showRoomModal} onClose={() => setShowRoomModal(false)} title={editingRoom ? 'Edit Room' : 'Add Room'}>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Room ID</label>
+            <input
+              type="text"
+              value={roomId}
+              onChange={(e) => setRoomId(e.target.value)}
+              className="w-full px-3 py-2 rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              placeholder="e.g., A101"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Capacity</label>
+            <input
+              type="number"
+              value={roomCapacity}
+              onChange={(e) => setRoomCapacity(e.target.value)}
+              className="w-full px-3 py-2 rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              placeholder="e.g., 30"
+              min="1"
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={() => setShowRoomModal(false)}
+              className="px-4 py-2 rounded-md border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={editingRoom ? handleEditRoom : handleAddRoom}
+              className="px-4 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 transition"
+            >
+              {editingRoom ? 'Update' : 'Add'}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 
@@ -727,4 +1114,4 @@ const ATBulSUSchedule = () => {
   );
 };
 
-export default ATBulSUSchedule;
+export default Scheduler;
