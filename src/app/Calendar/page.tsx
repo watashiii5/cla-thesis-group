@@ -337,7 +337,7 @@ const CalendarPage: React.FC = () => {
 
   /* Sidebar & Header (kept the same look so sidebar is shared across pages) */
   const navItems = [
-    { href: '/', label: 'ATBulSU Schedule', icon: <BuildingIcon className="w-5 h-5" /> },
+    { href: '/', label: 'Scheduler', icon: <BuildingIcon className="w-5 h-5" /> },
     { href: '/Dashboard', label: 'Dashboard', icon: <BuildingIcon className="w-5 h-5 text-indigo-500" /> },
     { href: '/Calendar', label: 'Calendar', icon: <MenuIcon className="w-5 h-5 text-yellow-500" /> },
     { href: '/Participants', label: 'Participants', icon: <UsersIcon className="w-5 h-5 text-green-500" /> },
@@ -397,7 +397,7 @@ const CalendarPage: React.FC = () => {
     return (
       <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-3 flex items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <h1 className="text-lg font-semibold text-gray-800 dark:text-gray-100">ATBulSU Schedule</h1>
+          <h1 className="text-lg font-semibold text-gray-800 dark:text-gray-100">Scheduler</h1>
 
           <div className="relative">
             <input
