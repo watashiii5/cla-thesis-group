@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import QuantumChart from '@/components/QuantumChart/page';
 
 export interface Campus {
   id: string;
@@ -31,6 +32,13 @@ export interface Applicant {
   timeSlot?: string;
 }
 
+export interface PlacementStats {
+  totalCapacity: number;
+  placedByRoom: Record<string, number>;
+  placedByBuilding: Record<string, number>;
+  pwdScheduled: number;
+}
+
 export interface ScheduleResult {
   success: boolean;
   scheduled: Applicant[];
@@ -41,8 +49,12 @@ export interface ScheduleResult {
     pwdScheduled: number;
     totalUnscheduled: number;
   };
+  durationSeconds?: number;
+  placementStats?: PlacementStats;
+  quantumMetrics?: any;
 }
 
+// SVG Icons
 const SunIcon = (props: React.SVGProps<SVGSVGElement>) => (
   <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="12" cy="12" r="4" />
@@ -156,7 +168,12 @@ const Scheduler = () => {
   const [scheduleResult, setScheduleResult] = useState<ScheduleResult | null>(null);
   const pathname = usePathname();
 
-  // Modal states
+  const [quantumResult, setQuantumResult] = useState<Record<string, number> | null>(null);
+  const [quantumLoading, setQuantumLoading] = useState(false);
+  const [showQuantumLab, setShowQuantumLab] = useState(false);
+  const [qubits, setQubits] = useState(4);
+  const [iterations, setIterations] = useState(100);
+
   const [showCampusModal, setShowCampusModal] = useState(false);
   const [showBuildingModal, setShowBuildingModal] = useState(false);
   const [showRoomModal, setShowRoomModal] = useState(false);
@@ -164,13 +181,11 @@ const Scheduler = () => {
   const [editingBuilding, setEditingBuilding] = useState<Building | null>(null);
   const [editingRoom, setEditingRoom] = useState<Room | null>(null);
 
-  // Form states
   const [campusName, setCampusName] = useState('');
   const [buildingName, setBuildingName] = useState('');
   const [roomId, setRoomId] = useState('');
   const [roomCapacity, setRoomCapacity] = useState('');
 
-  // Data states
   const [campuses, setCampuses] = useState<Campus[]>([
     { id: '1', name: 'Main Campus' },
     { id: '2', name: 'Alangilan Campus' },
@@ -232,233 +247,300 @@ const Scheduler = () => {
     }
   }, [isDark]);
 
-  // Campus CRUD operations
+  useEffect(() => {
+    setQubits(Math.min(Math.max(2, applicants.length || 2), 20));
+  }, [applicants.length]);
+
+  // ---- CRUD Handlers ----
+  const openCampusModal = (campus?: Campus) => {
+    setEditingCampus(campus ?? null);
+    setCampusName(campus?.name ?? '');
+    setShowCampusModal(true);
+  };
+
   const handleAddCampus = () => {
     if (!campusName.trim()) return;
-    const newCampus: Campus = {
-      id: Date.now().toString(),
-      name: campusName
-    };
-    setCampuses([...campuses, newCampus]);
+    const id = Date.now().toString();
+    setCampuses(prev => [...prev, { id, name: campusName.trim() }]);
     setCampusName('');
     setShowCampusModal(false);
   };
 
   const handleEditCampus = () => {
-    if (!editingCampus || !campusName.trim()) return;
-    setCampuses(campuses.map(c => c.id === editingCampus.id ? { ...c, name: campusName } : c));
-    setCampusName('');
+    if (!editingCampus) return;
+    setCampuses(prev => prev.map(c => c.id === editingCampus.id ? { ...c, name: campusName.trim() || c.name } : c));
     setEditingCampus(null);
+    setCampusName('');
     setShowCampusModal(false);
   };
 
   const handleDeleteCampus = (campusId: string) => {
-    if (confirm('Are you sure you want to delete this campus? All buildings and rooms in this campus will also be deleted.')) {
-      setCampuses(campuses.filter(c => c.id !== campusId));
-      // Clean up buildings
-      const newBuildings = { ...buildings };
-      delete newBuildings[campusId];
-      setBuildings(newBuildings);
+    setCampuses(prev => prev.filter(c => c.id !== campusId));
+    const bldgs = buildings[campusId] || [];
+    const buildingIds = new Set(bldgs.map(b => b.id));
+    setBuildings(prev => {
+      const copy = { ...prev };
+      delete copy[campusId];
+      return copy;
+    });
+    setRooms(prev => {
+      const copy = { ...prev };
+      for (const bid of buildingIds) delete copy[bid];
+      return copy;
+    });
+    if (selectedCampus?.id === campusId) {
+      setSelectedCampus(null);
+      setSelectedBuilding(null);
+      setSelectedRoom(null);
+      setCurrentView('campuses');
     }
   };
 
-  const openCampusModal = (campus?: Campus) => {
-    if (campus) {
-      setEditingCampus(campus);
-      setCampusName(campus.name);
-    } else {
-      setEditingCampus(null);
-      setCampusName('');
+  const openBuildingModal = (building?: Building) => {
+    if (!selectedCampus && !building) {
+      alert('Select a campus first.');
+      return;
     }
-    setShowCampusModal(true);
+    setEditingBuilding(building ?? null);
+    setBuildingName(building?.name ?? '');
+    setShowBuildingModal(true);
   };
 
-  // Building CRUD operations
   const handleAddBuilding = () => {
     if (!selectedCampus || !buildingName.trim()) return;
     const newBuilding: Building = {
-      id: 'b' + Date.now(),
-      name: buildingName,
+      id: 'b' + Date.now().toString(),
+      name: buildingName.trim(),
       campusId: selectedCampus.id
     };
-    setBuildings({
-      ...buildings,
-      [selectedCampus.id]: [...(buildings[selectedCampus.id] || []), newBuilding]
-    });
+    setBuildings(prev => ({
+      ...prev,
+      [selectedCampus.id]: [...(prev[selectedCampus.id] || []), newBuilding]
+    }));
     setBuildingName('');
     setShowBuildingModal(false);
   };
 
   const handleEditBuilding = () => {
-    if (!editingBuilding || !buildingName.trim() || !selectedCampus) return;
-    setBuildings({
-      ...buildings,
-      [selectedCampus.id]: buildings[selectedCampus.id].map(b => 
-        b.id === editingBuilding.id ? { ...b, name: buildingName } : b
-      )
+    if (!editingBuilding || !editingBuilding.campusId) return;
+    setBuildings(prev => {
+      const list = prev[editingBuilding.campusId] || [];
+      const updated = list.map(b => b.id === editingBuilding.id ? { ...b, name: buildingName.trim() || b.name } : b);
+      return { ...prev, [editingBuilding.campusId]: updated };
     });
-    setBuildingName('');
     setEditingBuilding(null);
+    setBuildingName('');
     setShowBuildingModal(false);
   };
 
   const handleDeleteBuilding = (buildingId: string) => {
-    if (!selectedCampus) return;
-    if (confirm('Are you sure you want to delete this building? All rooms in this building will also be deleted.')) {
-      setBuildings({
-        ...buildings,
-        [selectedCampus.id]: buildings[selectedCampus.id].filter(b => b.id !== buildingId)
-      });
-      // Clean up rooms
-      const newRooms = { ...rooms };
-      delete newRooms[buildingId];
-      setRooms(newRooms);
+    const campusId = Object.keys(buildings).find(cid => (buildings[cid] || []).some(b => b.id === buildingId));
+    if (!campusId) return;
+    setBuildings(prev => {
+      const filtered = (prev[campusId] || []).filter(b => b.id !== buildingId);
+      return { ...prev, [campusId]: filtered };
+    });
+    setRooms(prev => {
+      const copy = { ...prev };
+      delete copy[buildingId];
+      return copy;
+    });
+    if (selectedBuilding?.id === buildingId) {
+      setSelectedBuilding(null);
+      setSelectedRoom(null);
+      setCurrentView('buildings');
     }
   };
 
-  const openBuildingModal = (building?: Building) => {
-    if (building) {
-      setEditingBuilding(building);
-      setBuildingName(building.name);
-    } else {
-      setEditingBuilding(null);
-      setBuildingName('');
+  const openRoomModal = (room?: Room) => {
+    if (!selectedBuilding && !room) {
+      alert('Select a building first.');
+      return;
     }
-    setShowBuildingModal(true);
+    setEditingRoom(room ?? null);
+    setRoomId(room?.id ?? '');
+    setRoomCapacity(room ? String(room.capacity) : '');
+    setShowRoomModal(true);
   };
 
-  // Room CRUD operations
   const handleAddRoom = () => {
     if (!selectedBuilding || !roomId.trim() || !roomCapacity) return;
-    const newRoom: Room = {
-      id: roomId,
-      capacity: parseInt(roomCapacity),
-      buildingId: selectedBuilding.id
-    };
-    setRooms({
-      ...rooms,
-      [selectedBuilding.id]: [...(rooms[selectedBuilding.id] || []), newRoom]
-    });
+    const capacity = Math.max(1, parseInt(roomCapacity, 10) || 1);
+    const newRoom: Room = { id: roomId.trim(), capacity, buildingId: selectedBuilding.id };
+    setRooms(prev => ({
+      ...prev,
+      [selectedBuilding.id]: [...(prev[selectedBuilding.id] || []), newRoom]
+    }));
     setRoomId('');
     setRoomCapacity('');
     setShowRoomModal(false);
   };
 
   const handleEditRoom = () => {
-    if (!editingRoom || !roomId.trim() || !roomCapacity || !selectedBuilding) return;
-    setRooms({
-      ...rooms,
-      [selectedBuilding.id]: rooms[selectedBuilding.id].map(r => 
-        r.id === editingRoom.id ? { id: roomId, capacity: parseInt(roomCapacity), buildingId: selectedBuilding.id } : r
-      )
+    if (!editingRoom || !selectedBuilding) return;
+    const capacity = Math.max(1, parseInt(roomCapacity, 10) || editingRoom.capacity);
+    setRooms(prev => {
+      const list = prev[selectedBuilding.id] || [];
+      const updated = list.map(r => r.id === editingRoom.id ? { ...r, id: roomId.trim() || r.id, capacity } : r);
+      return { ...prev, [selectedBuilding.id]: updated };
     });
+    setEditingRoom(null);
     setRoomId('');
     setRoomCapacity('');
-    setEditingRoom(null);
     setShowRoomModal(false);
   };
 
-  const handleDeleteRoom = (roomId: string) => {
+  const handleDeleteRoom = (id: string) => {
     if (!selectedBuilding) return;
-    if (confirm('Are you sure you want to delete this room?')) {
-      setRooms({
-        ...rooms,
-        [selectedBuilding.id]: rooms[selectedBuilding.id].filter(r => r.id !== roomId)
-      });
+    setRooms(prev => {
+      const list = prev[selectedBuilding.id] || [];
+      const updated = list.filter(r => r.id !== id);
+      return { ...prev, [selectedBuilding.id]: updated };
+    });
+    if (selectedRoom?.id === id) {
+      setSelectedRoom(null);
+      setCurrentView('rooms');
     }
   };
 
-  const openRoomModal = (room?: Room) => {
-    if (room) {
-      setEditingRoom(room);
-      setRoomId(room.id);
-      setRoomCapacity(room.capacity.toString());
-    } else {
-      setEditingRoom(null);
-      setRoomId('');
-      setRoomCapacity('');
-    }
-    setShowRoomModal(true);
-  };
-
+  // ---- CSV Upload ----
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     setUploadedFile(file);
-    
     const text = await file.text();
-    const lines = text.trim().split('\n');
-    const headers = lines[0].split(',').map(h => h.trim());
-    
+    const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
+    if (lines.length <= 1) {
+      setApplicants([]);
+      return;
+    }
+    const header = lines[0].split(',').map(h => h.trim().toLowerCase());
+    const idx = {
+      appNo: header.findIndex(h => h.includes('application') || h === 'appno' || h === 'application no'),
+      name: header.findIndex(h => h === 'name'),
+      course: header.findIndex(h => h.includes('course')),
+      major: header.findIndex(h => h === 'major'),
+      pwd: header.findIndex(h => h === 'pwd' || h === 'ispwd' || h === 'is_pwd')
+    };
     const parsed: Applicant[] = lines.slice(1).map(line => {
-      const values = line.split(',').map(v => v.trim());
+      const cols = line.split(',').map(v => v.trim());
+      const isPwdVal = (cols[idx.pwd] || '').toLowerCase();
+      const isPWD = isPwdVal === 'true' || isPwdVal === 'yes' || isPwdVal === '1';
       return {
-        appNo: values[0] || '',
-        name: values[1] || '',
-        course: values[2] || '',
-        major: values[3] || '',
-        isPWD: values[4]?.toLowerCase() === 'true' || values[4] === '1'
+        appNo: cols[idx.appNo] || '',
+        name: cols[idx.name] || '',
+        course: cols[idx.course] || '',
+        major: cols[idx.major] || '',
+        isPWD
       };
-    });
-
+    }).filter(a => a.appNo);
     setApplicants(parsed);
   };
 
-  const scheduleAlgorithm = (applicants: Applicant[], rooms: Room[]): ScheduleResult => {
-    const timeSlots = ['8:00-10:00', '10:00-12:00', '1:00-3:00', '3:00-5:00'];
-    const scheduled: Applicant[] = [];
-    const unscheduled: Applicant[] = [];
-    
-    const pwdApplicants = applicants.filter(a => a.isPWD);
-    const nonPwdApplicants = applicants.filter(a => !a.isPWD);
-    
-    const sortedApplicants = [...pwdApplicants, ...nonPwdApplicants];
-    
-    const slots: Array<{room: Room, time: string, capacity: number, assigned: number}> = [];
-    rooms.forEach(room => {
-      timeSlots.forEach(time => {
-        slots.push({
-          room,
-          time,
-          capacity: room.capacity,
-          assigned: 0
+  // ---- Quantum Scheduling ----
+  const quantumScheduleWithQAOA = async (applicants: Applicant[], rooms: Room[]): Promise<ScheduleResult> => {
+    setQuantumLoading(true);
+    try {
+      const scheduleData = {
+        applicants: applicants.map((a, idx) => ({
+          id: idx,
+          appNo: a.appNo,
+          name: a.name,
+          course: a.course,
+          major: a.major,
+          isPWD: a.isPWD
+        })),
+        rooms: rooms.map((r, idx) => ({
+          id: idx,
+          roomId: r.id,
+          capacity: r.capacity,
+          buildingId: r.buildingId
+        })),
+        timeSlots: ['8:00-10:00', '10:00-12:00', '1:00-3:00', '3:00-5:00'],
+        qubits,
+        iterations
+      };
+
+      const response = await fetch("http://127.0.0.1:8000/schedule-qaoa", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(scheduleData),
+      });
+      if (!response.ok) throw new Error('Quantum scheduling failed');
+
+      const result = await response.json();
+
+      const scheduled: Applicant[] = [];
+      const unscheduled: Applicant[] = [];
+
+      result.assignments.forEach((assignment: any) => {
+        const applicant = applicants[assignment.applicant_id];
+        const room = rooms[assignment.room_id];
+        scheduled.push({
+          ...applicant,
+          roomId: room.id,
+          timeSlot: assignment.time_slot
         });
       });
-    });
 
-    sortedApplicants.forEach(applicant => {
-      let assigned = false;
-      
-      for (const slot of slots) {
-        if (slot.assigned < slot.capacity) {
-          scheduled.push({
-            ...applicant,
-            roomId: slot.room.id,
-            timeSlot: slot.time
-          });
-          slot.assigned++;
-          assigned = true;
-          break;
+      const scheduledIds = new Set(result.assignments.map((a: any) => a.applicant_id));
+      applicants.forEach((applicant, idx) => {
+        if (!scheduledIds.has(idx)) unscheduled.push(applicant);
+      });
+
+      return {
+        success: true,
+        scheduled,
+        unscheduled,
+        summary: {
+          totalApplicants: applicants.length,
+          totalScheduled: scheduled.length,
+          pwdScheduled: scheduled.filter(a => a.isPWD).length,
+          totalUnscheduled: unscheduled.length
+        },
+        durationSeconds: result.duration_seconds,
+        placementStats: {
+          totalCapacity: result.placement_stats?.total_capacity ?? 0,
+          placedByRoom: result.placement_stats?.placed_by_room ?? {},
+          placedByBuilding: result.placement_stats?.placed_by_building ?? {},
+          pwdScheduled: result.placement_stats?.pwd_scheduled ?? 0
+        },
+        quantumMetrics: result.quantum_metrics
+      };
+    } catch (error) {
+      console.error('Quantum QAOA scheduling error:', error);
+      return {
+        success: false,
+        scheduled: [],
+        unscheduled: applicants,
+        summary: {
+          totalApplicants: applicants.length,
+          totalScheduled: 0,
+          pwdScheduled: 0,
+          totalUnscheduled: applicants.length
         }
-      }
-      
-      if (!assigned) {
-        unscheduled.push(applicant);
-      }
-    });
+      };
+    } finally {
+      setQuantumLoading(false);
+    }
+  };
 
-    return {
-      success: true,
-      scheduled,
-      unscheduled,
-      summary: {
-        totalApplicants: applicants.length,
-        totalScheduled: scheduled.length,
-        pwdScheduled: scheduled.filter(a => a.isPWD).length,
-        totalUnscheduled: unscheduled.length
-      }
-    };
+  const runQuantumVisualization = async () => {
+    setQuantumLoading(true);
+    try {
+      const res = await fetch("http://127.0.0.1:8000/simulate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ qubits: Math.max(2, Math.min(5, qubits)), gate: 'bell' }),
+      });
+      const data = await res.json();
+      setQuantumResult(data);
+    } catch (error) {
+      console.error('Quantum visualization error:', error);
+      alert('Error connecting to quantum backend. Make sure the backend is running on port 8000.');
+    } finally {
+      setQuantumLoading(false);
+    }
   };
 
   const handleGenerateSchedule = async () => {
@@ -466,19 +548,25 @@ const Scheduler = () => {
       alert('Please upload a CSV file first');
       return;
     }
-
     setIsGenerating(true);
 
-    await new Promise(resolve => setTimeout(resolve, 1500));
-
     const allRooms: Room[] = [];
-    Object.values(rooms).forEach(roomList => {
-      allRooms.push(...roomList);
-    });
+    Object.values(rooms).forEach(roomList => allRooms.push(...roomList));
+    if (allRooms.length === 0) {
+      alert('Please add rooms before generating schedule');
+      setIsGenerating(false);
+      return;
+    }
 
-    const result = scheduleAlgorithm(applicants, allRooms);
+    const result = await quantumScheduleWithQAOA(applicants, allRooms);
     setScheduleResult(result);
     setIsGenerating(false);
+
+    if (result.success) {
+      alert(`Quantum scheduling complete.\nScheduled: ${result.summary.totalScheduled}\nUnscheduled: ${result.summary.totalUnscheduled}\nTime: ${result.durationSeconds?.toFixed(3)}s`);
+    } else {
+      alert('Quantum scheduling failed. Please check backend connection.');
+    }
   };
 
   const exportScheduleCSV = () => {
@@ -682,7 +770,7 @@ const Scheduler = () => {
   const CampusesView = () => (
     <div className="p-8">
       <div className="flex items-center justify-between mb-6 max-w-4xl mx-auto">
-        <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100">Schedule Management</h2>
+        <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100">QAOA Quantum Scheduler</h2>
         <button
           onClick={() => openCampusModal()}
           className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md text-sm shadow hover:bg-indigo-700 transition"
@@ -692,10 +780,56 @@ const Scheduler = () => {
         </button>
       </div>
 
+      {/* Optional Quantum Lab (separate, not tied to solver) */}
+      <div className="max-w-4xl mx-auto mb-6">
+        <button
+          onClick={() => setShowQuantumLab(s => !s)}
+          className="mb-3 text-sm text-indigo-600 dark:text-indigo-400 hover:underline"
+        >
+          {showQuantumLab ? 'Hide Quantum Lab (optional)' : 'Show Quantum Lab (optional)'}
+        </button>
+
+        {showQuantumLab && (
+          <div className="p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg shadow-sm">
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Number of Qubits</label>
+                <input
+                  type="number"
+                  min={2}
+                  max={20}
+                  value={qubits}
+                  onChange={(e) => setQubits(Number(e.target.value))}
+                  className="w-full px-3 py-2 rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800"
+                />
+              </div>
+              <div className="flex items-end">
+                <button
+                  onClick={runQuantumVisualization}
+                  disabled={quantumLoading}
+                  className="w-full px-4 py-2 bg-blue-600 text-white rounded-md text-sm shadow hover:bg-blue-700 transition disabled:opacity-50"
+                >
+                  {quantumLoading ? 'Running...' : 'Run Bell Circuit'}
+                </button>
+              </div>
+            </div>
+
+            {quantumResult && (
+              <div className="mt-4">
+                <QuantumChart data={quantumResult} />
+                <pre className="mt-3 text-xs bg-gray-50 dark:bg-gray-800 p-3 rounded border border-gray-200 dark:border-gray-700 overflow-x-auto">
+                  {JSON.stringify(quantumResult, null, 2)}
+                </pre>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
       {scheduleResult && (
         <div className="max-w-4xl mx-auto mb-6 p-6 bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 shadow-sm">
-          <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">Schedule Summary</h3>
-          <div className="grid grid-cols-4 gap-4">
+          <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">📊 Quantum Schedule Results</h3>
+          <div className="grid grid-cols-5 gap-4">
             <div className="text-center">
               <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">{scheduleResult.summary.totalApplicants}</div>
               <div className="text-xs text-gray-500 dark:text-gray-400">Total Applicants</div>
@@ -706,13 +840,46 @@ const Scheduler = () => {
             </div>
             <div className="text-center">
               <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">{scheduleResult.summary.pwdScheduled}</div>
-              <div className="text-xs text-gray-500 dark:text-gray-400">PWD Priority</div>
+              <div className="text-xs text-gray-500 dark:text-gray-400">PWD Scheduled</div>
             </div>
             <div className="text-center">
               <div className="text-2xl font-bold text-red-600 dark:text-red-400">{scheduleResult.summary.totalUnscheduled}</div>
               <div className="text-xs text-gray-500 dark:text-gray-400">Unscheduled</div>
             </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-gray-800 dark:text-gray-100">
+                {scheduleResult.durationSeconds?.toFixed(3) ?? '—'}s
+              </div>
+              <div className="text-xs text-gray-500 dark:text-gray-400">Compute Time</div>
+            </div>
           </div>
+
+          {scheduleResult.placementStats && (
+            <div className="mt-6 grid grid-cols-2 gap-6">
+              <div>
+                <h4 className="text-sm font-semibold mb-2">Per Building Allocation</h4>
+                <div className="text-xs space-y-1">
+                  {Object.entries(scheduleResult.placementStats.placedByBuilding).map(([bid, cnt]) => (
+                    <div key={bid} className="flex justify-between">
+                      <span className="text-gray-600 dark:text-gray-300">{bid}</span>
+                      <span className="font-semibold">{cnt}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <h4 className="text-sm font-semibold mb-2">Per Room Allocation</h4>
+                <div className="text-xs space-y-1 max-h-40 overflow-auto">
+                  {Object.entries(scheduleResult.placementStats.placedByRoom).map(([rid, cnt]) => (
+                    <div key={rid} className="flex justify-between">
+                      <span className="text-gray-600 dark:text-gray-300">{rid}</span>
+                      <span className="font-semibold">{cnt}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -756,7 +923,7 @@ const Scheduler = () => {
 
       <div className="mt-8 max-w-4xl mx-auto space-y-4">
         <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6 shadow-sm">
-          <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">Upload Applicants</h3>
+          <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">Upload Applicants for QAOA</h3>
           
           <div className="flex items-center gap-3 mb-4">
             <label className="cursor-pointer">
@@ -787,12 +954,21 @@ const Scheduler = () => {
         <div className="flex items-center justify-center gap-3">
           <button 
             onClick={handleGenerateSchedule}
-            disabled={isGenerating || applicants.length === 0}
-            className="px-6 py-3 bg-indigo-600 text-white rounded-md text-sm shadow hover:bg-indigo-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={isGenerating || applicants.length === 0 || quantumLoading}
+            className="px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-md text-sm shadow-lg hover:shadow-xl transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
-            {isGenerating ? 'Generating...' : 'Generate Schedule'}
+            {isGenerating ? (
+              <>
+                <span className="animate-spin">⚛</span>
+                Running QAOA...
+              </>
+            ) : (
+              <>
+                ⚛️ Generate Quantum Schedule
+              </>
+            )}
           </button>
-          {scheduleResult && (
+          {scheduleResult && scheduleResult.success && (
             <button 
               onClick={exportScheduleCSV}
               className="px-6 py-3 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-md text-sm text-gray-700 dark:text-gray-200 shadow hover:shadow-md transition flex items-center gap-2"
@@ -828,6 +1004,75 @@ const Scheduler = () => {
               className="px-4 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 transition"
             >
               {editingCampus ? 'Update' : 'Add'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal isOpen={showBuildingModal} onClose={() => setShowBuildingModal(false)} title={editingBuilding ? 'Edit Building' : 'Add Building'}>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Building Name</label>
+            <input
+              type="text"
+              value={buildingName}
+              onChange={(e) => setBuildingName(e.target.value)}
+              className="w-full px-3 py-2 rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              placeholder="Enter building name"
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={() => setShowBuildingModal(false)}
+              className="px-4 py-2 rounded-md border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={editingBuilding ? handleEditBuilding : handleAddBuilding}
+              className="px-4 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 transition"
+            >
+              {editingBuilding ? 'Update' : 'Add'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal isOpen={showRoomModal} onClose={() => setShowRoomModal(false)} title={editingRoom ? 'Edit Room' : 'Add Room'}>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Room ID</label>
+            <input
+              type="text"
+              value={roomId}
+              onChange={(e) => setRoomId(e.target.value)}
+              className="w-full px-3 py-2 rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              placeholder="e.g., A101"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Capacity</label>
+            <input
+              type="number"
+              value={roomCapacity}
+              onChange={(e) => setRoomCapacity(e.target.value)}
+              className="w-full px-3 py-2 rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              placeholder="e.g., 30"
+              min="1"
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={() => setShowRoomModal(false)}
+              className="px-4 py-2 rounded-md border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={editingRoom ? handleEditRoom : handleAddRoom}
+              className="px-4 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 transition"
+            >
+              {editingRoom ? 'Update' : 'Add'}
             </button>
           </div>
         </div>
