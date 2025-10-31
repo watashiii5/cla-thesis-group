@@ -4,16 +4,8 @@ import React, { useState } from 'react'
 import type { JSX } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
+import MenuBar from '@/app/components/MenuBar'
 import './styles.css'
-
-const Header: React.FC = () => {
-  return (
-    <header className="page-header">
-      <h1>Welcome to Qtime Scheduler</h1>
-      <h2>Kindly Upload the CSV files for the Campus and Participant Data</h2>
-    </header>
-  )
-}
 
 export default function CSVUploadPage(): JSX.Element {
   const router = useRouter()
@@ -201,8 +193,14 @@ export default function CSVUploadPage(): JSX.Element {
   }
 
   return (
-    <>
-      <Header />
+    <div className="page-layout">
+      <MenuBar onToggleSidebar={() => {}} showSidebarToggle={false} showAccountIcon={false} />
+      
+      <div className="page-header-content">
+        <h1>Welcome to Qtime Scheduler</h1>
+        <h2>Kindly Upload the CSV files for the Campus and Participant Data</h2>
+      </div>
+
       <main className="upload-container">
         <div className="upload-wrapper">
           {/* Campus CSV Section */}
@@ -346,11 +344,11 @@ export default function CSVUploadPage(): JSX.Element {
           {/* Skip Button */}
           <div className="skip-container">
             <button onClick={handleSkip} className="skip-button">
-              Skip to Dashboard →
+              Skip →
             </button>
           </div>
         </div>
       </main>
-    </>
+    </div>
   )
 }

@@ -1,3 +1,8 @@
+.page-layout {
+  min-height: 100vh;
+  background: #f5f7fb;
+}
+
 .page-header {
   background: #2563eb;
   color: #fff;
@@ -9,13 +14,24 @@
   z-index: 100;
 }
 
-.page-header h1 {
+.page-header-content {
+  margin-top: 64px;
+  background: #2563eb;
+  color: #fff;
+  padding: 32px 20px;
+  text-align: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.page-header h1,
+.page-header-content h1 {
   margin: 0 0 12px 0;
   font-size: 28px;
   font-weight: 700;
 }
 
-.page-header h2 {
+.page-header h2,
+.page-header-content h2 {
   margin: 0;
   font-size: 16px;
   font-weight: 400;
@@ -169,4 +185,22 @@
   content: '📦';
   margin-right: 8px;
   font-size: 16px;
+}
+
+@media (max-width: 768px) {
+  .page-header-content h1 {
+    font-size: 24px;
+  }
+
+  .page-header-content h2 {
+    font-size: 14px;
+  }
+
+  .upload-container {
+    padding: 20px 16px;
+  }
+
+  .upload-card {
+    padding: 24px;
+  }
 }
