@@ -1,14 +1,25 @@
-.container {
+.login-page {
   min-height: 100vh;
+  min-width: 100vw;
   display: flex;
   align-items: center;
   justify-content: center;
   background: #f5f7fb;
+  margin: 0;
+  padding: 0;
+}
+
+.container {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   padding: 20px;
 }
 
 .card {
-  width: 360px;
+  width: 100%;
+  max-width: 360px;
   background: #fff;
   border-radius: 8px;
   padding: 24px;
@@ -42,6 +53,8 @@
   border-radius: 6px;
   border: 1px solid #d1d5db;
   font-size: 14px;
+  color: #000;
+  background: #fff;
 }
 
 .button {
@@ -95,10 +108,4 @@
   padding: 8px 10px;
   border-radius: 6px;
   font-size: 13px;
-}
-
-.hint {
-  margin-top: 14px;
-  font-size: 13px;
-  color: #374151;
 }

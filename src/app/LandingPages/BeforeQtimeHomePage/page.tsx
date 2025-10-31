@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
-import type { ChangeEvent, JSX } from 'react'
+import type { JSX } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import './styles.css'
@@ -20,7 +20,6 @@ export default function CSVUploadPage(): JSX.Element {
   const [campusFile, setCampusFile] = useState<File | null>(null)
   const [participantFile, setParticipantFile] = useState<File | null>(null)
   const [campusQueueName, setCampusQueueName] = useState('')
-  const [participantQueueName, setParticipantQueueName] = useState('')
   const [participantBatchName, setParticipantBatchName] = useState('')
   const [campusLoading, setCampusLoading] = useState(false)
   const [participantLoading, setParticipantLoading] = useState(false)
@@ -32,6 +31,37 @@ export default function CSVUploadPage(): JSX.Element {
   const parseCSV = (text: string): string[][] => {
     const lines = text.trim().split('\n')
     return lines.map(line => line.split(',').map(cell => cell.trim()))
+  }
+
+  // Get next upload group ID by finding max + 1
+  const getNextCampusGroupId = async (): Promise<number> => {
+    const { data, error } = await supabase
+      .from('campuses')
+      .select('upload_group_id')
+      .order('upload_group_id', { ascending: false })
+      .limit(1)
+    
+    if (error) {
+      console.error('Error getting max campus ID:', error)
+      return 1
+    }
+    
+    return data && data.length > 0 ? data[0].upload_group_id + 1 : 1
+  }
+
+  const getNextParticipantGroupId = async (): Promise<number> => {
+    const { data, error } = await supabase
+      .from('participants')
+      .select('upload_group_id')
+      .order('upload_group_id', { ascending: false })
+      .limit(1)
+    
+    if (error) {
+      console.error('Error getting max participant ID:', error)
+      return 1
+    }
+    
+    return data && data.length > 0 ? data[0].upload_group_id + 1 : 1
   }
 
   const handleCampusUpload = async () => {
@@ -52,30 +82,40 @@ export default function CSVUploadPage(): JSX.Element {
         throw new Error('CSV file must contain headers and at least one data row.')
       }
 
-      const headers = rows[0]
       const dataRows = rows.slice(1)
 
-      if (headers.length < 4) {
-        throw new Error('Campus CSV must have: Campus, Building, Room, Capacity')
-      }
+      // Get the next group ID - all rows from this CSV will share this ID
+      const groupId = await getNextCampusGroupId()
 
-      const tableName = `campus_${campusQueueName.toLowerCase().replace(/\s+/g, '_')}`
-      
       const campusData = dataRows.map(row => ({
-        campus: row[0],
-        building: row[1],
-        room: row[2],
+        upload_group_id: groupId,
+        campus: row[0] || '',
+        building: row[1] || '',
+        room: row[2] || '',
         capacity: parseInt(row[3]) || 0,
-        queue_name: campusQueueName
+        queue_name: campusQueueName,
+        file_name: campusFile.name
       }))
 
-      const { error: insertError } = await supabase
-        .from(tableName)
+      console.log('Inserting campus data with Group ID:', groupId)
+      console.log('Data:', campusData)
+
+      const { data, error: insertError } = await supabase
+        .from('campuses')
         .insert(campusData)
 
-      if (insertError) throw insertError
+      if (insertError) {
+        console.error('Campus insert error:', insertError)
+        throw insertError
+      }
 
-      setCampusMessage(`Campus data uploaded successfully to table: ${tableName}`)
+      setCampusMessage(
+        `✅ Campus data uploaded successfully!\n` +
+        `Group ID: ${groupId}\n` +
+        `Queue Name: ${campusQueueName}\n` +
+        `File: ${campusFile.name}\n` +
+        `Rows: ${campusData.length}`
+      )
       
       // Reset form
       setCampusFile(null)
@@ -83,6 +123,7 @@ export default function CSVUploadPage(): JSX.Element {
       const fileInput = document.getElementById('campusFile') as HTMLInputElement
       if (fileInput) fileInput.value = ''
     } catch (err: any) {
+      console.error('Campus upload error:', err)
       setCampusError(err?.message ?? String(err))
     } finally {
       setCampusLoading(false)
@@ -107,30 +148,40 @@ export default function CSVUploadPage(): JSX.Element {
         throw new Error('CSV file must contain headers and at least one data row.')
       }
 
-      const headers = rows[0]
       const dataRows = rows.slice(1)
 
-      if (headers.length < 4) {
-        throw new Error('Participant CSV must have: Participant Number, Name, PWD, Email')
-      }
-
-      const tableName = `participant_${participantBatchName.toLowerCase().replace(/\s+/g, '_')}`
+      // Get the next group ID - all rows from this CSV will share this ID
+      const groupId = await getNextParticipantGroupId()
 
       const participantData = dataRows.map(row => ({
-        participant_number: row[0],
-        name: row[1],
+        upload_group_id: groupId,
+        participant_number: row[0] || '',
+        name: row[1] || '',
         is_pwd: row[2].toLowerCase() === 'yes' || row[2].toLowerCase() === 'true',
-        email: row[3],
-        queue_name: participantBatchName
+        email: row[3] || '',
+        queue_name: participantBatchName,
+        file_name: participantFile.name
       }))
 
-      const { error: insertError } = await supabase
-        .from(tableName)
+      console.log('Inserting participant data with Group ID:', groupId)
+      console.log('Data:', participantData)
+
+      const { data, error: insertError } = await supabase
+        .from('participants')
         .insert(participantData)
 
-      if (insertError) throw insertError
+      if (insertError) {
+        console.error('Participant insert error:', insertError)
+        throw insertError
+      }
 
-      setParticipantMessage(`Participant data uploaded successfully to table: ${tableName}`)
+      setParticipantMessage(
+        `✅ Participant data uploaded successfully!\n` +
+        `Group ID: ${groupId}\n` +
+        `Batch Name: ${participantBatchName}\n` +
+        `File: ${participantFile.name}\n` +
+        `Rows: ${participantData.length}`
+      )
       
       // Reset form
       setParticipantFile(null)
@@ -138,6 +189,7 @@ export default function CSVUploadPage(): JSX.Element {
       const fileInput = document.getElementById('participantFile') as HTMLInputElement
       if (fileInput) fileInput.value = ''
     } catch (err: any) {
+      console.error('Participant upload error:', err)
       setParticipantError(err?.message ?? String(err))
     } finally {
       setParticipantLoading(false)
@@ -158,22 +210,28 @@ export default function CSVUploadPage(): JSX.Element {
             <h2 className="section-title">Campus/Building Capacity</h2>
             
             <div className="format-info">
-              <h3>Expected Format:</h3>
+              <h3>Expected CSV Format:</h3>
               <p>Campus, Building, Room, Capacity</p>
+              <small style={{ color: '#64748b', marginTop: '8px', display: 'block' }}>
+                Example: Main Campus, Building A, Room 101, 30
+              </small>
             </div>
 
             <div className="form-group">
               <label className="label">
-                Campus Name (Table Identifier)
+                Queue Name (Unique Identifier)
                 <input
                   type="text"
                   value={campusQueueName}
                   onChange={(e) => setCampusQueueName(e.target.value)}
                   className="input"
-                  placeholder="e.g., MainCampus"
+                  placeholder="e.g., MainCampus2024"
                   required
                 />
               </label>
+              <small style={{ color: '#64748b', fontSize: '12px', marginTop: '4px' }}>
+                This name will be used to identify this upload batch
+              </small>
             </div>
 
             <div className="form-group">
@@ -193,6 +251,11 @@ export default function CSVUploadPage(): JSX.Element {
                   required
                 />
               </label>
+              {campusFile && (
+                <small style={{ color: '#2563eb', fontSize: '12px', marginTop: '4px' }}>
+                  Selected: {campusFile.name}
+                </small>
+              )}
             </div>
 
             <button
@@ -203,7 +266,11 @@ export default function CSVUploadPage(): JSX.Element {
               {campusLoading ? 'Uploading...' : 'Upload Campus CSV'}
             </button>
 
-            {campusMessage && <div className="message success">{campusMessage}</div>}
+            {campusMessage && (
+              <div className="message success" style={{ whiteSpace: 'pre-line' }}>
+                {campusMessage}
+              </div>
+            )}
             {campusError && <div className="message error">{campusError}</div>}
           </div>
 
@@ -212,13 +279,16 @@ export default function CSVUploadPage(): JSX.Element {
             <h2 className="section-title">Participants</h2>
             
             <div className="format-info">
-              <h3>Expected Format:</h3>
+              <h3>Expected CSV Format:</h3>
               <p>Participant Number, Name, PWD (Yes/No), Email</p>
+              <small style={{ color: '#64748b', marginTop: '8px', display: 'block' }}>
+                Example: 2024001, John Doe, No, john@email.com
+              </small>
             </div>
 
             <div className="form-group">
               <label className="label">
-                Batch Name (Table Identifier)
+                Batch Name (Unique Identifier)
                 <input
                   type="text"
                   value={participantBatchName}
@@ -228,6 +298,9 @@ export default function CSVUploadPage(): JSX.Element {
                   required
                 />
               </label>
+              <small style={{ color: '#64748b', fontSize: '12px', marginTop: '4px' }}>
+                This name will be used to identify this upload batch
+              </small>
             </div>
 
             <div className="form-group">
@@ -247,6 +320,11 @@ export default function CSVUploadPage(): JSX.Element {
                   required
                 />
               </label>
+              {participantFile && (
+                <small style={{ color: '#2563eb', fontSize: '12px', marginTop: '4px' }}>
+                  Selected: {participantFile.name}
+                </small>
+              )}
             </div>
 
             <button
@@ -257,14 +335,18 @@ export default function CSVUploadPage(): JSX.Element {
               {participantLoading ? 'Uploading...' : 'Upload Participant CSV'}
             </button>
 
-            {participantMessage && <div className="message success">{participantMessage}</div>}
+            {participantMessage && (
+              <div className="message success" style={{ whiteSpace: 'pre-line' }}>
+                {participantMessage}
+              </div>
+            )}
             {participantError && <div className="message error">{participantError}</div>}
           </div>
 
           {/* Skip Button */}
           <div className="skip-container">
             <button onClick={handleSkip} className="skip-button">
-              Skip →
+              Skip to Dashboard →
             </button>
           </div>
         </div>

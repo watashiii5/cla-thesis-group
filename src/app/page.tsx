@@ -65,71 +65,73 @@ export default function Page(): JSX.Element {
   }
 
   return (
-    <main className="container">
-      <div className="card">
-        <h1 className="title">{mode === 'login' ? 'Login' : 'Register'}</h1>
+    <div className="login-page">
+      <main className="container">
+        <div className="card">
+          <h1 className="title">{mode === 'login' ? 'Login' : 'Register'}</h1>
 
-        <form onSubmit={handleSubmit} className="form">
-          <label className="label">
-            Email
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="input"
-              required
-            />
-          </label>
-
-          <label className="label">
-            Password
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="input"
-              required
-            />
-          </label>
-
-          {mode === 'register' && (
+          <form onSubmit={handleSubmit} className="form">
             <label className="label">
-              Confirm Password
+              Email
               <input
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 className="input"
                 required
               />
             </label>
-          )}
 
-          <button type="submit" disabled={loading} className="button">
-            {loading ? 'Please wait...' : mode === 'login' ? 'Login' : 'Register'}
-          </button>
+            <label className="label">
+              Password
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="input"
+                required
+              />
+            </label>
 
-          <div className="switchRow">
-            <span>
-              {mode === 'login' ? "Don't have an account?" : 'Already have an account?'}
-            </span>
-            <button
-              type="button"
-              onClick={() => {
-                setMode(mode === 'login' ? 'register' : 'login')
-                setError(null)
-                setMessage(null)
-              }}
-              className="linkButton"
-            >
-              {mode === 'login' ? 'Create one' : 'Sign in'}
+            {mode === 'register' && (
+              <label className="label">
+                Confirm Password
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="input"
+                  required
+                />
+              </label>
+            )}
+
+            <button type="submit" disabled={loading} className="button">
+              {loading ? 'Please wait...' : mode === 'login' ? 'Login' : 'Register'}
             </button>
-          </div>
 
-          {message && <div className="message">{message}</div>}
-          {error && <div className="error">{error}</div>}
-        </form>
-      </div>
-    </main>
+            <div className="switchRow">
+              <span>
+                {mode === 'login' ? "Don't have an account?" : 'Already have an account?'}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setMode(mode === 'login' ? 'register' : 'login')
+                  setError(null)
+                  setMessage(null)
+                }}
+                className="linkButton"
+              >
+                {mode === 'login' ? 'Create one' : 'Sign in'}
+              </button>
+            </div>
+
+            {message && <div className="message">{message}</div>}
+            {error && <div className="error">{error}</div>}
+          </form>
+        </div>
+      </main>
+    </div>
   )
 }
