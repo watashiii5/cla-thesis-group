@@ -102,7 +102,7 @@ export default function QtimeHomePage() {
   }
 
   const handleGenerateCampusUI = (groupId: number) => {
-    router.push(`/LandingPages/CampusCapacity?id=${groupId}`)
+    router.push(`/LandingPages/QtimeCampusCapacityPage?id=${groupId}`)
   }
 
   const handleGenerateParticipantUI = (groupId: number) => {

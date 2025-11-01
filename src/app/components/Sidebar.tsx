@@ -15,10 +15,10 @@ export default function Sidebar({ isOpen }: SidebarProps) {
   const menuItems = [
     { icon: '🏠', label: 'Home', path: '/LandingPages/QtimeHomePage' },
     { icon: '📁', label: 'Upload CSV', path: '/LandingPages/BeforeQtimeHomePage' },
-    { icon: '🏢', label: 'Campus Capacity', path: '/LandingPages/CampusCapacity' },
-    { icon: '👥', label: 'Participants', path: '/LandingPages/Participants' },
-    { icon: '📊', label: 'Schedule', path: '/LandingPages/Schedule' },
-    { icon: '📈', label: 'Analytics', path: '/LandingPages/Analytics' },
+    { icon: '🏢', label: 'Campus Capacity', path: '/LandingPages/QtimeCampusCapacityPage' },
+    { icon: '👥', label: 'Participants', path: '/LandingPages/QtimeParticipantsPage' },
+    { icon: '📊', label: 'Schedule', path: '/LandingPages/QtimeSchedulePage' },
+    { icon: '📈', label: 'Analytics', path: '/LandingPages/QtimeAnalyticsPage' },
   ]
 
   return (

@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import './MenuBar.css'
@@ -14,6 +14,32 @@ interface MenuBarProps {
 export default function MenuBar({ onToggleSidebar, showSidebarToggle = false, showAccountIcon = true }: MenuBarProps) {
   const router = useRouter()
   const [showAccountMenu, setShowAccountMenu] = useState(false)
+  const [userEmail, setUserEmail] = useState<string | null>(null)
+
+  useEffect(() => {
+    // Get current user email
+    const fetchUserEmail = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        setUserEmail(user.email || null)
+      }
+    }
+
+    fetchUserEmail()
+
+    // Listen for auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setUserEmail(session.user.email || null)
+      } else {
+        setUserEmail(null)
+      }
+    })
+
+    return () => {
+      subscription.unsubscribe()
+    }
+  }, [])
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
@@ -46,6 +72,12 @@ export default function MenuBar({ onToggleSidebar, showSidebarToggle = false, sh
             
             {showAccountMenu && (
               <div className="account-menu">
+                {userEmail && (
+                  <>
+                    <div className="account-menu-email">{userEmail}</div>
+                    <div className="account-menu-divider"></div>
+                  </>
+                )}
                 <div className="account-menu-item">Profile</div>
                 <div className="account-menu-item">Settings</div>
                 <div className="account-menu-divider"></div>
