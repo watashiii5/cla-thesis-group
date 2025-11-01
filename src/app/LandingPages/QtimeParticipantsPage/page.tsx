@@ -73,8 +73,7 @@ export default function ParticipantsPage() {
     country: 'Philippines'
   })
   const [deletingParticipant, setDeletingParticipant] = useState<number | null>(null)
-  const [sendingEmails, setSendingEmails] = useState(false)
-  const [emailMessage, setEmailMessage] = useState('')
+  const [successMessage, setSuccessMessage] = useState('')
 
   useEffect(() => {
     fetchParticipantFiles()
@@ -107,18 +106,18 @@ export default function ParticipantsPage() {
   const fetchParticipantFiles = async () => {
     setLoading(true)
     try {
-      console.log('Fetching participant files...')
+      console.log('📂 Fetching participant files...')
       const { data, error } = await supabase
         .from('participants')
         .select('upload_group_id, batch_name, file_name, created_at')
         .order('created_at', { ascending: false })
 
       if (error) {
-        console.error('Participant error:', error)
+        console.error('❌ Participant error:', error)
         throw error
       }
 
-      console.log('Participant data fetched:', data?.length, 'rows')
+      console.log('✅ Participant data fetched:', data?.length, 'rows')
 
       const grouped = data?.reduce((acc: any[], curr) => {
         const existing = acc.find(item => item.upload_group_id === curr.upload_group_id)
@@ -138,7 +137,7 @@ export default function ParticipantsPage() {
 
       setParticipantFiles(grouped || [])
     } catch (error) {
-      console.error('Error fetching participant files:', error)
+      console.error('❌ Error fetching participant files:', error)
     } finally {
       setLoading(false)
     }
@@ -171,7 +170,7 @@ export default function ParticipantsPage() {
       setFilteredData(data || [])
       calculateStats(data || [])
     } catch (error) {
-      console.error('Error fetching participant data:', error)
+      console.error('❌ Error fetching participant data:', error)
     } finally {
       setLoadingData(false)
     }
@@ -189,91 +188,12 @@ export default function ParticipantsPage() {
     })
   }
 
-  // CRUD Operations
-  const handleEditClick = (participant: Participant) => {
-    setEditingParticipant(participant.id!)
-    setEditForm({
-      participant_number: participant.participant_number,
-      name: participant.name,
-      is_pwd: participant.is_pwd,
-      email: participant.email,
-      province: participant.province,
-      city: participant.city,
-      country: participant.country
-    })
-    setShowActionsFor(null)
-  }
-
-  const handleEditCancel = () => {
-    setEditingParticipant(null)
-    setEditForm({
-      participant_number: '',
-      name: '',
-      is_pwd: false,
-      email: '',
-      province: '',
-      city: '',
-      country: 'Philippines'
-    })
-  }
-
-  const handleEditSave = async (participantId: number) => {
-    try {
-      const { error } = await supabase
-        .from('participants')
-        .update({
-          participant_number: editForm.participant_number,
-          name: editForm.name,
-          is_pwd: editForm.is_pwd,
-          email: editForm.email,
-          province: editForm.province,
-          city: editForm.city,
-          country: editForm.country
-        })
-        .eq('id', participantId)
-
-      if (error) throw error
-
-      const updatedData = participantData.map(p => 
-        p.id === participantId ? { ...p, ...editForm } : p
-      )
-      setParticipantData(updatedData)
-      calculateStats(updatedData)
-      setEditingParticipant(null)
-    } catch (error) {
-      console.error('Error updating participant:', error)
-      alert('Failed to update participant')
-    }
-  }
-
-  const handleDelete = async (participantId: number) => {
-    if (!confirm('Are you sure you want to delete this participant?')) return
-
-    setDeletingParticipant(participantId)
-    setShowActionsFor(null)
-    try {
-      const { error } = await supabase
-        .from('participants')
-        .delete()
-        .eq('id', participantId)
-
-      if (error) throw error
-
-      const updatedData = participantData.filter(p => p.id !== participantId)
-      setParticipantData(updatedData)
-      calculateStats(updatedData)
-    } catch (error) {
-      console.error('Error deleting participant:', error)
-      alert('Failed to delete participant')
-    } finally {
-      setDeletingParticipant(null)
-    }
-  }
-
+  // CRUD: CREATE - Add Participant
   const handleAddParticipant = async () => {
     if (!selectedBatch) return
     if (!addForm.participant_number || !addForm.name || !addForm.email) {
-      alert('Please fill in all required fields')
+      setSuccessMessage('❌ Please fill in all required fields (*, #, Name, Email)')
+      setTimeout(() => setSuccessMessage(''), 3000)
       return
     }
 
@@ -302,6 +222,8 @@ export default function ParticipantsPage() {
         const updatedData = [...participantData, data[0]]
         setParticipantData(updatedData)
         calculateStats(updatedData)
+        setSuccessMessage('✅ Participant added successfully!')
+        setTimeout(() => setSuccessMessage(''), 3000)
       }
 
       setAddForm({
@@ -315,8 +237,105 @@ export default function ParticipantsPage() {
       })
       setShowAddModal(false)
     } catch (error) {
-      console.error('Error adding participant:', error)
-      alert('Failed to add participant')
+      console.error('❌ Error adding participant:', error)
+      setSuccessMessage('❌ Failed to add participant')
+      setTimeout(() => setSuccessMessage(''), 3000)
+    }
+  }
+
+  // CRUD: READ - Already implemented in display
+
+  // CRUD: UPDATE - Edit Participant
+  const handleEditClick = (participant: Participant) => {
+    setEditingParticipant(participant.id!)
+    setEditForm({
+      participant_number: participant.participant_number,
+      name: participant.name,
+      is_pwd: participant.is_pwd,
+      email: participant.email,
+      province: participant.province,
+      city: participant.city,
+      country: participant.country
+    })
+    setShowActionsFor(null)
+  }
+
+  const handleEditCancel = () => {
+    setEditingParticipant(null)
+    setEditForm({
+      participant_number: '',
+      name: '',
+      is_pwd: false,
+      email: '',
+      province: '',
+      city: '',
+      country: 'Philippines'
+    })
+  }
+
+  const handleEditSave = async (participantId: number) => {
+    if (!editForm.participant_number || !editForm.name || !editForm.email) {
+      setSuccessMessage('❌ Please fill in all required fields')
+      setTimeout(() => setSuccessMessage(''), 3000)
+      return
+    }
+
+    try {
+      const { error } = await supabase
+        .from('participants')
+        .update({
+          participant_number: editForm.participant_number,
+          name: editForm.name,
+          is_pwd: editForm.is_pwd,
+          email: editForm.email,
+          province: editForm.province,
+          city: editForm.city,
+          country: editForm.country
+        })
+        .eq('id', participantId)
+
+      if (error) throw error
+
+      const updatedData = participantData.map(p => 
+        p.id === participantId ? { ...p, ...editForm } : p
+      )
+      setParticipantData(updatedData)
+      calculateStats(updatedData)
+      setEditingParticipant(null)
+      setSuccessMessage('✅ Participant updated successfully!')
+      setTimeout(() => setSuccessMessage(''), 3000)
+    } catch (error) {
+      console.error('❌ Error updating participant:', error)
+      setSuccessMessage('❌ Failed to update participant')
+      setTimeout(() => setSuccessMessage(''), 3000)
+    }
+  }
+
+  // CRUD: DELETE - Remove Participant
+  const handleDelete = async (participantId: number) => {
+    if (!confirm('🗑️ Are you sure you want to delete this participant? This action cannot be undone.')) return
+
+    setDeletingParticipant(participantId)
+    setShowActionsFor(null)
+    try {
+      const { error } = await supabase
+        .from('participants')
+        .delete()
+        .eq('id', participantId)
+
+      if (error) throw error
+
+      const updatedData = participantData.filter(p => p.id !== participantId)
+      setParticipantData(updatedData)
+      calculateStats(updatedData)
+      setSuccessMessage('✅ Participant deleted successfully!')
+      setTimeout(() => setSuccessMessage(''), 3000)
+    } catch (error) {
+      console.error('❌ Error deleting participant:', error)
+      setSuccessMessage('❌ Failed to delete participant')
+      setTimeout(() => setSuccessMessage(''), 3000)
+    } finally {
+      setDeletingParticipant(null)
     }
   }
 
@@ -332,45 +351,6 @@ export default function ParticipantsPage() {
     setShowActionsFor(showActionsFor === participantId ? null : participantId)
   }
 
-  const handleSendEmails = async () => {
-    const scheduleId = searchParams.get('scheduleId')
-    
-    console.log(`\n🚀 handleSendEmails called with scheduleId: ${scheduleId}`)
-
-    if (!scheduleId) {
-      setEmailMessage('❌ No schedule ID found')
-      return
-    }
-
-    setSendingEmails(true)
-    setEmailMessage('📧 Sending emails...')
-
-    try {
-      console.log(`📤 Calling /api/schedule/send-batch-emails with schedule_id=${scheduleId}`)
-      
-      const res = await fetch('/api/schedule/send-batch-emails', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ schedule_id: Number(scheduleId) }),
-      })
-      
-      const data = await res.json()
-      
-      console.log(`📥 Response:`, data)
-
-      if (res.ok) {
-        setEmailMessage(`✅ ${data.message}`)
-      } else {
-        setEmailMessage(`❌ ${data.error || 'Unknown error'}`)
-      }
-    } catch (e: any) {
-      console.error('❌ Error:', e)
-      setEmailMessage(`❌ ${e.message}`)
-    } finally {
-      setSendingEmails(false)
-    }
-  }
-
   return (
     <div className="participants-layout">
       <MenuBar 
@@ -382,6 +362,13 @@ export default function ParticipantsPage() {
       
       <main className={`participants-main ${sidebarOpen ? 'with-sidebar' : 'full-width'}`}>
         <div className="participants-container">
+          {/* Success Message */}
+          {successMessage && (
+            <div className={`success-message ${successMessage.includes('❌') ? 'error' : 'success'}`}>
+              {successMessage}
+            </div>
+          )}
+
           <div className="participants-header">
             <button 
               className="back-button"
@@ -586,12 +573,14 @@ export default function ParticipantsPage() {
                                             <button 
                                               className="save-btn-inline"
                                               onClick={() => handleEditSave(participant.id!)}
+                                              title="Save changes"
                                             >
                                               ✓
                                             </button>
                                             <button 
                                               className="cancel-btn-inline"
                                               onClick={handleEditCancel}
+                                              title="Cancel editing"
                                             >
                                               ✕
                                             </button>
@@ -618,6 +607,7 @@ export default function ParticipantsPage() {
                                                 e.stopPropagation()
                                                 toggleActionsMenu(participant.id!)
                                               }}
+                                              title="More options"
                                             >
                                               ⚙️
                                             </button>
@@ -681,13 +671,14 @@ export default function ParticipantsPage() {
               <button 
                 className="modal-close"
                 onClick={() => setShowAddModal(false)}
+                title="Close modal"
               >
                 ✕
               </button>
             </div>
             <div className="modal-body">
               <div className="form-group">
-                <label>Participant Number *</label>
+                <label>Participant Number * <span className="required-indicator">(Required)</span></label>
                 <input
                   type="text"
                   value={addForm.participant_number}
@@ -697,7 +688,7 @@ export default function ParticipantsPage() {
                 />
               </div>
               <div className="form-group">
-                <label>Full Name *</label>
+                <label>Full Name * <span className="required-indicator">(Required)</span></label>
                 <input
                   type="text"
                   value={addForm.name}
@@ -717,7 +708,7 @@ export default function ParticipantsPage() {
                 </label>
               </div>
               <div className="form-group">
-                <label>Email *</label>
+                <label>Email * <span className="required-indicator">(Required)</span></label>
                 <input
                   type="email"
                   value={addForm.email}
@@ -762,39 +753,6 @@ export default function ParticipantsPage() {
               </button>
             </div>
           </div>
-        </div>
-      )}
-
-      {/* Send Emails Button - Place this where appropriate in your UI */}
-      {selectedBatch && (
-        <div className="send-emails-section">
-          <button 
-            onClick={handleSendEmails}
-            disabled={sendingEmails}
-            style={{
-              padding: '10px 20px',
-              backgroundColor: '#667eea',
-              color: 'white',
-              border: 'none',
-              borderRadius: '5px',
-              cursor: sendingEmails ? 'not-allowed' : 'pointer',
-              opacity: sendingEmails ? 0.6 : 1,
-            }}
-          >
-            {sendingEmails ? '📧 Sending...' : '📧 Send Emails'}
-          </button>
-
-          {emailMessage && (
-            <div style={{
-              padding: '10px',
-              marginTop: '10px',
-              backgroundColor: emailMessage.includes('✅') ? '#d4edda' : '#f8d7da',
-              color: emailMessage.includes('✅') ? '#155724' : '#721c24',
-              borderRadius: '5px',
-            }}>
-              {emailMessage}
-            </div>
-          )}
         </div>
       )}
     </div>
