@@ -5,43 +5,42 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL as string
 const SUPABASE_ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON)
 
-// Call the FastAPI backend
 const BACKEND_BASE_URL =
   process.env.BACKEND_BASE_URL?.replace(/\/+$/, '') || 'http://127.0.0.1:8000'
 
+console.log(`🔗 Backend URL: ${BACKEND_BASE_URL}`)
+
 export async function POST(req: NextRequest) {
+  console.log('\n' + '='.repeat(80))
+  console.log('🚀 POST /api/schedule/generate')
+  console.log('='.repeat(80))
+
   try {
     const body = await req.json()
+    console.log('📥 Request body:', JSON.stringify(body, null, 2))
 
-    // Forward request to FastAPI (capacity-aware scheduler)
-    const res = await fetch(`${BACKEND_BASE_URL}/api/schedule/generate`, {
+    // Forward to FastAPI backend
+    console.log(`\n🔗 Calling ${BACKEND_BASE_URL}/api/schedule/generate...`)
+    const backendRes = await fetch(`${BACKEND_BASE_URL}/api/schedule/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        event_name: body.event_name,
-        event_type: body.event_type,
-        schedule_date: body.schedule_date,
-        start_time: body.start_time,
-        end_time: body.end_time,
-        duration_per_batch: body.duration_per_batch,
-        campus_group_id: body.campus_group_id,
-        participant_group_id: body.participant_group_id,
-        prioritize_pwd: body.prioritize_pwd,
-        email_notification: body.email_notification,
-      }),
+      body: JSON.stringify(body),
     })
 
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}))
+    console.log(`📊 Backend response status: ${backendRes.status}`)
+
+    if (!backendRes.ok) {
+      const err = await backendRes.json().catch(() => ({ error: 'Unknown error' }))
+      console.error(`❌ Backend error: ${JSON.stringify(err)}`)
       return NextResponse.json(
-        { detail: err.detail || err.error || `Backend error ${res.status}` },
-        { status: res.status }
+        { detail: err.detail || err.error || `Backend error ${backendRes.status}` },
+        { status: backendRes.status }
       )
     }
 
-    const data = await res.json()
+    const data = await backendRes.json()
+    console.log(`✅ Backend returned ${data.assignments?.length || 0} assignments`)
 
-    // Build schedule_data from normalized seat-level assignments
     const assignments: Array<{
       batch_number: number
       participant_id: number
@@ -53,8 +52,8 @@ export async function POST(req: NextRequest) {
       time_slot: string
     }> = data.assignments || []
 
-    // No seats? return summary only.
     if (!assignments.length) {
+      console.warn('⚠️  No assignments in response')
       return NextResponse.json({
         scheduled_count: data.scheduled_count,
         unscheduled_count: data.unscheduled_count,
@@ -62,7 +61,8 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    // Fetch participant details once
+    // Fetch participants
+    console.log(`\n👥 Fetching ${new Set(assignments.map(a => a.participant_id)).size} participants...`)
     const participantIds = [...new Set(assignments.map(a => a.participant_id))]
     const { data: participants, error } = await supabase
       .from('participants')
@@ -70,22 +70,24 @@ export async function POST(req: NextRequest) {
       .in('id', participantIds)
 
     if (error) {
+      console.error(`❌ Participants fetch error: ${error.message}`)
       return NextResponse.json(
         { detail: `Supabase participants fetch failed: ${error.message}` },
         { status: 500 }
       )
     }
 
+    console.log(`✅ Fetched ${participants?.length || 0} participants`)
+
     const pmap = new Map<number, any>(
       (participants || []).map(p => [p.id as number, p])
     )
 
-    // Convert assignments -> schedule_data rows for UI/CSV
+    // Build schedule_data
     const schedule_data = assignments.map(a => {
       const p = pmap.get(a.participant_id) || {}
       return {
-        participant_number:
-          p.participant_number ?? p.id ?? a.participant_id,
+        participant_number: p.participant_number ?? p.id ?? a.participant_id,
         name: p.name ?? 'N/A',
         email: p.email ?? 'N/A',
         pwd: p.is_pwd ? 'Yes' : 'No',
@@ -97,13 +99,17 @@ export async function POST(req: NextRequest) {
       }
     })
 
-    // This guarantees per-batch rows <= capacity since backend assigned seats by capacity.
+    console.log(`✅ Generated ${schedule_data.length} schedule rows`)
+    console.log('='.repeat(80) + '\n')
+
     return NextResponse.json({
       scheduled_count: data.scheduled_count,
       unscheduled_count: data.unscheduled_count,
       schedule_data,
     })
   } catch (e: any) {
+    console.error('❌ CRITICAL ERROR:', e)
+    console.log('='.repeat(80) + '\n')
     return NextResponse.json(
       { detail: e?.message || 'Generate failed' },
       { status: 500 }
