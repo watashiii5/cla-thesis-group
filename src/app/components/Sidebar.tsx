@@ -1,7 +1,8 @@
 'use client'
 
-import React from 'react'
-import { usePathname, useRouter } from 'next/navigation'
+import React, { useState } from 'react'
+import { useRouter, usePathname } from 'next/navigation'
+import { FaHome, FaUpload, FaGraduationCap, FaUsers, FaCalendarAlt, FaChartBar, FaChevronDown, FaChevronRight } from 'react-icons/fa'
 import './Sidebar.css'
 
 interface SidebarProps {
@@ -9,34 +10,80 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ isOpen }: SidebarProps) {
-  const pathname = usePathname()
   const router = useRouter()
+  const pathname = usePathname()
+  const [scheduleMenuOpen, setScheduleMenuOpen] = useState(false)
 
   const menuItems = [
-    { icon: '🏠', label: 'Home', path: '/LandingPages/QtimeHomePage' },
-    { icon: '📁', label: 'Upload CSV', path: '/LandingPages/BeforeQtimeHomePage' },
-    { icon: '🎓', label: 'Campus Capacity', path: '/LandingPages/QtimeCampusCapacityPage' },
-    { icon: '👥', label: 'Participants', path: '/LandingPages/QtimeParticipantsPage' },
-    { icon: '📊', label: 'Schedule', path: '/LandingPages/QtimeSchedulePage' },
-    { icon: '📈', label: 'Analytics', path: '/LandingPages/QtimeAnalyticsPage' },
+    { icon: FaHome, label: 'Home', path: '/LandingPages/QtimeHomePage' },
+    { icon: FaUpload, label: 'Upload CSV', path: '/LandingPages/BeforeQtimeHomePage' },
+    { icon: FaGraduationCap, label: 'Campus Capacity', path: '/LandingPages/QtimeCampusCapacityPage' },
+    { icon: FaUsers, label: 'Participants', path: '/LandingPages/QtimeParticipantsPage' },
+    { 
+      icon: FaCalendarAlt, 
+      label: 'Schedule', 
+      path: '/LandingPages/GenerateSchedule',
+      hasSubmenu: true,
+      submenu: [
+        { label: 'Generate Schedule', path: '/LandingPages/GenerateSchedule' },
+        { label: 'View Schedules', path: '/LandingPages/GenerateSchedule/ViewSchedule' },
+        { label: 'Participant Schedules', path: '/LandingPages/GenerateSchedule/ParticipantSchedules' },
+      ]
+    },
+    { icon: FaChartBar, label: 'Analytics', path: '/LandingPages/QtimeAnalyticsPage' },
   ]
 
   const handleNavigation = (path: string) => {
     router.push(path)
   }
 
+  const toggleScheduleMenu = () => {
+    setScheduleMenuOpen(!scheduleMenuOpen)
+  }
+
   return (
     <aside className={`sidebar ${isOpen ? 'open' : 'closed'}`}>
       <nav className="sidebar-nav">
-        {menuItems.map((item) => (
-          <button
-            key={item.path}
-            className={`sidebar-item ${pathname === item.path ? 'active' : ''}`}
-            onClick={() => handleNavigation(item.path)}
-          >
-            <span className="sidebar-icon">{item.icon}</span>
-            <span className="sidebar-label">{item.label}</span>
-          </button>
+        {menuItems.map((item, index) => (
+          <div key={index}>
+            {item.hasSubmenu ? (
+              <>
+                <button
+                  onClick={toggleScheduleMenu}
+                  className={`sidebar-item ${scheduleMenuOpen ? 'active' : ''}`}
+                >
+                  <item.icon className="sidebar-icon" />
+                  <span className="sidebar-label">{item.label}</span>
+                  {scheduleMenuOpen ? (
+                    <FaChevronDown className="submenu-icon" />
+                  ) : (
+                    <FaChevronRight className="submenu-icon" />
+                  )}
+                </button>
+                {scheduleMenuOpen && (
+                  <div className="submenu">
+                    {item.submenu?.map((subItem, subIndex) => (
+                      <button
+                        key={subIndex}
+                        onClick={() => handleNavigation(subItem.path)}
+                        className={`submenu-item ${pathname === subItem.path ? 'active' : ''}`}
+                      >
+                        {subItem.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </>
+            ) : (
+              <button
+                onClick={() => handleNavigation(item.path)}
+                className={`sidebar-item ${pathname === item.path ? 'active' : ''}`}
+              >
+                <item.icon className="sidebar-icon" />
+                <span className="sidebar-label">{item.label}</span>
+              </button>
+            )}
+          </div>
         ))}
       </nav>
     </aside>

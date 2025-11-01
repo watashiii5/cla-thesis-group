@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import MenuBar from '@/app/components/MenuBar'
 import Sidebar from '@/app/components/Sidebar'
@@ -9,6 +9,7 @@ import './styles.css'
 
 interface ParticipantFile {
   upload_group_id: number
+  batch_name: string
   file_name: string
   created_at: string
   row_count: number
@@ -20,6 +21,9 @@ interface Participant {
   name: string
   is_pwd: boolean
   email: string
+  province: string
+  city: string
+  country: string
   upload_group_id?: number
   file_name?: string
 }
@@ -32,6 +36,8 @@ interface ParticipantStats {
 
 export default function ParticipantsPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const groupIdFromUrl = searchParams.get('id')
   
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [participantFiles, setParticipantFiles] = useState<ParticipantFile[]>([])
@@ -51,20 +57,37 @@ export default function ParticipantsPage() {
     participant_number: '',
     name: '',
     is_pwd: false,
-    email: ''
+    email: '',
+    province: '',
+    city: '',
+    country: 'Philippines'
   })
   const [showAddModal, setShowAddModal] = useState(false)
   const [addForm, setAddForm] = useState<Participant>({
     participant_number: '',
     name: '',
     is_pwd: false,
-    email: ''
+    email: '',
+    province: '',
+    city: '',
+    country: 'Philippines'
   })
   const [deletingParticipant, setDeletingParticipant] = useState<number | null>(null)
 
   useEffect(() => {
     fetchParticipantFiles()
   }, [])
+
+  useEffect(() => {
+    // Auto-select batch if ID is provided in URL
+    if (groupIdFromUrl && participantFiles.length > 0) {
+      const groupId = parseInt(groupIdFromUrl)
+      const fileExists = participantFiles.find(f => f.upload_group_id === groupId)
+      if (fileExists && selectedBatch !== groupId) {
+        handleSelectBatch(groupId)
+      }
+    }
+  }, [groupIdFromUrl, participantFiles])
 
   useEffect(() => {
     if (dataSearchTerm) {
@@ -85,7 +108,7 @@ export default function ParticipantsPage() {
       console.log('Fetching participant files...')
       const { data, error } = await supabase
         .from('participants')
-        .select('upload_group_id, file_name, created_at')
+        .select('upload_group_id, batch_name, file_name, created_at')
         .order('created_at', { ascending: false })
 
       if (error) {
@@ -102,6 +125,7 @@ export default function ParticipantsPage() {
         } else {
           acc.push({
             upload_group_id: curr.upload_group_id,
+            batch_name: curr.batch_name,
             file_name: curr.file_name,
             created_at: curr.created_at,
             row_count: 1
@@ -170,7 +194,10 @@ export default function ParticipantsPage() {
       participant_number: participant.participant_number,
       name: participant.name,
       is_pwd: participant.is_pwd,
-      email: participant.email
+      email: participant.email,
+      province: participant.province,
+      city: participant.city,
+      country: participant.country
     })
     setShowActionsFor(null)
   }
@@ -181,7 +208,10 @@ export default function ParticipantsPage() {
       participant_number: '',
       name: '',
       is_pwd: false,
-      email: ''
+      email: '',
+      province: '',
+      city: '',
+      country: 'Philippines'
     })
   }
 
@@ -193,7 +223,10 @@ export default function ParticipantsPage() {
           participant_number: editForm.participant_number,
           name: editForm.name,
           is_pwd: editForm.is_pwd,
-          email: editForm.email
+          email: editForm.email,
+          province: editForm.province,
+          city: editForm.city,
+          country: editForm.country
         })
         .eq('id', participantId)
 
@@ -253,6 +286,10 @@ export default function ParticipantsPage() {
           name: addForm.name,
           is_pwd: addForm.is_pwd,
           email: addForm.email,
+          province: addForm.province,
+          city: addForm.city,
+          country: addForm.country,
+          batch_name: selectedFile?.batch_name || '',
           file_name: selectedFile?.file_name || ''
         }])
         .select()
@@ -269,7 +306,10 @@ export default function ParticipantsPage() {
         participant_number: '',
         name: '',
         is_pwd: false,
-        email: ''
+        email: '',
+        province: '',
+        city: '',
+        country: 'Philippines'
       })
       setShowAddModal(false)
     } catch (error) {
@@ -281,6 +321,7 @@ export default function ParticipantsPage() {
   const getFilteredFiles = () => {
     if (!searchTerm) return participantFiles
     return participantFiles.filter(file => 
+      file.batch_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       file.file_name.toLowerCase().includes(searchTerm.toLowerCase())
     )
   }
@@ -349,7 +390,7 @@ export default function ParticipantsPage() {
                     >
                       <div className="batch-card-icon">📋</div>
                       <div className="batch-card-content">
-                        <h3 className="batch-card-name">{file.file_name}</h3>
+                        <h3 className="batch-card-name">{file.batch_name}</h3>
                         <p className="batch-card-meta">👤 {file.row_count} participants</p>
                         <p className="batch-card-date">
                           📅 Uploaded: {new Date(file.created_at).toLocaleDateString()}
@@ -435,6 +476,8 @@ export default function ParticipantsPage() {
                                 <th>Name</th>
                                 <th>PWD</th>
                                 <th>Email</th>
+                                <th>Province</th>
+                                <th>City</th>
                                 <th>Actions</th>
                               </tr>
                             </thead>
@@ -482,6 +525,22 @@ export default function ParticipantsPage() {
                                           />
                                         </td>
                                         <td>
+                                          <input
+                                            type="text"
+                                            value={editForm.province}
+                                            onChange={(e) => setEditForm({...editForm, province: e.target.value})}
+                                            className="table-input"
+                                          />
+                                        </td>
+                                        <td>
+                                          <input
+                                            type="text"
+                                            value={editForm.city}
+                                            onChange={(e) => setEditForm({...editForm, city: e.target.value})}
+                                            className="table-input"
+                                          />
+                                        </td>
+                                        <td>
                                           <div className="table-actions">
                                             <button 
                                               className="save-btn-inline"
@@ -508,6 +567,8 @@ export default function ParticipantsPage() {
                                           </span>
                                         </td>
                                         <td>{participant.email}</td>
+                                        <td>{participant.province}</td>
+                                        <td>{participant.city}</td>
                                         <td>
                                           <div className="table-options">
                                             <button 
@@ -621,6 +682,26 @@ export default function ParticipantsPage() {
                   value={addForm.email}
                   onChange={(e) => setAddForm({...addForm, email: e.target.value})}
                   placeholder="e.g., john@email.com"
+                  className="modal-input"
+                />
+              </div>
+              <div className="form-group">
+                <label>Province</label>
+                <input
+                  type="text"
+                  value={addForm.province}
+                  onChange={(e) => setAddForm({...addForm, province: e.target.value})}
+                  placeholder="e.g., Metro Manila"
+                  className="modal-input"
+                />
+              </div>
+              <div className="form-group">
+                <label>City</label>
+                <input
+                  type="text"
+                  value={addForm.city}
+                  onChange={(e) => setAddForm({...addForm, city: e.target.value})}
+                  placeholder="e.g., Manila"
                   className="modal-input"
                 />
               </div>

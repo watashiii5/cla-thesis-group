@@ -16,17 +16,17 @@
 
 .page-header-content {
   margin-top: 64px;
-  background: #2563eb;
-  color: #fff;
+  background: #ffffff;
+  color: #000000;
   padding: 32px 20px;
   text-align: center;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 40px 80px rgba(0, 0, 0,5);
 }
 
 .page-header h1,
 .page-header-content h1 {
   margin: 0 0 12px 0;
-  font-size: 28px;
+  font-size: 32px;
   font-weight: 700;
 }
 
@@ -40,7 +40,7 @@
 
 .upload-container {
   width: 100%;
-  background: #f5f7fb;
+  background: #f8f8f8;
   padding: 40px 20px 60px 20px;
   display: flex;
   justify-content: center;
