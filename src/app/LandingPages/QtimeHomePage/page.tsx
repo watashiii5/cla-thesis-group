@@ -37,15 +37,43 @@ export default function QtimeHomePage() {
   const fetchUploadedFiles = async () => {
     setLoading(true)
     try {
-      // Fetch campus files
+      console.log('Fetching campus files...')
       const { data: campusData, error: campusError } = await supabase
         .from('campuses')
         .select('upload_group_id, school_name, file_name, created_at')
         .order('created_at', { ascending: false })
 
-      if (campusError) throw campusError
+      if (campusError) {
+        console.error('Campus error details:', {
+          message: campusError.message,
+          details: campusError.details,
+          hint: campusError.hint,
+          code: campusError.code
+        })
+        throw campusError
+      }
 
-      // Group by upload_group_id and count rows
+      console.log('Campus data fetched:', campusData?.length, 'rows')
+
+      console.log('Fetching participant files...')
+      const { data: participantData, error: participantError } = await supabase
+        .from('participants')
+        .select('upload_group_id, file_name, created_at')
+        .order('created_at', { ascending: false })
+
+      if (participantError) {
+        console.error('Participant error details:', {
+          message: participantError.message,
+          details: participantError.details,
+          hint: participantError.hint,
+          code: participantError.code
+        })
+        throw participantError
+      }
+
+      console.log('Participant data fetched:', participantData?.length, 'rows')
+
+      // Group campus files by upload_group_id
       const campusGrouped = campusData?.reduce((acc: any[], curr) => {
         const existing = acc.find(item => item.upload_group_id === curr.upload_group_id)
         if (existing) {
@@ -53,7 +81,23 @@ export default function QtimeHomePage() {
         } else {
           acc.push({
             upload_group_id: curr.upload_group_id,
-            school_name: curr.school_name, // Changed
+            school_name: curr.school_name,
+            file_name: curr.file_name,
+            created_at: curr.created_at,
+            row_count: 1
+          })
+        }
+        return acc
+      }, [])
+
+      // Group participant files by upload_group_id
+      const participantGrouped = participantData?.reduce((acc: any[], curr) => {
+        const existing = acc.find(item => item.upload_group_id === curr.upload_group_id)
+        if (existing) {
+          existing.row_count++
+        } else {
+          acc.push({
+            upload_group_id: curr.upload_group_id,
             file_name: curr.file_name,
             created_at: curr.created_at,
             row_count: 1
@@ -63,35 +107,18 @@ export default function QtimeHomePage() {
       }, [])
 
       setCampusFiles(campusGrouped || [])
-
-      // Fetch participant files
-      const { data: participantData, error: participantError } = await supabase
-        .from('participants')
-        .select('upload_group_id, school_name, file_name, created_at')
-        .order('created_at', { ascending: false })
-
-      if (participantError) throw participantError
-
-      // Group by upload_group_id and count rows
-      const participantGrouped = participantData?.reduce((acc: any[], curr) => {
-        const existing = acc.find(item => item.upload_group_id === curr.upload_group_id)
-        if (existing) {
-          existing.row_count++
-        } else {
-          acc.push({
-            upload_group_id: curr.upload_group_id,
-            school_name: curr.school_name, // Changed
-            file_name: curr.file_name,
-            created_at: curr.created_at,
-            row_count: 1
-          })
-        }
-        return acc
-      }, [])
-
       setParticipantFiles(participantGrouped || [])
-    } catch (error) {
-      console.error('Error fetching files:', error)
+      
+      console.log('Files set successfully')
+    } catch (err: any) {
+      console.error('Error fetching files:', {
+        error: err,
+        message: err?.message,
+        details: err?.details,
+        hint: err?.hint,
+        code: err?.code,
+        stack: err?.stack
+      })
     } finally {
       setLoading(false)
     }
