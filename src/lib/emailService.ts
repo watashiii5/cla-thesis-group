@@ -111,6 +111,44 @@ export async function sendScheduleEmails(recipients: EmailRecipient[]) {
   return sendBatchEmails(recipients)
 }
 
+const LOGO_SVG = `
+<svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#2563eb;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#3b82f6;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="40" height="40" rx="8" fill="url(#logoGradient)"/>
+  
+  <!-- Calendar Icon -->
+  <g transform="translate(8, 6)">
+    <!-- Calendar Box -->
+    <rect x="0" y="4" width="24" height="20" rx="2" fill="none" stroke="white" stroke-width="1.5"/>
+    
+    <!-- Calendar Top Bar -->
+    <rect x="0" y="4" width="24" height="4" rx="1" fill="white" opacity="0.3"/>
+    
+    <!-- Date Grid -->
+    <circle cx="4" cy="12" r="1.5" fill="white"/>
+    <circle cx="12" cy="12" r="1.5" fill="white"/>
+    <circle cx="20" cy="12" r="1.5" fill="white"/>
+    
+    <circle cx="4" cy="18" r="1.5" fill="white"/>
+    <circle cx="12" cy="18" r="1.5" fill="white" opacity="0.6"/>
+    <circle cx="20" cy="18" r="1.5" fill="white"/>
+  </g>
+  
+  <!-- Checkmark -->
+  <g transform="translate(20, 18)">
+    <circle cx="0" cy="0" r="6" fill="white" opacity="0.2"/>
+    <path d="M-2 0L1 3L4 -1" stroke="white" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>
+`
+
 function generateBatchEmailHTML(
   recipient: EmailRecipient,
   batch: any
@@ -187,45 +225,45 @@ function generateEmailHTML(recipient: EmailRecipient): string {
       <body>
         <div class="container">
           <div class="header">
-            <h1>✅ Your Schedule is Confirmed!</h1>
+            <h1> Your Schedule is Confirmed!</h1>
             <p>Your admission test schedule is ready</p>
           </div>
           
           <div class="content">
-            <p class="greeting">Hi <strong>${recipient.name}</strong>,</p>
+            <p class="greeting">Hi <strong> ${recipient.name}</strong>,</p>
             <p>Great news! Your admission test schedule has been confirmed. Please review your details below:</p>
             
             <div class="details">
               <div class="detail-row">
-                <span class="detail-label">Participant Number</span>
-                <span class="detail-value"><strong>${recipient.participant_number || 'N/A'}</strong></span>
+                <span class="detail-label">Participant Number: </span>
+                <span class="detail-value"><strong> ${recipient.participant_number || 'N/A'}</strong></span>
               </div>
               <div class="detail-row">
-                <span class="detail-label">Batch</span>
-                <span class="detail-value"><strong>${recipient.batch_name || 'N/A'}</strong></span>
+                <span class="detail-label">Batch: </span>
+                <span class="detail-value"><strong> ${recipient.batch_name || 'N/A'}</strong></span>
               </div>
               <div class="detail-row">
-                <span class="detail-label">Test Time</span>
-                <span class="detail-value"><strong>${recipient.time_slot || 'N/A'}</strong></span>
+                <span class="detail-label">Test Time: </span>
+                <span class="detail-value"><strong> ${recipient.time_slot || 'N/A'}</strong></span>
               </div>
               <div class="detail-row">
-                <span class="detail-label">Room</span>
-                <span class="detail-value"><strong>${recipient.room || 'N/A'}</strong></span>
+                <span class="detail-label">Room: </span>
+                <span class="detail-value"><strong> ${recipient.room || 'N/A'}</strong></span>
               </div>
               <div class="detail-row">
-                <span class="detail-label">Campus</span>
-                <span class="detail-value"><strong>${recipient.campus || 'N/A'}</strong></span>
+                <span class="detail-label">Campus: </span>
+                <span class="detail-value"><strong> ${recipient.campus || 'N/A'}</strong></span>
               </div>
             </div>
 
             <div class="important">
               <h3>⚠️ Important Reminders</h3>
               <ul>
-                <li><strong>Arrive Early:</strong> Come 15 minutes before your scheduled time</li>
+                <li><strong>Arrive Early:</strong> Come 15 minutes before your scheduled time </li>
                 <li><strong>Bring ID:</strong> Valid government-issued ID required</li>
-                <li><strong>No Devices:</strong> Mobile phones and electronic devices not allowed</li>
-                <li><strong>Bring Supplies:</strong> Pen, pencil, and eraser required</li>
-                <li><strong>Be Punctual:</strong> Latecomers may not be admitted</li>
+                <li><strong>No Devices:</strong> Mobile phones and electronic devices not allowed </li>
+                <li><strong>Bring Supplies:</strong> Pen, pencil, and eraser required </li>
+                <li><strong>Be Punctual:</strong> Latecomers may not be admitted </li>
               </ul>
             </div>
 
