@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react'
-import { useRouter, usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import './Sidebar.css'
 
 interface SidebarProps {
@@ -9,26 +9,30 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ isOpen }: SidebarProps) {
-  const router = useRouter()
   const pathname = usePathname()
+  const router = useRouter()
 
   const menuItems = [
     { icon: '🏠', label: 'Home', path: '/LandingPages/QtimeHomePage' },
     { icon: '📁', label: 'Upload CSV', path: '/LandingPages/BeforeQtimeHomePage' },
-    { icon: '🏢', label: 'Campus Capacity', path: '/LandingPages/QtimeCampusCapacityPage' },
+    { icon: '🎓', label: 'Campus Capacity', path: '/LandingPages/QtimeCampusCapacityPage' },
     { icon: '👥', label: 'Participants', path: '/LandingPages/QtimeParticipantsPage' },
     { icon: '📊', label: 'Schedule', path: '/LandingPages/QtimeSchedulePage' },
     { icon: '📈', label: 'Analytics', path: '/LandingPages/QtimeAnalyticsPage' },
   ]
 
+  const handleNavigation = (path: string) => {
+    router.push(path)
+  }
+
   return (
     <aside className={`sidebar ${isOpen ? 'open' : 'closed'}`}>
       <nav className="sidebar-nav">
-        {menuItems.map((item, index) => (
+        {menuItems.map((item) => (
           <button
-            key={index}
+            key={item.path}
             className={`sidebar-item ${pathname === item.path ? 'active' : ''}`}
-            onClick={() => router.push(item.path)}
+            onClick={() => handleNavigation(item.path)}
           >
             <span className="sidebar-icon">{item.icon}</span>
             <span className="sidebar-label">{item.label}</span>

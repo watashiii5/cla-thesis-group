@@ -11,8 +11,8 @@ export default function CSVUploadPage(): JSX.Element {
   const router = useRouter()
   const [campusFile, setCampusFile] = useState<File | null>(null)
   const [participantFile, setParticipantFile] = useState<File | null>(null)
-  const [campusQueueName, setCampusQueueName] = useState('')
-  const [participantBatchName, setParticipantBatchName] = useState('')
+  const [campusSchoolName, setCampusSchoolName] = useState('')
+  const [participantSchoolName, setParticipantSchoolName] = useState('')
   const [campusLoading, setCampusLoading] = useState(false)
   const [participantLoading, setParticipantLoading] = useState(false)
   const [campusMessage, setCampusMessage] = useState<string | null>(null)
@@ -57,8 +57,8 @@ export default function CSVUploadPage(): JSX.Element {
   }
 
   const handleCampusUpload = async () => {
-    if (!campusFile || !campusQueueName) {
-      setCampusError('Please provide queue name and choose a file.')
+    if (!campusFile || !campusSchoolName) {
+      setCampusError('Please provide school name and choose a file.')
       return
     }
 
@@ -85,7 +85,7 @@ export default function CSVUploadPage(): JSX.Element {
         building: row[1] || '',
         room: row[2] || '',
         capacity: parseInt(row[3]) || 0,
-        queue_name: campusQueueName,
+        school_name: campusSchoolName,
         file_name: campusFile.name
       }))
 
@@ -104,14 +104,14 @@ export default function CSVUploadPage(): JSX.Element {
       setCampusMessage(
         `✅ Campus data uploaded successfully!\n` +
         `Group ID: ${groupId}\n` +
-        `Queue Name: ${campusQueueName}\n` +
+        `School Name: ${campusSchoolName}\n` +
         `File: ${campusFile.name}\n` +
         `Rows: ${campusData.length}`
       )
       
       // Reset form
       setCampusFile(null)
-      setCampusQueueName('')
+      setCampusSchoolName('')
       const fileInput = document.getElementById('campusFile') as HTMLInputElement
       if (fileInput) fileInput.value = ''
     } catch (err: any) {
@@ -123,8 +123,8 @@ export default function CSVUploadPage(): JSX.Element {
   }
 
   const handleParticipantUpload = async () => {
-    if (!participantFile || !participantBatchName) {
-      setParticipantError('Please provide batch name and choose a file.')
+    if (!participantFile) {
+      setParticipantError('Please choose a file.')
       return
     }
 
@@ -142,7 +142,7 @@ export default function CSVUploadPage(): JSX.Element {
 
       const dataRows = rows.slice(1)
 
-      // Get the next group ID - all rows from this CSV will share this ID
+      // Get the next group ID
       const groupId = await getNextParticipantGroupId()
 
       const participantData = dataRows.map(row => ({
@@ -151,7 +151,6 @@ export default function CSVUploadPage(): JSX.Element {
         name: row[1] || '',
         is_pwd: row[2].toLowerCase() === 'yes' || row[2].toLowerCase() === 'true',
         email: row[3] || '',
-        queue_name: participantBatchName,
         file_name: participantFile.name
       }))
 
@@ -170,14 +169,13 @@ export default function CSVUploadPage(): JSX.Element {
       setParticipantMessage(
         `✅ Participant data uploaded successfully!\n` +
         `Group ID: ${groupId}\n` +
-        `Batch Name: ${participantBatchName}\n` +
         `File: ${participantFile.name}\n` +
         `Rows: ${participantData.length}`
       )
       
       // Reset form
       setParticipantFile(null)
-      setParticipantBatchName('')
+      setParticipantSchoolName('')
       const fileInput = document.getElementById('participantFile') as HTMLInputElement
       if (fileInput) fileInput.value = ''
     } catch (err: any) {
@@ -217,18 +215,18 @@ export default function CSVUploadPage(): JSX.Element {
 
             <div className="form-group">
               <label className="label">
-                Queue Name (Unique Identifier)
+                School Name (e.g., State University)
                 <input
                   type="text"
-                  value={campusQueueName}
-                  onChange={(e) => setCampusQueueName(e.target.value)}
+                  value={campusSchoolName}
+                  onChange={(e) => setCampusSchoolName(e.target.value)}
                   className="input"
-                  placeholder="e.g., MainCampus2024"
+                  placeholder="e.g., State University"
                   required
                 />
               </label>
               <small style={{ color: '#64748b', fontSize: '12px', marginTop: '4px' }}>
-                This name will be used to identify this upload batch
+                This name will be used to identify your institution
               </small>
             </div>
 
@@ -258,7 +256,7 @@ export default function CSVUploadPage(): JSX.Element {
 
             <button
               onClick={handleCampusUpload}
-              disabled={campusLoading || !campusFile || !campusQueueName}
+              disabled={campusLoading || !campusFile || !campusSchoolName}
               className="upload-button"
             >
               {campusLoading ? 'Uploading...' : 'Upload Campus CSV'}
@@ -281,23 +279,6 @@ export default function CSVUploadPage(): JSX.Element {
               <p>Participant Number, Name, PWD (Yes/No), Email</p>
               <small style={{ color: '#64748b', marginTop: '8px', display: 'block' }}>
                 Example: 2024001, John Doe, No, john@email.com
-              </small>
-            </div>
-
-            <div className="form-group">
-              <label className="label">
-                Batch Name (Unique Identifier)
-                <input
-                  type="text"
-                  value={participantBatchName}
-                  onChange={(e) => setParticipantBatchName(e.target.value)}
-                  className="input"
-                  placeholder="e.g., Fall2024Batch"
-                  required
-                />
-              </label>
-              <small style={{ color: '#64748b', fontSize: '12px', marginTop: '4px' }}>
-                This name will be used to identify this upload batch
               </small>
             </div>
 
@@ -327,7 +308,7 @@ export default function CSVUploadPage(): JSX.Element {
 
             <button
               onClick={handleParticipantUpload}
-              disabled={participantLoading || !participantFile || !participantBatchName}
+              disabled={participantLoading || !participantFile}
               className="upload-button"
             >
               {participantLoading ? 'Uploading...' : 'Upload Participant CSV'}

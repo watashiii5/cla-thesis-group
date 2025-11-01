@@ -9,7 +9,7 @@ import './styles.css'
 
 interface CampusFile {
   upload_group_id: number
-  queue_name: string
+  school_name: string // Changed from queue_name
   file_name: string
   created_at: string
   row_count: number
@@ -17,7 +17,7 @@ interface CampusFile {
 
 interface ParticipantFile {
   upload_group_id: number
-  queue_name: string
+  school_name: string // Changed from queue_name
   file_name: string
   created_at: string
   row_count: number
@@ -40,7 +40,7 @@ export default function QtimeHomePage() {
       // Fetch campus files
       const { data: campusData, error: campusError } = await supabase
         .from('campuses')
-        .select('upload_group_id, queue_name, file_name, created_at')
+        .select('upload_group_id, school_name, file_name, created_at')
         .order('created_at', { ascending: false })
 
       if (campusError) throw campusError
@@ -53,7 +53,7 @@ export default function QtimeHomePage() {
         } else {
           acc.push({
             upload_group_id: curr.upload_group_id,
-            queue_name: curr.queue_name,
+            school_name: curr.school_name, // Changed
             file_name: curr.file_name,
             created_at: curr.created_at,
             row_count: 1
@@ -67,7 +67,7 @@ export default function QtimeHomePage() {
       // Fetch participant files
       const { data: participantData, error: participantError } = await supabase
         .from('participants')
-        .select('upload_group_id, queue_name, file_name, created_at')
+        .select('upload_group_id, school_name, file_name, created_at')
         .order('created_at', { ascending: false })
 
       if (participantError) throw participantError
@@ -80,7 +80,7 @@ export default function QtimeHomePage() {
         } else {
           acc.push({
             upload_group_id: curr.upload_group_id,
-            queue_name: curr.queue_name,
+            school_name: curr.school_name, // Changed
             file_name: curr.file_name,
             created_at: curr.created_at,
             row_count: 1
@@ -152,10 +152,10 @@ export default function QtimeHomePage() {
                         {campusFiles.map((file) => (
                           <div key={file.upload_group_id} className="file-card">
                             <div className="file-card-header">
-                              <span className="file-icon">🏢</span>
+                              <span className="file-icon">🎓</span>
                               <span className="file-id">ID: {file.upload_group_id}</span>
                             </div>
-                            <h3 className="file-name">{file.queue_name}</h3>
+                            <h3 className="file-name">{file.school_name}</h3>
                             <p className="file-details">{file.file_name}</p>
                             <p className="file-meta">{file.row_count} rooms</p>
                             <p className="file-date">
@@ -184,7 +184,7 @@ export default function QtimeHomePage() {
                               <span className="file-icon">👥</span>
                               <span className="file-id">ID: {file.upload_group_id}</span>
                             </div>
-                            <h3 className="file-name">{file.queue_name}</h3>
+                            <h3 className="file-name">{file.school_name}</h3>
                             <p className="file-details">{file.file_name}</p>
                             <p className="file-meta">{file.row_count} participants</p>
                             <p className="file-date">
