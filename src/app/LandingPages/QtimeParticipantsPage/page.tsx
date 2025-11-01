@@ -73,6 +73,8 @@ export default function ParticipantsPage() {
     country: 'Philippines'
   })
   const [deletingParticipant, setDeletingParticipant] = useState<number | null>(null)
+  const [sendingEmails, setSendingEmails] = useState(false)
+  const [emailMessage, setEmailMessage] = useState('')
 
   useEffect(() => {
     fetchParticipantFiles()
@@ -328,6 +330,45 @@ export default function ParticipantsPage() {
 
   const toggleActionsMenu = (participantId: number) => {
     setShowActionsFor(showActionsFor === participantId ? null : participantId)
+  }
+
+  const handleSendEmails = async () => {
+    const scheduleId = searchParams.get('scheduleId')
+    
+    console.log(`\n🚀 handleSendEmails called with scheduleId: ${scheduleId}`)
+
+    if (!scheduleId) {
+      setEmailMessage('❌ No schedule ID found')
+      return
+    }
+
+    setSendingEmails(true)
+    setEmailMessage('📧 Sending emails...')
+
+    try {
+      console.log(`📤 Calling /api/schedule/send-batch-emails with schedule_id=${scheduleId}`)
+      
+      const res = await fetch('/api/schedule/send-batch-emails', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ schedule_id: Number(scheduleId) }),
+      })
+      
+      const data = await res.json()
+      
+      console.log(`📥 Response:`, data)
+
+      if (res.ok) {
+        setEmailMessage(`✅ ${data.message}`)
+      } else {
+        setEmailMessage(`❌ ${data.error || 'Unknown error'}`)
+      }
+    } catch (e: any) {
+      console.error('❌ Error:', e)
+      setEmailMessage(`❌ ${e.message}`)
+    } finally {
+      setSendingEmails(false)
+    }
   }
 
   return (
@@ -721,6 +762,39 @@ export default function ParticipantsPage() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Send Emails Button - Place this where appropriate in your UI */}
+      {selectedBatch && (
+        <div className="send-emails-section">
+          <button 
+            onClick={handleSendEmails}
+            disabled={sendingEmails}
+            style={{
+              padding: '10px 20px',
+              backgroundColor: '#667eea',
+              color: 'white',
+              border: 'none',
+              borderRadius: '5px',
+              cursor: sendingEmails ? 'not-allowed' : 'pointer',
+              opacity: sendingEmails ? 0.6 : 1,
+            }}
+          >
+            {sendingEmails ? '📧 Sending...' : '📧 Send Emails'}
+          </button>
+
+          {emailMessage && (
+            <div style={{
+              padding: '10px',
+              marginTop: '10px',
+              backgroundColor: emailMessage.includes('✅') ? '#d4edda' : '#f8d7da',
+              color: emailMessage.includes('✅') ? '#155724' : '#721c24',
+              borderRadius: '5px',
+            }}>
+              {emailMessage}
+            </div>
+          )}
         </div>
       )}
     </div>

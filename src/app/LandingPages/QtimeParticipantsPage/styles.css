@@ -1,4 +1,9 @@
 /* Layout */
+* {
+  margin-top: 300px;
+  box-sizing: border-box;
+}
+
 .participants-layout {
   display: flex;
   min-height: 100vh;
