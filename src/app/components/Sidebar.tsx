@@ -30,7 +30,6 @@ export default function Sidebar({ isOpen }: SidebarProps) {
         { label: 'Participant Schedules', path: '/LandingPages/GenerateSchedule/ParticipantSchedules' },
       ]
     },
-    { icon: FaChartBar, label: 'Analytics', path: '/LandingPages/QtimeAnalyticsPage' },
   ]
 
   const handleNavigation = (path: string) => {
