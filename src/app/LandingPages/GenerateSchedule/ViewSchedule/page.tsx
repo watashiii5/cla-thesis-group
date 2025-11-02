@@ -161,7 +161,7 @@ export default function ViewSchedulePage() {
 
                   <div className="stats-container">
                     <div className="stat-badge success">
-                      <span className="stat-icon">✓</span>
+                      <span className="stat-icon success">✓</span>
                       <div>
                         <span className="stat-label">Scheduled</span>
                         <span className="stat-value">{schedule.scheduled_count}</span>
@@ -169,7 +169,7 @@ export default function ViewSchedulePage() {
                     </div>
                     {schedule.unscheduled_count > 0 && (
                       <div className="stat-badge warning">
-                        <span className="stat-icon">⚠</span>
+                        <span className="stat-icon warning">⚠</span>
                         <div>
                           <span className="stat-label">Unscheduled</span>
                           <span className="stat-value">{schedule.unscheduled_count}</span>
