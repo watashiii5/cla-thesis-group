@@ -25,7 +25,7 @@ interface ScheduleConfig {
   campusGroupId: number | null
   participantGroupId: number | null
   eventName: string
-  eventType: 'admission_test' | 'enrollment' | 'orientation' | 'custom'
+  eventType: 'Admission_Test' | 'Enrollment' | 'Orientation' | 'Custom'
   scheduleDate: string
   startTime: string
   endTime: string
@@ -58,7 +58,7 @@ export default function GenerateSchedulePage() {
     campusGroupId: null,
     participantGroupId: null,
     eventName: '',
-    eventType: 'admission_test',
+    eventType: 'Admission_Test',
     scheduleDate: '',
     startTime: '08:00',
     endTime: '18:00',
@@ -372,10 +372,10 @@ export default function GenerateSchedulePage() {
                     onChange={(e) => setConfig({...config, eventType: e.target.value as any})}
                     className="form-select"
                   >
-                    <option value="admission_test">Admission Test</option>
-                    <option value="enrollment">Enrollment</option>
-                    <option value="orientation">Orientation</option>
-                    <option value="custom">Custom Event</option>
+                    <option value="Admission_Test">Admission Test</option>
+                    <option value="Enrollment">Enrollment</option>
+                    <option value="Orientation">Orientation</option>
+                    <option value="Custom_Event">Custom Event</option>
                   </select>
                 </div>
               </div>
