@@ -544,6 +544,56 @@
   50% { opacity: 0.5; }
 }
 
+/* Ensure default text is black and placeholders/muted text are darker */
+:root {
+  --text-color: #000;
+  --muted-text-color: #555;
+}
+
+/* Global/default text color for this page */
+body,
+.schedule-layout,
+.schedule-main,
+.schedule-container,
+.form-section,
+.form-card,
+.header-text,
+.selection-grid,
+.results-section,
+.warning-content {
+  color: var(--text-color) !important;
+}
+
+/* Inputs, selects, textareas — make typed text black and placeholders muted */
+input,
+select,
+textarea,
+button,
+.form-input,
+.form-select {
+  color: var(--text-color) !important;
+  background-color: #fff; /* optional: ensure contrast */
+  border-color: #ccc;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--muted-text-color);
+}
+
+/* Specific elements that might have been white previously */
+.header-large-icon,
+.header-title-section,
+.selection-card h3,
+.selection-card p,
+.form-label,
+.stat-label,
+.stat-value,
+.results-info h2,
+.results-info p {
+  color: var(--text-color) !important;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .schedule-main {
