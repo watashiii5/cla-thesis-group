@@ -1,1 +1,1 @@
-# Schedule API module
+"""Schedule management module"""

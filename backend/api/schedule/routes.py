@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 from typing import List, Optional, Dict
 import os
@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 from supabase import create_client, Client
 from .scheduler import PriorityScheduler
 import logging
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +36,30 @@ logger.info(f"✅ Using key type: {'SERVICE_ROLE' if SERVICE_ROLE else 'ANON'}")
 
 sb: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
+# ==================== Models ====================
+
+class ScheduleBase(BaseModel):
+    name: str
+    description: Optional[str] = None
+
+class ScheduleCreate(ScheduleBase):
+    pass
+
+class Schedule(ScheduleBase):
+    id: int
+    created_at: datetime
+
+class Participant(BaseModel):
+    participant_number: str
+    name: str
+    email: str
+    is_pwd: bool
+    province: str
+    city: str
+
+class BatchEmailRequest(BaseModel):
+    schedule_id: int
+
 class ScheduleRequest(BaseModel):
     event_name: str
     event_type: str
@@ -54,6 +79,33 @@ class ScheduleResponse(BaseModel):
     total_batches: int
     warnings: List[str] = []
     assignments: List[Dict] = []
+
+# ==================== Endpoints ====================
+
+@router.get("/", response_model=List[Schedule])
+async def list_schedules():
+    """Get all schedules"""
+    try:
+        logger.info("📋 Fetching all schedules...")
+        # TODO: Implement with Supabase
+        return []
+    except Exception as e:
+        logger.error(f"❌ Error fetching schedules: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/generate")
+async def generate_schedule(schedule: ScheduleCreate):
+    """Generate a new schedule"""
+    try:
+        logger.info(f"🔄 Generating schedule: {schedule.name}")
+        # TODO: Implement schedule generation logic
+        return {
+            "message": "Schedule generated successfully",
+            "schedule_id": 1
+        }
+    except Exception as e:
+        logger.error(f"❌ Error generating schedule: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/generate", response_model=ScheduleResponse)
 async def generate_schedule(req: ScheduleRequest):
