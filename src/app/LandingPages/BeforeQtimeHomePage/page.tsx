@@ -1,11 +1,12 @@
 'use client'
+import styles from './styles/bQtime.module.css'
 
 import React, { useState } from 'react'
 import type { JSX } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import MenuBar from '@/app/components/MenuBar'
-import './styles.css'
+
 
 export default function CSVUploadPage(): JSX.Element {
   const router = useRouter()
@@ -196,21 +197,21 @@ export default function CSVUploadPage(): JSX.Element {
   }
 
   return (
-    <div className="page-layout">
+    <div className={styles['page-layout']}>
       <MenuBar onToggleSidebar={() => {}} showSidebarToggle={false} showAccountIcon={false} />
       
-      <div className="page-header-content">
+      <div className={styles['page-header-content']}>
         <h1>Welcome to Qtime Scheduler</h1>
         <h2>Kindly Upload the CSV files for the Campus and Participant Data</h2>
       </div>
 
-      <main className="upload-container">
-        <div className="upload-wrapper">
+      <main className={styles['upload-container']}>
+        <div className={styles['upload-wrapper']}>
           {/* Campus CSV Section */}
-          <div className="upload-card">
-            <h2 className="section-title">Campus/Building Capacity</h2>
+          <div className={styles['upload-card']}>
+            <h2 className={styles['section-title']}>Campus/Building Capacity</h2>
             
-            <div className="format-info">
+            <div className={styles['format-info']}>
               <h3>Expected CSV Format:</h3>
               <p>Campus, Building, Room, Capacity</p>
               <small style={{ color: '#64748b', marginTop: '8px', display: 'block' }}>
@@ -218,14 +219,14 @@ export default function CSVUploadPage(): JSX.Element {
               </small>
             </div>
 
-            <div className="form-group">
-              <label className="label">
+            <div className={styles['form-group']}>
+              <label className={styles['label']}>
                 School Name (e.g., State University)
                 <input
                   type="text"
                   value={campusSchoolName}
                   onChange={(e) => setCampusSchoolName(e.target.value)}
-                  className="input"
+                  className={styles['input']}
                   placeholder="e.g., State University"
                   required
                 />
@@ -235,8 +236,8 @@ export default function CSVUploadPage(): JSX.Element {
               </small>
             </div>
 
-            <div className="form-group">
-              <label className="label">
+            <div className={styles['form-group']}>
+              <label className={styles['label']}>
                 Select CSV File
                 <input
                   id="campusFile"
@@ -248,7 +249,7 @@ export default function CSVUploadPage(): JSX.Element {
                       setCampusError(null)
                     }
                   }}
-                  className="file-input"
+                  className={styles['file-input']}
                   required
                 />
               </label>
@@ -262,24 +263,24 @@ export default function CSVUploadPage(): JSX.Element {
             <button
               onClick={handleCampusUpload}
               disabled={campusLoading || !campusFile || !campusSchoolName}
-              className="upload-button"
+              className={styles['upload-button']}
             >
               {campusLoading ? 'Uploading...' : 'Upload Campus CSV'}
             </button>
 
             {campusMessage && (
-              <div className="message success" style={{ whiteSpace: 'pre-line' }}>
+              <div className={`${styles['message']} ${styles['success']}`} style={{ whiteSpace: 'pre-line' }}>
                 {campusMessage}
               </div>
             )}
-            {campusError && <div className="message error">{campusError}</div>}
+            {campusError && <div className={`${styles['message']} ${styles['error']}`}>{campusError}</div>}
           </div>
 
           {/* Participant CSV Section */}
-          <div className="upload-card">
-            <h2 className="section-title">Participants</h2>
+          <div className={styles['upload-card']}>
+            <h2 className={styles['section-title']}>Participants</h2>
             
-            <div className="format-info">
+            <div className={styles['format-info']}>
               <h3>Expected CSV Format:</h3>
               <p>Participant Number, Name, PWD (Yes/No), Email, Province, City, Country</p>
               <small style={{ color: '#64748b', marginTop: '8px', display: 'block' }}>
@@ -287,14 +288,14 @@ export default function CSVUploadPage(): JSX.Element {
               </small>
             </div>
 
-            <div className="form-group">
-              <label className="label">
+            <div className={styles['form-group']}>
+              <label className={styles['label']}>
                 Batch Name (e.g., Batch 2024-A, First Year Students)
                 <input
                   type="text"
                   value={participantBatchName}
                   onChange={(e) => setParticipantBatchName(e.target.value)}
-                  className="input"
+                  className={styles['input']}
                   placeholder="e.g., Batch 2024-A"
                   required
                 />
@@ -304,8 +305,8 @@ export default function CSVUploadPage(): JSX.Element {
               </small>
             </div>
 
-            <div className="form-group">
-              <label className="label">
+            <div className={styles['form-group']}>
+              <label className={styles['label']}>
                 Select CSV File
                 <input
                   id="participantFile"
@@ -317,7 +318,7 @@ export default function CSVUploadPage(): JSX.Element {
                       setParticipantError(null)
                     }
                   }}
-                  className="file-input"
+                  className={styles['file-input']}
                   required
                 />
               </label>
@@ -331,27 +332,29 @@ export default function CSVUploadPage(): JSX.Element {
             <button
               onClick={handleParticipantUpload}
               disabled={participantLoading || !participantFile || !participantBatchName}
-              className="upload-button"
+              className={styles['upload-button']}
             >
               {participantLoading ? 'Uploading...' : 'Upload Participant CSV'}
             </button>
 
             {participantMessage && (
-              <div className="message success" style={{ whiteSpace: 'pre-line' }}>
+              <div className={`${styles['message']} ${styles['success']}`} style={{ whiteSpace: 'pre-line' }}>
                 {participantMessage}
               </div>
             )}
-            {participantError && <div className="message error">{participantError}</div>}
+            {participantError && <div className={`${styles['message']} ${styles['error']}`}>{participantError}</div>}
           </div>
 
           {/* Skip Button */}
-          <div className="skip-container">
-            <button onClick={handleSkip} className="skip-button">
+          <div className={styles['skip-container']}>
+            <button onClick={handleSkip} className={styles['skip-button']}>
               Skip →
             </button>
           </div>
         </div>
       </main>
     </div>
+    
   )
+  
 }
