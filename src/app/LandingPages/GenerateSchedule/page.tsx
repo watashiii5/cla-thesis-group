@@ -145,24 +145,28 @@ export default function GenerateSchedulePage() {
     try {
       const startTime = performance.now()
 
-      // Use Next.js API route instead of direct backend call
+      // Fixed: Ensure data is sent correctly
+      const requestBody = {
+        campusGroupId: config.campusGroupId,
+        participantGroupId: config.participantGroupId,
+        eventName: config.eventName,
+        eventType: config.eventType,
+        scheduleDate: config.scheduleDate,
+        startTime: config.startTime,
+        endTime: config.endTime,
+        durationPerBatch: config.durationPerBatch,
+        prioritizePWD: config.prioritizePWD,
+        emailNotification: config.emailNotification
+      }
+
+      console.log('Sending request:', requestBody) // Debug log
+
       const response = await fetch('/api/schedule/generate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          campus_group_id: config.campusGroupId,
-          participant_group_id: config.participantGroupId,
-          event_name: config.eventName,
-          event_type: config.eventType,
-          schedule_date: config.scheduleDate,
-          start_time: config.startTime,
-          end_time: config.endTime,
-          duration_per_batch: config.durationPerBatch,
-          prioritize_pwd: config.prioritizePWD,
-          email_notification: config.emailNotification
-        })
+        body: JSON.stringify(requestBody)
       })
 
       const endTime = performance.now()
@@ -170,10 +174,12 @@ export default function GenerateSchedulePage() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }))
+        console.error('API Error:', errorData) // Debug log
         throw new Error(errorData.detail || errorData.error || `Server error: ${response.status}`)
       }
 
       const result = await response.json()
+      console.log('API Response:', result) // Debug log
       
       setScheduleResult({
         success: true,
