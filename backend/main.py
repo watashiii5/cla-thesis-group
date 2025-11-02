@@ -1,17 +1,16 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
+import os
+
+# Load environment variables
+load_dotenv()
+
 from api.schedule.routes import router as schedule_router
-import logging
 
-# Configure logging to see what's happening
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+app = FastAPI()
 
-app = FastAPI(title="CLA Scheduler API")
-
+# CORS Middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -20,14 +19,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(schedule_router)
+# Include routers
+app.include_router(schedule_router, prefix="/api/schedule", tags=["schedule"])
+
+@app.get("/")
+def read_root():
+    return {"message": "CLA Thesis Backend is running"}
 
 @app.get("/health")
-def health():
-    logger.info("Health check called")
-    return {"ok": True, "message": "Backend is running"}
+def health_check():
+    return {"status": "ok"}
 
 if __name__ == "__main__":
-    logger.info("Starting FastAPI server...")
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8000)

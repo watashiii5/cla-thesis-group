@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from typing import List, Dict
+from typing import List, Optional, Dict
 import os
 from pathlib import Path
 from dotenv import load_dotenv
@@ -334,3 +334,11 @@ async def export_schedule(schedule_id: int):
     except Exception as e:
         logger.error(f"❌ Export failed: {e}", exc_info=True)
         raise HTTPException(500, f"Export failed: {e}")
+
+@router.get("/")
+async def get_schedules():
+    return {"schedules": []}
+
+@router.post("/send-batch-emails")
+async def send_batch_emails(data: dict):
+    return {"message": "Emails sent"}
