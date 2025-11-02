@@ -1,117 +1,280 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { supabase } from '@/lib/supabaseClient'
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL as string
-const SUPABASE_ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON)
-
-const BACKEND_BASE_URL =
-  process.env.BACKEND_BASE_URL?.replace(/\/+$/, '') || 'http://127.0.0.1:8000'
-
-console.log(`🔗 Backend URL: ${BACKEND_BASE_URL}`)
-
-export async function POST(req: NextRequest) {
-  console.log('\n' + '='.repeat(80))
-  console.log('🚀 POST /api/schedule/generate')
-  console.log('='.repeat(80))
-
+export async function POST(request: NextRequest) {
   try {
-    const body = await req.json()
-    console.log('📥 Request body:', JSON.stringify(body, null, 2))
+    const body = await request.json()
+    console.log('Received body:', body)
 
-    // Forward to FastAPI backend
-    console.log(`\n🔗 Calling ${BACKEND_BASE_URL}/api/schedule/generate...`)
-    const backendRes = await fetch(`${BACKEND_BASE_URL}/api/schedule/generate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
+    const { 
+      campusGroupId, 
+      participantGroupId,
+      eventName,
+      eventType,
+      scheduleDate,
+      startTime,
+      endTime,
+      durationPerBatch,
+      prioritizePWD 
+    } = body
 
-    console.log(`📊 Backend response status: ${backendRes.status}`)
-
-    if (!backendRes.ok) {
-      const err = await backendRes.json().catch(() => ({ error: 'Unknown error' }))
-      console.error(`❌ Backend error: ${JSON.stringify(err)}`)
+    if (!campusGroupId || !participantGroupId) {
       return NextResponse.json(
-        { detail: err.detail || err.error || `Backend error ${backendRes.status}` },
-        { status: backendRes.status }
+        { error: 'Missing required fields: campusGroupId and participantGroupId' },
+        { status: 400 }
       )
     }
 
-    const data = await backendRes.json()
-    console.log(`✅ Backend returned ${data.assignments?.length || 0} assignments`)
+    const startExecutionTime = performance.now()
 
-    const assignments: Array<{
-      batch_number: number
-      participant_id: number
-      seat_no: number
-      is_pwd: boolean
-      campus: string
-      building: string
-      room: string
-      time_slot: string
-    }> = data.assignments || []
+    // Fetch campus data
+    const { data: campuses, error: campusError } = await supabase
+      .from('campuses')
+      .select('*')
+      .eq('upload_group_id', campusGroupId)
 
-    if (!assignments.length) {
-      console.warn('⚠️  No assignments in response')
-      return NextResponse.json({
-        scheduled_count: data.scheduled_count,
-        unscheduled_count: data.unscheduled_count,
-        schedule_data: [],
-      })
-    }
-
-    // Fetch participants
-    console.log(`\n👥 Fetching ${new Set(assignments.map(a => a.participant_id)).size} participants...`)
-    const participantIds = [...new Set(assignments.map(a => a.participant_id))]
-    const { data: participants, error } = await supabase
-      .from('participants')
-      .select('id, participant_number, name, email, is_pwd')
-      .in('id', participantIds)
-
-    if (error) {
-      console.error(`❌ Participants fetch error: ${error.message}`)
+    if (campusError) {
+      console.error('Campus fetch error:', campusError)
       return NextResponse.json(
-        { detail: `Supabase participants fetch failed: ${error.message}` },
+        { error: `Campus fetch error: ${campusError.message}` },
         { status: 500 }
       )
     }
 
-    console.log(`✅ Fetched ${participants?.length || 0} participants`)
+    // Fetch participant data
+    const { data: participants, error: participantError } = await supabase
+      .from('participants')
+      .select('*')
+      .eq('upload_group_id', participantGroupId)
 
-    const pmap = new Map<number, any>(
-      (participants || []).map(p => [p.id as number, p])
-    )
+    if (participantError) {
+      console.error('Participant fetch error:', participantError)
+      return NextResponse.json(
+        { error: `Participant fetch error: ${participantError.message}` },
+        { status: 500 }
+      )
+    }
 
-    // Build schedule_data
-    const schedule_data = assignments.map(a => {
-      const p = pmap.get(a.participant_id) || {}
-      return {
-        participant_number: p.participant_number ?? p.id ?? a.participant_id,
-        name: p.name ?? 'N/A',
-        email: p.email ?? 'N/A',
-        pwd: p.is_pwd ? 'Yes' : 'No',
-        batch_name: `Batch ${a.batch_number}`,
-        room: a.room,
-        time_slot: a.time_slot,
-        campus: a.campus,
-        seat_no: a.seat_no,
+    if (!campuses || campuses.length === 0) {
+      return NextResponse.json(
+        { error: 'No campuses found for the selected group' },
+        { status: 400 }
+      )
+    }
+
+    if (!participants || participants.length === 0) {
+      return NextResponse.json(
+        { error: 'No participants found for the selected group' },
+        { status: 400 }
+      )
+    }
+
+    console.log(`Found ${campuses.length} campuses and ${participants.length} participants`)
+
+    // Sort participants: PWD first if prioritized
+    let sortedParticipants = [...participants]
+    if (prioritizePWD) {
+      sortedParticipants.sort((a, b) => {
+        const aPWD = a.is_pwd ? 1 : 0
+        const bPWD = b.is_pwd ? 1 : 0
+        return bPWD - aPWD // PWD participants first
+      })
+    }
+
+    // Calculate time slots
+    const [startHour, startMinute] = startTime.split(':').map(Number)
+    const [endHour, endMinute] = endTime.split(':').map(Number)
+    const startMinutes = startHour * 60 + startMinute
+    const endMinutes = endHour * 60 + endMinute
+    const availableMinutes = endMinutes - startMinutes
+    const slotsPerDay = Math.floor(availableMinutes / durationPerBatch)
+
+    console.log(`Available slots per day: ${slotsPerDay}`)
+
+    // Schedule generation algorithm
+    const scheduleData: any[] = []
+    const batchMap: Map<string, any[]> = new Map() // Group by batch (room + time slot)
+    let scheduledCount = 0
+    let unscheduledCount = 0
+    let currentSlot = 0
+    let currentDate = new Date(scheduleDate)
+
+    // Track capacity usage per room per time slot
+    const roomSchedule: Map<string, Map<string, number>> = new Map()
+
+    for (const participant of sortedParticipants) {
+      let scheduled = false
+
+      // Try to find an available room
+      for (const campus of campuses) {
+        const roomKey = `${campus.campus}_${campus.building}_${campus.room}`
+        
+        if (!roomSchedule.has(roomKey)) {
+          roomSchedule.set(roomKey, new Map())
+        }
+
+        const slotIndex = currentSlot % slotsPerDay
+        const dayOffset = Math.floor(currentSlot / slotsPerDay)
+        const scheduleDateTime = new Date(currentDate)
+        scheduleDateTime.setDate(scheduleDateTime.getDate() + dayOffset)
+
+        const slotStartMinutes = startMinutes + (slotIndex * durationPerBatch)
+        const slotStartHour = Math.floor(slotStartMinutes / 60)
+        const slotStartMin = slotStartMinutes % 60
+        const slotEndMinutes = slotStartMinutes + durationPerBatch
+        const slotEndHour = Math.floor(slotEndMinutes / 60)
+        const slotEndMin = slotEndMinutes % 60
+
+        const timeSlot = `${slotStartHour.toString().padStart(2, '0')}:${slotStartMin.toString().padStart(2, '0')}-${slotEndHour.toString().padStart(2, '0')}:${slotEndMin.toString().padStart(2, '0')}`
+        const dateStr = scheduleDateTime.toISOString().split('T')[0]
+        const slotKey = `${dateStr}_${timeSlot}`
+
+        const roomSlots = roomSchedule.get(roomKey)!
+        const currentCapacity = roomSlots.get(slotKey) || 0
+
+        // Check if room has capacity
+        if (currentCapacity < campus.capacity) {
+          const batchKey = `${roomKey}_${slotKey}`
+          
+          // Assign participant to this room/slot
+          const assignment = {
+            participant_id: participant.id,
+            participant_number: participant.participant_number,
+            participant_name: participant.name,
+            email: participant.email,
+            is_pwd: participant.is_pwd,
+            province: participant.province,
+            city: participant.city,
+            campus: campus.campus,
+            building: campus.building,
+            room: campus.room,
+            room_capacity: campus.capacity,
+            date: dateStr,
+            time_slot: timeSlot,
+            seat_no: currentCapacity + 1
+          }
+
+          scheduleData.push(assignment)
+          
+          // Group by batch
+          if (!batchMap.has(batchKey)) {
+            batchMap.set(batchKey, [])
+          }
+          batchMap.get(batchKey)!.push(assignment)
+
+          roomSlots.set(slotKey, currentCapacity + 1)
+          scheduledCount++
+          scheduled = true
+          currentSlot++
+          break
+        }
       }
-    })
 
-    console.log(`✅ Generated ${schedule_data.length} schedule rows`)
-    console.log('='.repeat(80) + '\n')
+      if (!scheduled) {
+        currentSlot++
+        unscheduledCount++
+        console.log(`Unable to schedule participant: ${participant.participant_number}`)
+      }
+    }
+
+    const endExecutionTime = performance.now()
+    const executionTime = ((endExecutionTime - startExecutionTime) / 1000).toFixed(2)
+
+    // Save to database
+    // 1. Insert schedule_summary
+    const { data: summaryData, error: summaryError } = await supabase
+      .from('schedule_summary')
+      .insert({
+        event_name: eventName,
+        event_type: eventType,
+        schedule_date: scheduleDate,
+        start_time: startTime,
+        end_time: endTime,
+        campus_group_id: campusGroupId,
+        participant_group_id: participantGroupId,
+        scheduled_count: scheduledCount,
+        unscheduled_count: unscheduledCount,
+        execution_time: parseFloat(executionTime),
+        status: 'completed'
+      })
+      .select()
+      .single()
+
+    if (summaryError) {
+      console.error('Error inserting schedule summary:', summaryError)
+      return NextResponse.json(
+        { error: `Failed to save schedule summary: ${summaryError.message}` },
+        { status: 500 }
+      )
+    }
+
+    const scheduleSummaryId = summaryData.id
+    console.log('Created schedule summary with ID:', scheduleSummaryId)
+
+    // 2. Insert schedule_batches and schedule_assignments
+    for (const [batchKey, assignments] of batchMap.entries()) {
+      if (assignments.length === 0) continue
+
+      const firstAssignment = assignments[0]
+      const hasPWD = assignments.some(a => a.is_pwd)
+      const participantIds = assignments.map(a => a.participant_id)
+
+      // Insert batch
+      const { data: batchData, error: batchError } = await supabase
+        .from('schedule_batches')
+        .insert({
+          schedule_summary_id: scheduleSummaryId,
+          batch_name: `${firstAssignment.room} - ${firstAssignment.time_slot}`,
+          room: `${firstAssignment.campus} - ${firstAssignment.building} - ${firstAssignment.room}`,
+          time_slot: firstAssignment.time_slot,
+          participant_count: assignments.length,
+          has_pwd: hasPWD,
+          participant_ids: participantIds
+        })
+        .select()
+        .single()
+
+      if (batchError) {
+        console.error('Error inserting batch:', batchError)
+        continue
+      }
+
+      const batchId = batchData.id
+
+      // Insert assignments for this batch
+      const assignmentRecords = assignments.map(a => ({
+        schedule_summary_id: scheduleSummaryId,
+        schedule_batch_id: batchId,
+        participant_id: a.participant_id,
+        seat_no: a.seat_no,
+        is_pwd: a.is_pwd
+      }))
+
+      const { error: assignmentError } = await supabase
+        .from('schedule_assignments')
+        .insert(assignmentRecords)
+
+      if (assignmentError) {
+        console.error('Error inserting assignments:', assignmentError)
+      }
+    }
+
+    console.log(`Scheduling complete: ${scheduledCount} scheduled, ${unscheduledCount} unscheduled`)
 
     return NextResponse.json({
-      scheduled_count: data.scheduled_count,
-      unscheduled_count: data.unscheduled_count,
-      schedule_data,
+      success: true,
+      schedule_summary_id: scheduleSummaryId,
+      scheduled_count: scheduledCount,
+      unscheduled_count: unscheduledCount,
+      schedule_data: scheduleData,
+      execution_time: parseFloat(executionTime),
+      message: `Successfully scheduled ${scheduledCount} out of ${participants.length} participants`
     })
-  } catch (e: any) {
-    console.error('❌ CRITICAL ERROR:', e)
-    console.log('='.repeat(80) + '\n')
+
+  } catch (error: any) {
+    console.error('Generate schedule error:', error)
     return NextResponse.json(
-      { detail: e?.message || 'Generate failed' },
+      { error: error.message || 'Internal server error' },
       { status: 500 }
     )
   }
