@@ -4,8 +4,18 @@ import { useEffect, useState, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import MenuBar from '@/app/components/MenuBar'
 import Sidebar from '@/app/components/Sidebar'
-import './styles.css'
+import styles from './CampusSchedules.module.css'
 import { supabase } from '@/lib/supabaseClient'
+import { 
+  FaBuilding, 
+  FaDoorOpen, 
+  FaBox, 
+  FaUsers, 
+  FaWheelchair, 
+  FaChartBar,
+  FaClock,
+  FaChair
+} from 'react-icons/fa'
 
 interface Building {
   name: string
@@ -182,12 +192,16 @@ function CampusSchedulesContent() {
         if (!batchMap.has(batch.id)) {
           batchMap.set(batch.id, {
             ...batch,
-            participants: []
+            participants: [],
+            has_pwd: false
           })
         }
 
         const participant = participantMap.get(assignment.participant_id)
         if (participant) {
+          if (assignment.is_pwd) {
+            batchMap.get(batch.id).has_pwd = true
+          }
           batchMap.get(batch.id).participants.push({
             id: participant.id,
             participant_number: participant.participant_number,
@@ -221,7 +235,7 @@ function CampusSchedulesContent() {
           0
         )
 
-        const utilizationRate = room.capacity > 0 
+        const utilizationRate = room.capacity > 0 && roomBatches.length > 0
           ? Math.round((totalParticipants / (room.capacity * roomBatches.length)) * 100)
           : 0
 
@@ -244,9 +258,11 @@ function CampusSchedulesContent() {
       const totalBatches = batches.length
       const totalParticipants = assignments.length
       const pwdCount = assignments.filter((a: any) => a.is_pwd).length
-      const avgUtilization = Math.round(
-        buildingsArray.flatMap(b => b.rooms).reduce((sum, r) => sum + r.utilizationRate, 0) / totalRooms
-      )
+      const avgUtilization = totalRooms > 0
+        ? Math.round(
+            buildingsArray.flatMap(b => b.rooms).reduce((sum, r) => sum + r.utilizationRate, 0) / totalRooms
+          )
+        : 0
 
       setStats({
         totalBuildings: buildingsArray.length,
@@ -289,13 +305,13 @@ function CampusSchedulesContent() {
 
   if (loading) {
     return (
-      <div className="qtime-layout">
+      <div className={styles.qtimeLayout}>
         <MenuBar onToggleSidebar={() => setSidebarOpen(!sidebarOpen)} showSidebarToggle={true} showAccountIcon={true} />
         <Sidebar isOpen={sidebarOpen} />
-        <main className={`qtime-main ${sidebarOpen ? '' : 'full-width'}`}>
-          <div className="loading-state">
-            <div className="spinner"></div>
-            <p>⏳ Loading campus layout...</p>
+        <main className={`${styles.qtimeMain} ${!sidebarOpen ? styles.fullWidth : ''}`}>
+          <div className={styles.loadingState}>
+            <div className={styles.spinner}></div>
+            <p>Loading campus layout...</p>
           </div>
         </main>
       </div>
@@ -303,121 +319,123 @@ function CampusSchedulesContent() {
   }
 
   return (
-    <div className="qtime-layout">
+    <div className={styles.qtimeLayout}>
       <MenuBar onToggleSidebar={() => setSidebarOpen(!sidebarOpen)} showSidebarToggle={true} showAccountIcon={true} />
       <Sidebar isOpen={sidebarOpen} />
       
-      <main className={`qtime-main ${sidebarOpen ? '' : 'full-width'}`}>
-        <div className="campus-container">
+      <main className={`${styles.qtimeMain} ${!sidebarOpen ? styles.fullWidth : ''}`}>
+        <div className={styles.campusContainer}>
           {/* Header */}
-          <div className="campus-header">
-            <div className="header-left">
+          <div className={styles.campusHeader}>
+            <div className={styles.headerLeft}>
               {viewMode !== 'campus' && (
-                <button className="back-button" onClick={viewMode === 'room' ? handleBackToCampus : handleBackToRoom}>
+                <button className={styles.backButton} onClick={viewMode === 'room' ? handleBackToCampus : handleBackToRoom}>
                   ← Back
                 </button>
               )}
-              <div className="header-info">
-                <h1 className="campus-title">
-                  {viewMode === 'campus' && '🏛️ Campus Layout'}
-                  {viewMode === 'room' && `🏢 ${selectedRoom?.building} - Room ${selectedRoom?.room}`}
-                  {viewMode === 'batch' && `📦 ${selectedBatch?.batch_name}`}
+              <div className={styles.headerInfo}>
+                <h1 className={styles.campusTitle}>
+                  {viewMode === 'campus' && <><FaBuilding /> Campus Layout</>}
+                  {viewMode === 'room' && <><FaDoorOpen /> {selectedRoom?.building} - Room {selectedRoom?.room}</>}
+                  {viewMode === 'batch' && <><FaBox /> {selectedBatch?.batch_name}</>}
                 </h1>
                 {scheduleSummary && (
-                  <p className="campus-subtitle">
+                  <p className={styles.campusSubtitle}>
                     {scheduleSummary.event_name} • {new Date(scheduleSummary.schedule_date).toLocaleDateString()}
                   </p>
                 )}
               </div>
             </div>
-            <button className="back-button" onClick={() => router.back()}>
+            <button className={styles.backButton} onClick={() => router.back()}>
               ← Back to Overview
             </button>
           </div>
 
           {/* Stats Dashboard */}
-          <div className="stats-grid">
-            <div className="stat-card blue">
-              <div className="stat-icon">🏢</div>
-              <div className="stat-content">
-                <div className="stat-label">Buildings</div>
-                <div className="stat-value">{stats.totalBuildings}</div>
+          <div className={styles.statsGrid}>
+            <div className={`${styles.statCard} ${styles.blue}`}>
+              <FaBuilding className={styles.statIcon} />
+              <div className={styles.statContent}>
+                <div className={styles.statLabel}>Buildings</div>
+                <div className={styles.statValue}>{stats.totalBuildings}</div>
               </div>
             </div>
-            <div className="stat-card green">
-              <div className="stat-icon">🚪</div>
-              <div className="stat-content">
-                <div className="stat-label">Rooms</div>
-                <div className="stat-value">{stats.totalRooms}</div>
+            <div className={`${styles.statCard} ${styles.green}`}>
+              <FaDoorOpen className={styles.statIcon} />
+              <div className={styles.statContent}>
+                <div className={styles.statLabel}>Rooms</div>
+                <div className={styles.statValue}>{stats.totalRooms}</div>
               </div>
             </div>
-            <div className="stat-card purple">
-              <div className="stat-icon">📦</div>
-              <div className="stat-content">
-                <div className="stat-label">Batches</div>
-                <div className="stat-value">{stats.totalBatches}</div>
+            <div className={`${styles.statCard} ${styles.purple}`}>
+              <FaBox className={styles.statIcon} />
+              <div className={styles.statContent}>
+                <div className={styles.statLabel}>Batches</div>
+                <div className={styles.statValue}>{stats.totalBatches}</div>
               </div>
             </div>
-            <div className="stat-card orange">
-              <div className="stat-icon">👥</div>
-              <div className="stat-content">
-                <div className="stat-label">Participants</div>
-                <div className="stat-value">{stats.totalParticipants}</div>
+            <div className={`${styles.statCard} ${styles.orange}`}>
+              <FaUsers className={styles.statIcon} />
+              <div className={styles.statContent}>
+                <div className={styles.statLabel}>Participants</div>
+                <div className={styles.statValue}>{stats.totalParticipants}</div>
               </div>
             </div>
-            <div className="stat-card teal">
-              <div className="stat-icon">♿</div>
-              <div className="stat-content">
-                <div className="stat-label">PWD</div>
-                <div className="stat-value">{stats.pwdCount}</div>
+            <div className={`${styles.statCard} ${styles.teal}`}>
+              <FaWheelchair className={styles.statIcon} />
+              <div className={styles.statContent}>
+                <div className={styles.statLabel}>PWD</div>
+                <div className={styles.statValue}>{stats.pwdCount}</div>
               </div>
             </div>
-            <div className="stat-card red">
-              <div className="stat-icon">📊</div>
-              <div className="stat-content">
-                <div className="stat-label">Utilization</div>
-                <div className="stat-value">{stats.avgUtilization}%</div>
+            <div className={`${styles.statCard} ${styles.red}`}>
+              <FaChartBar className={styles.statIcon} />
+              <div className={styles.statContent}>
+                <div className={styles.statLabel}>Utilization</div>
+                <div className={styles.statValue}>{stats.avgUtilization}%</div>
               </div>
             </div>
           </div>
 
           {/* Content Area */}
           {viewMode === 'campus' && (
-            <div className="campus-view">
+            <div className={styles.campusView}>
               {buildings.map((building, idx) => (
-                <div key={idx} className="building-card">
-                  <div className="building-header">
-                    <h2 className="building-name">🏢 {building.name}</h2>
-                    <span className="room-count">{building.rooms.length} rooms</span>
+                <div key={idx} className={styles.buildingCard}>
+                  <div className={styles.buildingHeader}>
+                    <h2 className={styles.buildingName}>
+                      <FaBuilding /> {building.name}
+                    </h2>
+                    <span className={styles.roomCount}>{building.rooms.length} rooms</span>
                   </div>
-                  <div className="rooms-grid">
+                  <div className={styles.roomsGrid}>
                     {building.rooms.map((room) => (
                       <div
                         key={room.id}
-                        className="room-card"
+                        className={styles.roomCard}
                         onClick={() => handleRoomClick(room)}
                       >
-                        <div className="room-header">
-                          <span className="room-number">Room {room.room}</span>
-                          <span className={`utilization-badge ${
-                            room.utilizationRate >= 80 ? 'high' : 
-                            room.utilizationRate >= 50 ? 'medium' : 'low'
+                        <div className={styles.roomHeader}>
+                          <span className={styles.roomNumber}>Room {room.room}</span>
+                          <span className={`${styles.utilizationBadge} ${
+                            room.utilizationRate >= 80 ? styles.high : 
+                            room.utilizationRate >= 50 ? styles.medium : styles.low
                           }`}>
                             {room.utilizationRate}%
                           </span>
                         </div>
-                        <div className="room-body">
-                          <div className="room-stat">
-                            <span className="stat-icon">👥</span>
+                        <div className={styles.roomBody}>
+                          <div className={styles.roomStat}>
+                            <FaUsers />
                             <span>{room.totalParticipants} / {room.capacity * room.batches.length}</span>
                           </div>
-                          <div className="room-stat">
-                            <span className="stat-icon">📦</span>
+                          <div className={styles.roomStat}>
+                            <FaBox />
                             <span>{room.batches.length} batches</span>
                           </div>
                           {room.batches.some(b => b.has_pwd) && (
-                            <div className="pwd-indicator">
-                              <span className="stat-icon">♿</span>
+                            <div className={styles.pwdIndicator}>
+                              <FaWheelchair />
                               <span>PWD Priority</span>
                             </div>
                           )}
@@ -431,52 +449,58 @@ function CampusSchedulesContent() {
           )}
 
           {viewMode === 'room' && selectedRoom && (
-            <div className="room-view">
-              <div className="room-info-card">
-                <div className="info-row">
-                  <div className="info-item">
-                    <span className="info-label">Capacity</span>
-                    <span className="info-value">{selectedRoom.capacity} seats</span>
+            <div className={styles.roomView}>
+              <div className={styles.roomInfoCard}>
+                <div className={styles.infoRow}>
+                  <div className={styles.infoItem}>
+                    <span className={styles.infoLabel}>Capacity</span>
+                    <span className={styles.infoValue}>{selectedRoom.capacity} seats</span>
                   </div>
-                  <div className="info-item">
-                    <span className="info-label">Total Batches</span>
-                    <span className="info-value">{selectedRoom.batches.length}</span>
+                  <div className={styles.infoItem}>
+                    <span className={styles.infoLabel}>Total Batches</span>
+                    <span className={styles.infoValue}>{selectedRoom.batches.length}</span>
                   </div>
-                  <div className="info-item">
-                    <span className="info-label">Total Participants</span>
-                    <span className="info-value">{selectedRoom.totalParticipants}</span>
+                  <div className={styles.infoItem}>
+                    <span className={styles.infoLabel}>Total Participants</span>
+                    <span className={styles.infoValue}>{selectedRoom.totalParticipants}</span>
                   </div>
-                  <div className="info-item">
-                    <span className="info-label">Utilization</span>
-                    <span className="info-value">{selectedRoom.utilizationRate}%</span>
+                  <div className={styles.infoItem}>
+                    <span className={styles.infoLabel}>Utilization</span>
+                    <span className={styles.infoValue}>{selectedRoom.utilizationRate}%</span>
                   </div>
                 </div>
               </div>
 
-              <h3 className="section-title">📦 Batches Schedule</h3>
-              <div className="batches-timeline">
+              <h3 className={styles.sectionTitle}>
+                <FaBox /> Batches Schedule
+              </h3>
+              <div className={styles.batchesTimeline}>
                 {selectedRoom.batches.map((batch) => (
                   <div
                     key={batch.id}
-                    className="batch-card"
+                    className={styles.batchCard}
                     onClick={() => handleBatchClick(batch)}
                   >
-                    <div className="batch-header">
-                      <span className="batch-name">{batch.batch_name}</span>
+                    <div className={styles.batchHeader}>
+                      <span className={styles.batchName}>{batch.batch_name}</span>
                       {batch.has_pwd && (
-                        <span className="pwd-badge">♿ PWD</span>
+                        <span className={styles.pwdBadge}>
+                          <FaWheelchair /> PWD
+                        </span>
                       )}
                     </div>
-                    <div className="batch-time">⏰ {batch.time_slot}</div>
-                    <div className="batch-stats">
-                      <div className="batch-stat">
-                        <span className="stat-icon">👥</span>
+                    <div className={styles.batchTime}>
+                      <FaClock /> {batch.time_slot}
+                    </div>
+                    <div className={styles.batchStats}>
+                      <div className={styles.batchStat}>
+                        <FaUsers />
                         <span>{batch.participants.length} / {selectedRoom.capacity}</span>
                       </div>
-                      <div className="batch-utilization">
-                        <div className="progress-bar">
+                      <div className={styles.batchUtilization}>
+                        <div className={styles.progressBar}>
                           <div
-                            className="progress-fill"
+                            className={styles.progressFill}
                             style={{
                               width: `${Math.min((batch.participants.length / selectedRoom.capacity) * 100, 100)}%`
                             }}
@@ -491,42 +515,44 @@ function CampusSchedulesContent() {
           )}
 
           {viewMode === 'batch' && selectedBatch && selectedRoom && (
-            <div className="batch-view">
-              <div className="batch-info-card">
-                <div className="info-row">
-                  <div className="info-item">
-                    <span className="info-label">Time Slot</span>
-                    <span className="info-value">{selectedBatch.time_slot}</span>
+            <div className={styles.batchView}>
+              <div className={styles.batchInfoCard}>
+                <div className={styles.infoRow}>
+                  <div className={styles.infoItem}>
+                    <span className={styles.infoLabel}>Time Slot</span>
+                    <span className={styles.infoValue}>{selectedBatch.time_slot}</span>
                   </div>
-                  <div className="info-item">
-                    <span className="info-label">Participants</span>
-                    <span className="info-value">{selectedBatch.participants.length} / {selectedRoom.capacity}</span>
+                  <div className={styles.infoItem}>
+                    <span className={styles.infoLabel}>Participants</span>
+                    <span className={styles.infoValue}>{selectedBatch.participants.length} / {selectedRoom.capacity}</span>
                   </div>
-                  <div className="info-item">
-                    <span className="info-label">Occupancy</span>
-                    <span className="info-value">
+                  <div className={styles.infoItem}>
+                    <span className={styles.infoLabel}>Occupancy</span>
+                    <span className={styles.infoValue}>
                       {Math.round((selectedBatch.participants.length / selectedRoom.capacity) * 100)}%
                     </span>
                   </div>
                 </div>
               </div>
 
-              <h3 className="section-title">🪑 Seating Arrangement</h3>
-              <div className="seating-grid">
+              <h3 className={styles.sectionTitle}>
+                <FaChair /> Seating Arrangement
+              </h3>
+              <div className={styles.seatingGrid}>
                 {selectedBatch.participants
                   .sort((a, b) => a.seat_no - b.seat_no)
                   .map((participant) => (
                     <div
                       key={participant.id}
-                      className={`seat-card ${participant.is_pwd ? 'pwd-seat' : ''}`}
+                      className={`${styles.seatCard} ${participant.is_pwd ? styles.pwdSeat : ''}`}
                     >
-                      <div className="seat-number">Seat {participant.seat_no}</div>
-                      <div className="seat-info">
-                        <div className="participant-name">{participant.name}</div>
-                        <div className="participant-number">{participant.participant_number}</div>
+                      <div className={styles.seatNumber}>Seat {participant.seat_no}</div>
+                      <div className={styles.seatInfo}>
+                        <div className={styles.participantName}>{participant.name}</div>
+                        <div className={styles.participantNumber}>{participant.participant_number}</div>
                       </div>
                       {participant.is_pwd && (
-                        <div className="seat-pwd-badge">♿</div>
+                        <FaWheelchair className={styles.seatPwdBadge} />
                       )}
                     </div>
                   ))}

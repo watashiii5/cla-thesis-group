@@ -1,14 +1,26 @@
 'use client'
+import { useRouter } from 'next/navigation'
+import { 
+  Calendar, 
+  FileText, 
+  Users, 
+  BarChart3, 
+  Upload, 
+  Building2, 
+  CheckCircle2, 
+  XCircle, 
+  ArrowRight,
+  FileSpreadsheet,
+  Info
+} from 'lucide-react'
 import styles from './styles/bQtime.module.css'
-
 import React, { useState } from 'react'
 import type { JSX } from 'react'
-import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import MenuBar from '@/app/components/MenuBar'
 
 
-export default function CSVUploadPage(): JSX.Element {
+export default function BeforeQtimeHomePage(): JSX.Element {
   const router = useRouter()
   const [campusFile, setCampusFile] = useState<File | null>(null)
   const [participantFile, setParticipantFile] = useState<File | null>(null)
@@ -20,6 +32,27 @@ export default function CSVUploadPage(): JSX.Element {
   const [participantMessage, setParticipantMessage] = useState<string | null>(null)
   const [campusError, setCampusError] = useState<string | null>(null)
   const [participantError, setParticipantError] = useState<string | null>(null)
+
+  const features = [
+    {
+      icon: <FileText size={48} />,
+      title: 'Participant Data',
+      description: 'Upload and manage participant information easily',
+      action: () => router.push('/LandingPages/QtimeParticipantsPage')
+    },
+    {
+      icon: <Building2 size={48} />,
+      title: 'Campus Capacity',
+      description: 'Configure campus capacity and resources',
+      action: () => router.push('/LandingPages/QtimeCampusCapacityPage')
+    },
+    {
+      icon: <Calendar size={48} />,
+      title: 'Generate Schedule',
+      description: 'Create optimized schedules for your participants',
+      action: () => router.push('/LandingPages/GenerateSchedule')
+    }
+  ]
 
   const parseCSV = (text: string): string[][] => {
     const lines = text.trim().split('\n')
@@ -201,7 +234,9 @@ export default function CSVUploadPage(): JSX.Element {
       <MenuBar onToggleSidebar={() => {}} showSidebarToggle={false} showAccountIcon={false} />
       
       <div className={styles['page-header-content']}>
-        <h1>Welcome to Qtime Scheduler</h1>
+        <h1>
+          Welcome to Qtime Scheduler
+        </h1>
         <h2>Kindly Upload the CSV files for the Campus and Participant Data</h2>
       </div>
 
@@ -209,18 +244,26 @@ export default function CSVUploadPage(): JSX.Element {
         <div className={styles['upload-wrapper']}>
           {/* Campus CSV Section */}
           <div className={styles['upload-card']}>
-            <h2 className={styles['section-title']}>Campus/Building Capacity</h2>
+            <h2 className={styles['section-title']}>
+              <Building2 size={28} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '10px' }} />
+              Campus/Building Capacity
+            </h2>
             
             <div className={styles['format-info']}>
-              <h3>Expected CSV Format:</h3>
+              <h3>
+                <Info size={16} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '6px' }} />
+                Expected CSV Format:
+              </h3>
               <p>Campus, Building, Room, Capacity</p>
               <small style={{ color: '#64748b', marginTop: '8px', display: 'block' }}>
+                <FileSpreadsheet size={14} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '4px' }} />
                 Example: Main Campus, Building A, Room 101, 30
               </small>
             </div>
 
             <div className={styles['form-group']}>
               <label className={styles['label']}>
+                <Building2 size={16} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '6px' }} />
                 School Name (e.g., State University)
                 <input
                   type="text"
@@ -238,6 +281,7 @@ export default function CSVUploadPage(): JSX.Element {
 
             <div className={styles['form-group']}>
               <label className={styles['label']}>
+                <FileText size={16} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '6px' }} />
                 Select CSV File
                 <input
                   id="campusFile"
@@ -255,6 +299,7 @@ export default function CSVUploadPage(): JSX.Element {
               </label>
               {campusFile && (
                 <small style={{ color: '#2563eb', fontSize: '12px', marginTop: '4px' }}>
+                  <CheckCircle2 size={14} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '4px' }} />
                   Selected: {campusFile.name}
                 </small>
               )}
@@ -265,31 +310,46 @@ export default function CSVUploadPage(): JSX.Element {
               disabled={campusLoading || !campusFile || !campusSchoolName}
               className={styles['upload-button']}
             >
+              <Upload size={20} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '8px' }} />
               {campusLoading ? 'Uploading...' : 'Upload Campus CSV'}
             </button>
 
             {campusMessage && (
               <div className={`${styles['message']} ${styles['success']}`} style={{ whiteSpace: 'pre-line' }}>
+                <CheckCircle2 size={18} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '8px' }} />
                 {campusMessage}
               </div>
             )}
-            {campusError && <div className={`${styles['message']} ${styles['error']}`}>{campusError}</div>}
+            {campusError && (
+              <div className={`${styles['message']} ${styles['error']}`}>
+                <XCircle size={18} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '8px' }} />
+                {campusError}
+              </div>
+            )}
           </div>
 
           {/* Participant CSV Section */}
           <div className={styles['upload-card']}>
-            <h2 className={styles['section-title']}>Participants</h2>
+            <h2 className={styles['section-title']}>
+              <Users size={28} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '10px' }} />
+              Participants
+            </h2>
             
             <div className={styles['format-info']}>
-              <h3>Expected CSV Format:</h3>
+              <h3>
+                <Info size={16} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '6px' }} />
+                Expected CSV Format:
+              </h3>
               <p>Participant Number, Name, PWD (Yes/No), Email, Province, City, Country</p>
               <small style={{ color: '#64748b', marginTop: '8px', display: 'block' }}>
+                <FileSpreadsheet size={14} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '4px' }} />
                 Example: 2024001, John Doe, No, john@email.com, Metro Manila, Manila, Philippines
               </small>
             </div>
 
             <div className={styles['form-group']}>
               <label className={styles['label']}>
+                <Users size={16} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '6px' }} />
                 Batch Name (e.g., Batch 2024-A, First Year Students)
                 <input
                   type="text"
@@ -307,6 +367,7 @@ export default function CSVUploadPage(): JSX.Element {
 
             <div className={styles['form-group']}>
               <label className={styles['label']}>
+                <FileText size={16} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '6px' }} />
                 Select CSV File
                 <input
                   id="participantFile"
@@ -324,6 +385,7 @@ export default function CSVUploadPage(): JSX.Element {
               </label>
               {participantFile && (
                 <small style={{ color: '#2563eb', fontSize: '12px', marginTop: '4px' }}>
+                  <CheckCircle2 size={14} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '4px' }} />
                   Selected: {participantFile.name}
                 </small>
               )}
@@ -334,25 +396,79 @@ export default function CSVUploadPage(): JSX.Element {
               disabled={participantLoading || !participantFile || !participantBatchName}
               className={styles['upload-button']}
             >
+              <Upload size={20} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '8px' }} />
               {participantLoading ? 'Uploading...' : 'Upload Participant CSV'}
             </button>
 
             {participantMessage && (
               <div className={`${styles['message']} ${styles['success']}`} style={{ whiteSpace: 'pre-line' }}>
+                <CheckCircle2 size={18} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '8px' }} />
                 {participantMessage}
               </div>
             )}
-            {participantError && <div className={`${styles['message']} ${styles['error']}`}>{participantError}</div>}
+            {participantError && (
+              <div className={`${styles['message']} ${styles['error']}`}>
+                <XCircle size={18} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '8px' }} />
+                {participantError}
+              </div>
+            )}
           </div>
 
           {/* Skip Button */}
           <div className={styles['skip-container']}>
             <button onClick={handleSkip} className={styles['skip-button']}>
-              Skip →
+              Skip
+              <ArrowRight size={18} style={{ display: 'inline-block', verticalAlign: 'middle', marginLeft: '8px' }} />
             </button>
           </div>
         </div>
       </main>
+
+      <div className={styles.featuresGrid}>
+        {features.map((feature, index) => (
+          <div 
+            key={index} 
+            className={styles.featureCard}
+            onClick={feature.action}
+          >
+            <div className={styles.featureIcon}>
+              {feature.icon}
+            </div>
+            <h3 className={styles.featureTitle}>{feature.title}</h3>
+            <p className={styles.featureDescription}>{feature.description}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className={styles.statsSection}>
+        <div className={styles.statCard}>
+          <div className={styles.statIcon}>
+            <Users size={32} />
+          </div>
+          <div className={styles.statContent}>
+            <h4 className={styles.statLabel}>Total Participants</h4>
+            <p className={styles.statValue}>0</p>
+          </div>
+        </div>
+        <div className={styles.statCard}>
+          <div className={styles.statIcon}>
+            <Calendar size={32} />
+          </div>
+          <div className={styles.statContent}>
+            <h4 className={styles.statLabel}>Schedules Generated</h4>
+            <p className={styles.statValue}>0</p>
+          </div>
+        </div>
+        <div className={styles.statCard}>
+          <div className={styles.statIcon}>
+            <BarChart3 size={32} />
+          </div>
+          <div className={styles.statContent}>
+            <h4 className={styles.statLabel}>Campus Locations</h4>
+            <p className={styles.statValue}>0</p>
+          </div>
+        </div>
+      </div>
     </div>
     
   )

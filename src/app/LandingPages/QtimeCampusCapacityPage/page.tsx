@@ -5,6 +5,25 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import MenuBar from '@/app/components/MenuBar'
 import Sidebar from '@/app/components/Sidebar'
+import { 
+  Building2, 
+  ArrowLeft, 
+  Search, 
+  Calendar,
+  Plus,
+  Check,
+  X,
+  Users,
+  BarChart3,
+  DoorOpen,
+  Settings,
+  Edit2,
+  Trash2,
+  ChevronDown,
+  ChevronRight,
+  MapPin,
+  Hash
+} from 'lucide-react'
 import './styles.css'
 
 interface CampusFile {
@@ -216,7 +235,6 @@ export default function CampusCapacityPage() {
 
       if (error) throw error
 
-      // Update local state
       const updatedData = campusData.map(room => 
         room.id === roomId ? { ...room, ...editForm } : room
       )
@@ -242,7 +260,6 @@ export default function CampusCapacityPage() {
 
       if (error) throw error
 
-      // Update local state
       const updatedData = campusData.filter(room => room.id !== roomId)
       setCampusData(updatedData)
       calculateStats(updatedData)
@@ -262,7 +279,6 @@ export default function CampusCapacityPage() {
     }
 
     try {
-      // Get school name and file name from the selected campus
       const selectedFile = campusFiles.find(f => f.upload_group_id === selectedCampus)
       
       const { data, error } = await supabase
@@ -280,14 +296,12 @@ export default function CampusCapacityPage() {
 
       if (error) throw error
 
-      // Refresh data
       if (data && data.length > 0) {
         const updatedData = [...campusData, data[0]]
         setCampusData(updatedData)
         calculateStats(updatedData)
       }
 
-      // Reset form and close modal
       setAddForm({
         campus: '',
         building: '',
@@ -363,11 +377,12 @@ export default function CampusCapacityPage() {
               className="back-button"
               onClick={() => router.push('/LandingPages/QtimeHomePage')}
             >
-              ← Back to Home
+              <ArrowLeft size={18} />
+              Back to Home
             </button>
             <div className="header-title-section">
               <div className="header-icon-wrapper">
-                <span className="header-large-icon">🎓</span>
+                <Building2 className="header-large-icon" size={48} />
               </div>
               <div className="header-text">
                 <h1 className="campus-title">Campus Capacity Overview</h1>
@@ -385,9 +400,12 @@ export default function CampusCapacityPage() {
             <>
               <div className="selection-section">
                 <div className="search-header">
-                  <h2>📚 Select School</h2>
+                  <h2>
+                    <Building2 size={24} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '8px' }} />
+                    Select School
+                  </h2>
                   <div className="search-box">
-                    <span className="search-icon">🔍</span>
+                    <Search className="search-icon" size={18} />
                     <input
                       type="text"
                       placeholder="Search school..."
@@ -405,16 +423,24 @@ export default function CampusCapacityPage() {
                       className={`campus-select-card ${selectedCampus === file.upload_group_id ? 'selected' : ''}`}
                       onClick={() => handleSelectCampus(file.upload_group_id)}
                     >
-                      <div className="campus-card-icon school-icon">🎓</div>
+                      <div className="campus-card-icon school-icon">
+                        <Building2 size={36} />
+                      </div>
                       <div className="campus-card-content">
                         <h3 className="campus-card-name">{file.school_name}</h3>
-                        <p className="campus-card-meta">🚪 {file.row_count} rooms available</p>
+                        <p className="campus-card-meta">
+                          <DoorOpen size={16} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '6px' }} />
+                          {file.row_count} rooms available
+                        </p>
                         <p className="campus-card-date">
-                          📅 Uploaded: {new Date(file.created_at).toLocaleDateString()}
+                          <Calendar size={14} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '6px' }} />
+                          Uploaded: {new Date(file.created_at).toLocaleDateString()}
                         </p>
                       </div>
                       {selectedCampus === file.upload_group_id && (
-                        <div className="selected-indicator">✓</div>
+                        <div className="selected-indicator">
+                          <Check size={20} />
+                        </div>
                       )}
                     </div>
                   ))}
@@ -439,28 +465,36 @@ export default function CampusCapacityPage() {
                       {stats && (
                         <div className="stats-grid">
                           <div className="stat-card">
-                            <div className="stat-icon">🏢</div>
+                            <div className="stat-icon">
+                              <Building2 size={28} />
+                            </div>
                             <div className="stat-content">
                               <p className="stat-label">Total Buildings</p>
                               <h3 className="stat-value">{stats.buildings}</h3>
                             </div>
                           </div>
                           <div className="stat-card">
-                            <div className="stat-icon">🚪</div>
+                            <div className="stat-icon">
+                              <DoorOpen size={28} />
+                            </div>
                             <div className="stat-content">
                               <p className="stat-label">Total Rooms</p>
                               <h3 className="stat-value">{stats.totalRooms}</h3>
                             </div>
                           </div>
                           <div className="stat-card">
-                            <div className="stat-icon">👥</div>
+                            <div className="stat-icon">
+                              <Users size={28} />
+                            </div>
                             <div className="stat-content">
                               <p className="stat-label">Total Capacity</p>
                               <h3 className="stat-value">{stats.totalCapacity}</h3>
                             </div>
                           </div>
                           <div className="stat-card">
-                            <div className="stat-icon">📊</div>
+                            <div className="stat-icon">
+                              <BarChart3 size={28} />
+                            </div>
                             <div className="stat-content">
                               <p className="stat-label">Avg Capacity</p>
                               <h3 className="stat-value">{stats.avgCapacity}</h3>
@@ -471,12 +505,16 @@ export default function CampusCapacityPage() {
 
                       <div className="data-section">
                         <div className="section-header-actions">
-                          <h2 className="section-heading">🏢 Buildings & Rooms</h2>
+                          <h2 className="section-heading">
+                            <Building2 size={24} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '8px' }} />
+                            Buildings & Rooms
+                          </h2>
                           <button 
                             className="add-room-button"
                             onClick={() => setShowAddModal(true)}
                           >
-                            ➕ Add New Room
+                            <Plus size={20} />
+                            Add New Room
                           </button>
                         </div>
                         
@@ -493,8 +531,11 @@ export default function CampusCapacityPage() {
                               >
                                 <div className="building-header-left">
                                   <h3 className="building-name">
-                                    <span className="expand-icon">{isExpanded ? '▼' : '▶'}</span>
-                                    🏢 {building}
+                                    <span className="expand-icon">
+                                      {isExpanded ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
+                                    </span>
+                                    <Building2 size={20} style={{ display: 'inline-block', verticalAlign: 'middle', marginLeft: '4px', marginRight: '8px' }} />
+                                    {building}
                                   </h3>
                                   <span className="room-badge">{rooms.length} rooms</span>
                                   <span className="capacity-badge-small">Total: {buildingCapacity}</span>
@@ -513,7 +554,10 @@ export default function CampusCapacityPage() {
                                     return (
                                       <div key={floor} className="floor-section">
                                         <div className="floor-header">
-                                          <h4 className="floor-name">📍 {floorName} Floor</h4>
+                                          <h4 className="floor-name">
+                                            <MapPin size={18} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '6px' }} />
+                                            {floorName} Floor
+                                          </h4>
                                           <span className="floor-info">
                                             {floorRooms.length} rooms · Capacity: {floorCapacity}
                                           </span>
@@ -562,29 +606,35 @@ export default function CampusCapacityPage() {
                                                         className="save-btn-small"
                                                         onClick={() => handleEditSave(room.id!)}
                                                       >
-                                                        ✓ Save
+                                                        <Check size={16} />
+                                                        Save
                                                       </button>
                                                       <button 
                                                         className="cancel-btn-small"
                                                         onClick={handleEditCancel}
                                                       >
-                                                        ✕ Cancel
+                                                        <X size={16} />
+                                                        Cancel
                                                       </button>
                                                     </div>
                                                   </div>
                                                 ) : (
                                                   <>
-                                                    <div className="room-icon">🚪</div>
+                                                    <div className="room-icon">
+                                                      <DoorOpen size={24} />
+                                                    </div>
                                                     <div className="room-info">
                                                       <h4 className="room-name">{room.room}</h4>
                                                       <p className="room-parsed">{parsed.displayName}</p>
-                                                      <p className="room-campus">🎓 {room.campus}</p>
+                                                      <p className="room-campus">
+                                                        <Building2 size={14} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '4px' }} />
+                                                        {room.campus}
+                                                      </p>
                                                     </div>
                                                     <div className="room-capacity-badge">
                                                       {room.capacity}
                                                     </div>
                                                     
-                                                    {/* Options Menu Button */}
                                                     <div className="room-options">
                                                       <button 
                                                         className="options-trigger"
@@ -594,24 +644,25 @@ export default function CampusCapacityPage() {
                                                         }}
                                                         title="Options"
                                                       >
-                                                        ⚙️
+                                                        <Settings size={18} />
                                                       </button>
                                                       
-                                                      {/* Actions Popup */}
                                                       {showActions && (
                                                         <div className="actions-popup">
                                                           <button 
                                                             className="action-option edit-option"
                                                             onClick={() => handleEditClick(room)}
                                                           >
-                                                            ✏️ Edit Room
+                                                            <Edit2 size={16} />
+                                                            Edit Room
                                                           </button>
                                                           <button 
                                                             className="action-option delete-option"
                                                             onClick={() => handleDelete(room.id!)}
                                                             disabled={deletingRoom === room.id}
                                                           >
-                                                            {deletingRoom === room.id ? '⏳ Deleting...' : '🗑️ Delete Room'}
+                                                            <Trash2 size={16} />
+                                                            {deletingRoom === room.id ? 'Deleting...' : 'Delete Room'}
                                                           </button>
                                                         </div>
                                                       )}
@@ -638,7 +689,9 @@ export default function CampusCapacityPage() {
 
               {!selectedCampus && !loading && campusFiles.length > 0 && (
                 <div className="empty-selection">
-                  <div className="empty-icon">👆</div>
+                  <div className="empty-icon">
+                    <Building2 size={80} />
+                  </div>
                   <p>Please select a school above to view room details</p>
                 </div>
               )}
@@ -652,17 +705,23 @@ export default function CampusCapacityPage() {
         <div className="modal-overlay" onClick={() => setShowAddModal(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>➕ Add New Room</h3>
+              <h3>
+                <Plus size={24} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '8px' }} />
+                Add New Room
+              </h3>
               <button 
                 className="modal-close"
                 onClick={() => setShowAddModal(false)}
               >
-                ✕
+                <X size={20} />
               </button>
             </div>
             <div className="modal-body">
               <div className="form-group">
-                <label>Campus</label>
+                <label>
+                  <Building2 size={16} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '4px' }} />
+                  Campus
+                </label>
                 <input
                   type="text"
                   value={addForm.campus}
@@ -672,7 +731,10 @@ export default function CampusCapacityPage() {
                 />
               </div>
               <div className="form-group">
-                <label>Building</label>
+                <label>
+                  <Building2 size={16} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '4px' }} />
+                  Building
+                </label>
                 <input
                   type="text"
                   value={addForm.building}
@@ -682,7 +744,10 @@ export default function CampusCapacityPage() {
                 />
               </div>
               <div className="form-group">
-                <label>Room</label>
+                <label>
+                  <DoorOpen size={16} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '4px' }} />
+                  Room
+                </label>
                 <input
                   type="text"
                   value={addForm.room}
@@ -692,7 +757,10 @@ export default function CampusCapacityPage() {
                 />
               </div>
               <div className="form-group">
-                <label>Capacity</label>
+                <label>
+                  <Users size={16} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '4px' }} />
+                  Capacity
+                </label>
                 <input
                   type="number"
                   value={addForm.capacity || ''}
@@ -707,12 +775,14 @@ export default function CampusCapacityPage() {
                 className="modal-btn-cancel"
                 onClick={() => setShowAddModal(false)}
               >
+                <X size={18} />
                 Cancel
               </button>
               <button 
                 className="modal-btn-save"
                 onClick={handleAddRoom}
               >
+                <Check size={18} />
                 Add Room
               </button>
             </div>

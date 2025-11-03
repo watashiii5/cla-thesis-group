@@ -4,9 +4,9 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import MenuBar from '@/app/components/MenuBar'
 import Sidebar from '@/app/components/Sidebar'
-import './styles.css'
+import styles from './ViewSchedule.module.css'
 import { supabase } from '@/lib/supabaseClient'
-import { FaTrash } from 'react-icons/fa'
+import { FaTrash, FaEye, FaBuilding, FaCheckCircle, FaExclamationTriangle } from 'react-icons/fa'
 
 interface Schedule {
   id: number
@@ -53,7 +53,6 @@ export default function ViewSchedulePage() {
     }
 
     try {
-      // Delete from schedule_summary (cascade will handle related tables)
       const { error } = await supabase
         .from('schedule_summary')
         .delete()
@@ -62,7 +61,7 @@ export default function ViewSchedulePage() {
       if (error) throw error
 
       alert('Schedule deleted successfully!')
-      fetchSchedules() // Refresh the list
+      fetchSchedules()
     } catch (error: any) {
       console.error('Error deleting schedule:', error)
       alert('Failed to delete schedule: ' + error.message)
@@ -78,7 +77,7 @@ export default function ViewSchedulePage() {
   }
 
   return (
-    <div className="qtime-layout">
+    <div className={styles.qtimeLayout}>
       <MenuBar 
         onToggleSidebar={() => setSidebarOpen(!sidebarOpen)} 
         showSidebarToggle={true}
@@ -86,41 +85,41 @@ export default function ViewSchedulePage() {
       />
       <Sidebar isOpen={sidebarOpen} />
       
-      <main className={`qtime-main ${sidebarOpen ? '' : 'full-width'}`}>
-        <div className="qtime-container">
+      <main className={`${styles.qtimeMain} ${sidebarOpen ? '' : styles.fullWidth}`}>
+        <div className={styles.qtimeContainer}>
           {/* Header */}
-          <div className="page-header">
-            <button onClick={() => router.back()} className="back-button">
+          <div className={styles.pageHeader}>
+            <button onClick={() => router.back()} className={styles.backButton}>
               ← Back
             </button>
-            <button onClick={fetchSchedules} className="refresh-button">
+            <button onClick={fetchSchedules} className={styles.refreshButton}>
               🔄 Refresh
             </button>
           </div>
 
           {/* Welcome Section */}
-          <div className="welcome-section">
-            <h1 className="page-title">📅 Scheduled Events</h1>
-            <p className="page-subtitle">View and manage all your scheduled events</p>
+          <div className={styles.welcomeSection}>
+            <h1 className={styles.pageTitle}>Scheduled Events</h1>
+            <p className={styles.pageSubtitle}>View and manage all your scheduled events</p>
           </div>
 
           {/* Loading State */}
           {loading && (
-            <div className="loading-state">
-              <div className="spinner"></div>
+            <div className={styles.loadingState}>
+              <div className={styles.spinner}></div>
               <p>Loading schedules...</p>
             </div>
           )}
 
           {/* Empty State */}
           {!loading && schedules.length === 0 && (
-            <div className="empty-state">
-              <div className="empty-icon">📭</div>
+            <div className={styles.emptyState}>
+              <div className={styles.emptyIcon}>📭</div>
               <h2>No Schedules Yet</h2>
               <p>Create your first schedule to get started!</p>
               <button 
                 onClick={() => router.push('/LandingPages/GenerateSchedule')}
-                className="primary-button"
+                className={styles.primaryButton}
               >
                 + Create Schedule
               </button>
@@ -129,79 +128,79 @@ export default function ViewSchedulePage() {
 
           {/* Schedules Grid */}
           {!loading && schedules.length > 0 && (
-            <div className="schedules-grid">
+            <div className={styles.schedulesGrid}>
               {schedules.map((schedule) => (
-                <div key={schedule.id} className="schedule-card">
-                  {/* Delete Button - Top Right */}
+                <div key={schedule.id} className={styles.scheduleCard}>
+                  {/* Delete Button */}
                   <button
                     onClick={() => handleDelete(schedule.id)}
-                    className="delete-icon-button"
+                    className={styles.deleteIconButton}
                     title="Delete schedule"
                   >
                     <FaTrash />
                   </button>
 
                   {/* Card Header */}
-                  <div className="schedule-card-header">
-                    <h2 className="schedule-title">{schedule.event_name}</h2>
-                    <span className="status-badge">completed</span>
+                  <div className={styles.scheduleCardHeader}>
+                    <h2 className={styles.scheduleTitle}>{schedule.event_name}</h2>
+                    <span className={styles.statusBadge}>completed</span>
                   </div>
 
                   {/* Info Grid */}
-                  <div className="schedule-info-grid">
-                    <div className="info-item">
-                      <span className="info-label">TYPE</span>
-                      <span className="info-value">{schedule.event_type.replace('_', ' ')}</span>
+                  <div className={styles.scheduleInfoGrid}>
+                    <div className={styles.infoItem}>
+                      <span className={styles.infoLabel}>TYPE</span>
+                      <span className={styles.infoValue}>{schedule.event_type.replace('_', ' ')}</span>
                     </div>
-                    <div className="info-item">
-                      <span className="info-label">DATE</span>
-                      <span className="info-value">{formatDate(schedule.schedule_date)}</span>
+                    <div className={styles.infoItem}>
+                      <span className={styles.infoLabel}>DATE</span>
+                      <span className={styles.infoValue}>{formatDate(schedule.schedule_date)}</span>
                     </div>
-                    <div className="info-item">
-                      <span className="info-label">TIME</span>
-                      <span className="info-value">
+                    <div className={styles.infoItem}>
+                      <span className={styles.infoLabel}>TIME</span>
+                      <span className={styles.infoValue}>
                         {schedule.start_time} - {schedule.end_time}
                       </span>
                     </div>
-                    <div className="info-item">
-                      <span className="info-label">CREATED</span>
-                      <span className="info-value">{formatDate(schedule.created_at)}</span>
+                    <div className={styles.infoItem}>
+                      <span className={styles.infoLabel}>CREATED</span>
+                      <span className={styles.infoValue}>{formatDate(schedule.created_at)}</span>
                     </div>
                   </div>
 
                   {/* Stats */}
-                  <div className="stats-container">
-                    <div className="stat-badge success">
-                      <div className="stat-icon success">✓</div>
+                  <div className={styles.statsContainer}>
+                    <div className={`${styles.statBadge} ${styles.success}`}>
+                      <FaCheckCircle className={`${styles.statIcon} ${styles.success}`} />
                       <div>
-                        <div className="stat-label">Scheduled</div>
-                        <div className="stat-value">{schedule.scheduled_count}</div>
+                        <div className={styles.statLabel}>Scheduled</div>
+                        <div className={styles.statValue}>{schedule.scheduled_count}</div>
                       </div>
                     </div>
                     {schedule.unscheduled_count > 0 && (
-                      <div className="stat-badge warning">
-                        <div className="stat-icon warning">⚠</div>
+                      <div className={`${styles.statBadge} ${styles.warning}`}>
+                        <FaExclamationTriangle className={`${styles.statIcon} ${styles.warning}`} />
                         <div>
-                          <div className="stat-label">Unscheduled</div>
-                          <div className="stat-value">{schedule.unscheduled_count}</div>
+                          <div className={styles.statLabel}>Unscheduled</div>
+                          <div className={styles.statValue}>{schedule.unscheduled_count}</div>
                         </div>
                       </div>
                     )}
                   </div>
 
-                  {/* Actions - Always at bottom */}
-                  <div className="schedule-actions">
+                  {/* Actions */}
+                  <div className={styles.scheduleActions}>
                     <button
                       onClick={() => router.push(`/LandingPages/GenerateSchedule/ParticipantSchedules?scheduleId=${schedule.id}`)}
-                      className="view-button"
+                      className={styles.viewButton}
                     >
-                      👁️ View Participants
+                      <FaEye /> View Participants
                     </button>
                     <button
                       onClick={() => router.push(`/LandingPages/GenerateSchedule/CampusSchedules?scheduleId=${schedule.id}`)}
-                      className="view-button campus-view"
+                      className={`${styles.viewButton} ${styles.campusView}`}
                     >
-                      🏛️ Campus Layout
+                      <FaBuilding /> Campus Layout
                     </button>
                   </div>
                 </div>

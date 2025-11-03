@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
+import { Menu, User, LogOut, Settings as SettingsIcon, UserCircle } from 'lucide-react'
 import './MenuBar.css'
 
 interface MenuBarProps {
@@ -51,7 +52,7 @@ export default function MenuBar({ onToggleSidebar, showSidebarToggle = false, sh
       <div className="menu-bar-left">
         {showSidebarToggle && (
           <button className="menu-toggle" onClick={onToggleSidebar}>
-            ☰
+            <Menu size={24} />
           </button>
         )}
         <div className="logo">
@@ -67,21 +68,33 @@ export default function MenuBar({ onToggleSidebar, showSidebarToggle = false, sh
               className="account-button"
               onClick={() => setShowAccountMenu(!showAccountMenu)}
             >
-              <div className="account-avatar">👤</div>
+              <div className="account-avatar">
+                <User size={20} />
+              </div>
             </button>
             
             {showAccountMenu && (
               <div className="account-menu">
                 {userEmail && (
                   <>
-                    <div className="account-menu-email">{userEmail}</div>
+                    <div className="account-menu-email">
+                      <UserCircle size={16} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '6px' }} />
+                      {userEmail}
+                    </div>
                     <div className="account-menu-divider"></div>
                   </>
                 )}
-                <div className="account-menu-item">Profile</div>
-                <div className="account-menu-item">Settings</div>
+                <div className="account-menu-item">
+                  <UserCircle size={16} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '6px' }} />
+                  Profile
+                </div>
+                <div className="account-menu-item">
+                  <SettingsIcon size={16} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '6px' }} />
+                  Settings
+                </div>
                 <div className="account-menu-divider"></div>
                 <div className="account-menu-item" onClick={handleLogout}>
+                  <LogOut size={16} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '6px' }} />
                   Logout
                 </div>
               </div>
