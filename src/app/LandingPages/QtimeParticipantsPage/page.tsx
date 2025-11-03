@@ -20,7 +20,8 @@ import {
   BarChart3,
   Accessibility,
   Mail,
-  MapPin
+  MapPin,
+  AlertTriangle
 } from 'lucide-react'
 import './styles.css'
 
@@ -51,8 +52,8 @@ interface ParticipantStats {
   percentagePWD: number
 }
 
-// Helper function to fetch ALL rows (bypass 1000 limit)
-async function fetchAllRows(table: string, filters: any = {}) {
+// Helper function to fetch ALL rows (bypass 1000 limit) - FIXED for tables without created_at
+async function fetchAllRows(table: string, filters: any = {}, orderBy: string = 'id') {
   const PAGE_SIZE = 1000
   let allData: any[] = []
   let page = 0
@@ -70,7 +71,7 @@ async function fetchAllRows(table: string, filters: any = {}) {
       .from(table)
       .select('*')
       .range(from, to)
-      .order('created_at', { ascending: false })
+      .order(orderBy, { ascending: true })
 
     // Apply filters
     for (const [key, value] of Object.entries(filters)) {
@@ -103,6 +104,34 @@ async function fetchAllRows(table: string, filters: any = {}) {
 
   console.log(`✅ Total rows fetched from ${table}: ${allData.length}`)
   return allData
+}
+
+// Helper function to delete in batches (bypass 1000 limit)
+async function deleteInBatches(table: string, ids: number[], batchSize: number = 1000) {
+  console.log(`🗑️ Deleting ${ids.length} rows from ${table} in batches of ${batchSize}`)
+  
+  let deletedCount = 0
+  
+  for (let i = 0; i < ids.length; i += batchSize) {
+    const batch = ids.slice(i, i + batchSize)
+    console.log(`   🗑️ Deleting batch ${Math.floor(i / batchSize) + 1}: ${batch.length} rows`)
+    
+    const { error } = await supabase
+      .from(table)
+      .delete()
+      .in('id', batch)
+    
+    if (error) {
+      console.error(`❌ Error deleting batch:`, error)
+      throw error
+    }
+    
+    deletedCount += batch.length
+    console.log(`   ✅ Deleted ${deletedCount}/${ids.length} rows`)
+  }
+  
+  console.log(`✅ Successfully deleted all ${deletedCount} rows from ${table}`)
+  return deletedCount
 }
 
 export default function ParticipantsPage() {
@@ -145,6 +174,11 @@ export default function ParticipantsPage() {
   })
   const [deletingParticipant, setDeletingParticipant] = useState<number | null>(null)
   const [successMessage, setSuccessMessage] = useState('')
+  
+  // Delete batch states
+  const [showDeleteBatchModal, setShowDeleteBatchModal] = useState(false)
+  const [batchToDelete, setBatchToDelete] = useState<ParticipantFile | null>(null)
+  const [deletingBatch, setDeletingBatch] = useState(false)
 
   useEffect(() => {
     fetchParticipantFiles()
@@ -179,7 +213,7 @@ export default function ParticipantsPage() {
     try {
       console.log('📂 Fetching participant files...')
       
-      const allData = await fetchAllRows('participants')
+      const allData = await fetchAllRows('participants', {}, 'created_at')
 
       console.log('✅ Participant data fetched:', allData.length, 'rows')
 
@@ -226,7 +260,7 @@ export default function ParticipantsPage() {
     try {
       console.log(`📥 Fetching ALL participants for group ${groupId}...`)
       
-      const allData = await fetchAllRows('participants', { upload_group_id: groupId })
+      const allData = await fetchAllRows('participants', { upload_group_id: groupId }, 'id')
       
       allData.sort((a, b) => {
         const numA = parseInt(a.participant_number) || 0
@@ -258,132 +292,138 @@ export default function ParticipantsPage() {
     })
   }
 
-  // CRUD: CREATE - Add Participant
-  const handleAddParticipant = async () => {
-    if (!selectedBatch) return
-    if (!addForm.participant_number || !addForm.name || !addForm.email) {
-      setSuccessMessage('❌ Please fill in all required fields (*, #, Name, Email)')
-      setTimeout(() => setSuccessMessage(''), 3000)
-      return
-    }
+  // Delete Batch Function - WITH CASCADE DELETE IN BATCHES (FIXED)
+  const handleDeleteBatchClick = (e: React.MouseEvent, batch: ParticipantFile) => {
+    e.stopPropagation()
+    setBatchToDelete(batch)
+    setShowDeleteBatchModal(true)
+  }
 
+  const handleDeleteBatch = async () => {
+    if (!batchToDelete) return
+
+    setDeletingBatch(true)
     try {
-      const selectedFile = participantFiles.find(f => f.upload_group_id === selectedBatch)
-      
-      const { data, error } = await supabase
-        .from('participants')
-        .insert([{
-          upload_group_id: selectedBatch,
-          participant_number: addForm.participant_number,
-          name: addForm.name,
-          is_pwd: addForm.is_pwd,
-          email: addForm.email,
-          province: addForm.province,
-          city: addForm.city,
-          country: addForm.country,
-          batch_name: selectedFile?.batch_name || '',
-          file_name: selectedFile?.file_name || ''
-        }])
-        .select()
+      console.log(`🗑️ Deleting batch ${batchToDelete.upload_group_id}...`)
 
-      if (error) throw error
+      // Step 1: Fetch all participants with this upload_group_id to get their IDs
+      console.log(`📥 Fetching all participants for batch ${batchToDelete.upload_group_id}...`)
+      const participantsToDelete = await fetchAllRows('participants', { upload_group_id: batchToDelete.upload_group_id }, 'id')
 
-      if (data && data.length > 0) {
-        const updatedData = [...participantData, data[0]]
-        setParticipantData(updatedData)
-        calculateStats(updatedData)
-        setSuccessMessage('✅ Participant added successfully!')
+      if (!participantsToDelete || participantsToDelete.length === 0) {
+        console.log('⚠️ No participants found for this batch')
+        setSuccessMessage('⚠️ No participants found in this batch')
         setTimeout(() => setSuccessMessage(''), 3000)
+        setShowDeleteBatchModal(false)
+        setBatchToDelete(null)
+        setDeletingBatch(false)
+        return
       }
 
-      setAddForm({
-        participant_number: '',
-        name: '',
-        is_pwd: false,
-        email: '',
-        province: '',
-        city: '',
-        country: 'Philippines'
-      })
-      setShowAddModal(false)
-    } catch (error) {
-      console.error('❌ Error adding participant:', error)
-      setSuccessMessage('❌ Failed to add participant')
+      console.log(`📊 Found ${participantsToDelete.length} participants to delete`)
+      const participantIds = participantsToDelete.map(p => p.id)
+
+      // Step 2: Delete related schedule_assignments in batches (CASCADE)
+      console.log(`🗑️ Deleting related schedule assignments...`)
+      try {
+        // Fetch all schedule assignments for these participants - use 'id' for ordering
+        const assignmentsToDelete = await fetchAllRows('schedule_assignments', {}, 'id')
+        const relevantAssignments = assignmentsToDelete.filter(a => participantIds.includes(a.participant_id))
+        
+        if (relevantAssignments.length > 0) {
+          const assignmentIds = relevantAssignments.map(a => a.id)
+          await deleteInBatches('schedule_assignments', assignmentIds)
+          console.log(`✅ Deleted ${assignmentIds.length} schedule assignments`)
+        } else {
+          console.log(`ℹ️ No schedule assignments found for these participants`)
+        }
+      } catch (error: any) {
+        console.error('❌ Error deleting schedule assignments:', error)
+        throw new Error(`Failed to delete schedule assignments: ${error.message}`)
+      }
+
+      // Step 3: Delete related schedules in batches (if any exist in the schedules table)
+      console.log(`🗑️ Deleting related schedules...`)
+      try {
+        // Fetch all schedules for these participants - use 'created_at' for ordering
+        const schedulesToDelete = await fetchAllRows('schedules', {}, 'created_at')
+        const relevantSchedules = schedulesToDelete.filter(s => s.participant_id && participantIds.includes(s.participant_id))
+        
+        if (relevantSchedules.length > 0) {
+          const scheduleIds = relevantSchedules.map(s => s.id)
+          await deleteInBatches('schedules', scheduleIds)
+          console.log(`✅ Deleted ${scheduleIds.length} schedules`)
+        } else {
+          console.log(`ℹ️ No schedules found for these participants`)
+        }
+      } catch (error: any) {
+        console.error('❌ Error deleting schedules:', error)
+        throw new Error(`Failed to delete schedules: ${error.message}`)
+      }
+
+      // Step 4: Now delete the participants in batches
+      console.log(`🗑️ Deleting ${participantIds.length} participants...`)
+      await deleteInBatches('participants', participantIds)
+      console.log(`✅ Successfully deleted ${participantIds.length} participants and their related data`)
+
+      // If the deleted batch was selected, clear selection
+      if (selectedBatch === batchToDelete.upload_group_id) {
+        setSelectedBatch(null)
+        setParticipantData([])
+        setFilteredData([])
+        setStats(null)
+      }
+
+      // Refresh the batch list
+      await fetchParticipantFiles()
+
+      setSuccessMessage(`✅ Batch "${batchToDelete.batch_name}" with ${participantIds.length} participants deleted successfully!`)
       setTimeout(() => setSuccessMessage(''), 3000)
+      
+      setShowDeleteBatchModal(false)
+      setBatchToDelete(null)
+    } catch (error: any) {
+      console.error('❌ Error deleting batch:', error)
+      const errorMessage = error?.message || 'Unknown error occurred'
+      setSuccessMessage(`❌ Failed to delete batch: ${errorMessage}`)
+      setTimeout(() => setSuccessMessage(''), 5000)
+    } finally {
+      setDeletingBatch(false)
     }
   }
 
-  const handleEditClick = (participant: Participant) => {
-    setEditingParticipant(participant.id!)
-    setEditForm({
-      participant_number: participant.participant_number,
-      name: participant.name,
-      is_pwd: participant.is_pwd,
-      email: participant.email,
-      province: participant.province,
-      city: participant.city,
-      country: participant.country
-    })
-    setShowActionsFor(null)
-  }
-
-  const handleEditCancel = () => {
-    setEditingParticipant(null)
-    setEditForm({
-      participant_number: '',
-      name: '',
-      is_pwd: false,
-      email: '',
-      province: '',
-      city: '',
-      country: 'Philippines'
-    })
-  }
-
-  const handleEditSave = async (participantId: number) => {
-    if (!editForm.participant_number || !editForm.name || !editForm.email) {
-      setSuccessMessage('❌ Please fill in all required fields')
-      setTimeout(() => setSuccessMessage(''), 3000)
-      return
-    }
-
-    try {
-      const { error } = await supabase
-        .from('participants')
-        .update({
-          participant_number: editForm.participant_number,
-          name: editForm.name,
-          is_pwd: editForm.is_pwd,
-          email: editForm.email,
-          province: editForm.province,
-          city: editForm.city,
-          country: editForm.country
-        })
-        .eq('id', participantId)
-
-      if (error) throw error
-
-      const updatedData = participantData.map(p => 
-        p.id === participantId ? { ...p, ...editForm } : p
-      )
-      setParticipantData(updatedData)
-      calculateStats(updatedData)
-      setEditingParticipant(null)
-      setSuccessMessage('✅ Participant updated successfully!')
-      setTimeout(() => setSuccessMessage(''), 3000)
-    } catch (error) {
-      console.error('❌ Error updating participant:', error)
-      setSuccessMessage('❌ Failed to update participant')
-      setTimeout(() => setSuccessMessage(''), 3000)
-    }
-  }
-
+  // Single Participant Delete - WITH CASCADE
   const handleDelete = async (participantId: number) => {
-    if (!confirm('Are you sure you want to delete this participant? This action cannot be undone.')) return
+    if (!confirm('Are you sure you want to delete this participant? This will also delete all their schedule assignments.')) return
 
     setDeletingParticipant(participantId)
     setShowActionsFor(null)
     try {
+      console.log(`🗑️ Deleting participant ${participantId}...`)
+
+      // Step 1: Delete related schedule_assignments
+      const { error: assignmentError } = await supabase
+        .from('schedule_assignments')
+        .delete()
+        .eq('participant_id', participantId)
+
+      if (assignmentError) {
+        console.error('❌ Error deleting schedule assignments:', assignmentError)
+        throw new Error(`Failed to delete schedule assignments: ${assignmentError.message}`)
+      }
+
+      // Step 2: Delete related schedules
+      const { error: schedulesError } = await supabase
+        .from('schedules')
+        .delete()
+        .eq('participant_id', participantId)
+
+      if (schedulesError) {
+        console.error('❌ Error deleting schedules:', schedulesError)
+        throw new Error(`Failed to delete schedules: ${schedulesError.message}`)
+      }
+
+      // Step 3: Delete the participant
       const { error } = await supabase
         .from('participants')
         .delete()
@@ -396,10 +436,11 @@ export default function ParticipantsPage() {
       calculateStats(updatedData)
       setSuccessMessage('✅ Participant deleted successfully!')
       setTimeout(() => setSuccessMessage(''), 3000)
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Error deleting participant:', error)
-      setSuccessMessage('❌ Failed to delete participant')
-      setTimeout(() => setSuccessMessage(''), 3000)
+      const errorMessage = error?.message || 'Unknown error occurred'
+      setSuccessMessage(`❌ Failed to delete participant: ${errorMessage}`)
+      setTimeout(() => setSuccessMessage(''), 5000)
     } finally {
       setDeletingParticipant(null)
     }
@@ -417,6 +458,59 @@ export default function ParticipantsPage() {
     setShowActionsFor(showActionsFor === participantId ? null : participantId)
   }
 
+  const handleAddParticipant = async () => {
+    if (!addForm.participant_number || !addForm.name || !addForm.email) {
+      setSuccessMessage('❌ Please fill in all required fields')
+      setTimeout(() => setSuccessMessage(''), 3000)
+      return
+    }
+
+    try {
+      const selectedFile = participantFiles.find(f => f.upload_group_id === selectedBatch)
+      
+      const { data, error } = await supabase
+        .from('participants')
+        .insert({
+          participant_number: addForm.participant_number,
+          name: addForm.name,
+          is_pwd: addForm.is_pwd,
+          email: addForm.email,
+          province: addForm.province,
+          city: addForm.city,
+          country: addForm.country,
+          upload_group_id: selectedBatch,
+          batch_name: selectedFile?.batch_name || '',
+          file_name: selectedFile?.file_name || ''
+        })
+        .select()
+        .single()
+
+      if (error) throw error
+
+      const updatedData = [...participantData, data]
+      setParticipantData(updatedData)
+      calculateStats(updatedData)
+      setShowAddModal(false)
+      setAddForm({
+        participant_number: '',
+        name: '',
+        is_pwd: false,
+        email: '',
+        province: '',
+        city: '',
+        country: 'Philippines'
+      })
+      setSuccessMessage('✅ Participant added successfully!')
+      setTimeout(() => setSuccessMessage(''), 3000)
+      
+      await fetchParticipantFiles()
+    } catch (error: any) {
+      console.error('❌ Error adding participant:', error)
+      setSuccessMessage(`❌ Failed to add participant: ${error?.message || 'Unknown error'}`)
+      setTimeout(() => setSuccessMessage(''), 5000)
+    }
+  }
+
   return (
     <div className="participants-layout">
       <MenuBar 
@@ -430,7 +524,7 @@ export default function ParticipantsPage() {
         <div className="participants-container">
           {/* Success Message */}
           {successMessage && (
-            <div className={`success-message ${successMessage.includes('❌') ? 'error' : 'success'}`}>
+            <div className={`success-message ${successMessage.includes('❌') || successMessage.includes('⚠️') ? 'error' : 'success'}`}>
               {successMessage}
             </div>
           )}
@@ -505,6 +599,13 @@ export default function ParticipantsPage() {
                           <Check size={20} />
                         </div>
                       )}
+                      <button
+                        className="delete-batch-btn"
+                        onClick={(e) => handleDeleteBatchClick(e, file)}
+                        title="Delete entire batch"
+                      >
+                        <Trash2 size={18} />
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -602,6 +703,118 @@ export default function ParticipantsPage() {
                                 const isEditing = editingParticipant === participant.id
                                 const showActions = showActionsFor === participant.id
                                 
+                                const handleEditSave = async (participantId: number) => {
+                                  try {
+                                    const { error } = await supabase
+                                      .from('participants')
+                                      .update({
+                                        participant_number: editForm.participant_number,
+                                        name: editForm.name,
+                                        is_pwd: editForm.is_pwd,
+                                        email: editForm.email,
+                                        province: editForm.province,
+                                        city: editForm.city,
+                                        country: editForm.country
+                                      })
+                                      .eq('id', participantId)
+
+                                    if (error) throw error
+
+                                    const updatedData = participantData.map(p => 
+                                      p.id === participantId ? { ...p, ...editForm } : p
+                                    )
+                                    setParticipantData(updatedData)
+                                    calculateStats(updatedData)
+                                    setEditingParticipant(null)
+                                    setSuccessMessage('✅ Participant updated successfully!')
+                                    setTimeout(() => setSuccessMessage(''), 3000)
+                                  } catch (error: any) {
+                                    console.error('❌ Error updating participant:', error)
+                                    setSuccessMessage(`❌ Failed to update participant: ${error?.message || 'Unknown error'}`)
+                                    setTimeout(() => setSuccessMessage(''), 5000)
+                                  }
+                                }
+
+                                const handleEditCancel = () => {
+                                  setEditingParticipant(null)
+                                  setEditForm({
+                                    participant_number: '',
+                                    name: '',
+                                    is_pwd: false,
+                                    email: '',
+                                    province: '',
+                                    city: '',
+                                    country: 'Philippines'
+                                  })
+                                }
+
+                                const handleEditClick = (participant: Participant) => {
+                                  setEditingParticipant(participant.id!)
+                                  setEditForm({
+                                    participant_number: participant.participant_number,
+                                    name: participant.name,
+                                    is_pwd: participant.is_pwd,
+                                    email: participant.email,
+                                    province: participant.province,
+                                    city: participant.city,
+                                    country: participant.country
+                                  })
+                                  setShowActionsFor(null)
+                                }
+
+                                const handleAddParticipant = async () => {
+                                  if (!addForm.participant_number || !addForm.name || !addForm.email) {
+                                    setSuccessMessage('❌ Please fill in all required fields')
+                                    setTimeout(() => setSuccessMessage(''), 3000)
+                                    return
+                                  }
+
+                                  try {
+                                    const selectedFile = participantFiles.find(f => f.upload_group_id === selectedBatch)
+                                    
+                                    const { data, error } = await supabase
+                                      .from('participants')
+                                      .insert({
+                                        participant_number: addForm.participant_number,
+                                        name: addForm.name,
+                                        is_pwd: addForm.is_pwd,
+                                        email: addForm.email,
+                                        province: addForm.province,
+                                        city: addForm.city,
+                                        country: addForm.country,
+                                        upload_group_id: selectedBatch,
+                                        batch_name: selectedFile?.batch_name || '',
+                                        file_name: selectedFile?.file_name || ''
+                                      })
+                                      .select()
+                                      .single()
+
+                                    if (error) throw error
+
+                                    const updatedData = [...participantData, data]
+                                    setParticipantData(updatedData)
+                                    calculateStats(updatedData)
+                                    setShowAddModal(false)
+                                    setAddForm({
+                                      participant_number: '',
+                                      name: '',
+                                      is_pwd: false,
+                                      email: '',
+                                      province: '',
+                                      city: '',
+                                      country: 'Philippines'
+                                    })
+                                    setSuccessMessage('✅ Participant added successfully!')
+                                    setTimeout(() => setSuccessMessage(''), 3000)
+                                    
+                                    await fetchParticipantFiles()
+                                  } catch (error: any) {
+                                    console.error('❌ Error adding participant:', error)
+                                    setSuccessMessage(`❌ Failed to add participant: ${error?.message || 'Unknown error'}`)
+                                    setTimeout(() => setSuccessMessage(''), 5000)
+                                  }
+                                }
+
                                 return (
                                   <tr key={participant.id} className={isEditing ? 'editing-row' : ''}>
                                     {isEditing ? (
@@ -862,6 +1075,64 @@ export default function ParticipantsPage() {
               >
                 <Check size={18} />
                 Add Participant
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Batch Confirmation Modal */}
+      {showDeleteBatchModal && batchToDelete && (
+        <div className="modal-overlay" onClick={() => !deletingBatch && setShowDeleteBatchModal(false)}>
+          <div className="modal-content delete-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header delete-header">
+              <h3>
+                <AlertTriangle size={24} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '8px', color: '#ef4444' }} />
+                Delete Batch
+              </h3>
+              <button 
+                className="modal-close"
+                onClick={() => setShowDeleteBatchModal(false)}
+                disabled={deletingBatch}
+                title="Close modal"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="modal-body">
+              <div className="delete-warning">
+                <div className="warning-icon-wrapper">
+                  <AlertTriangle size={64} className="warning-icon" />
+                </div>
+                <h4>Are you absolutely sure?</h4>
+                <p>
+                  You are about to permanently delete the batch:
+                </p>
+                <div className="delete-batch-info">
+                  <strong>{batchToDelete.batch_name}</strong>
+                  <span>{batchToDelete.row_count} participants</span>
+                </div>
+                <p className="warning-text">
+                  This action <strong>CANNOT BE UNDONE</strong>. All {batchToDelete.row_count} participants in this batch will be permanently removed from the database.
+                </p>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button 
+                className="modal-btn-cancel"
+                onClick={() => setShowDeleteBatchModal(false)}
+                disabled={deletingBatch}
+              >
+                <X size={18} />
+                Cancel
+              </button>
+              <button 
+                className="modal-btn-delete"
+                onClick={handleDeleteBatch}
+                disabled={deletingBatch}
+              >
+                <Trash2 size={18} />
+                {deletingBatch ? 'Deleting...' : 'Delete Batch'}
               </button>
             </div>
           </div>

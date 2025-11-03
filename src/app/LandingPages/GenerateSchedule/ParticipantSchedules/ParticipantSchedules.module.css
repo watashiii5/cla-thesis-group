@@ -377,6 +377,19 @@
   color: var(--warning-orange);
 }
 
+.dateCell {
+  font-weight: 600;
+  color: var(--text-dark);
+  font-size: 14px;
+}
+
+.dateTimeCell {
+  font-weight: 600;
+  color: var(--text-dark);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
 /* ==================== Loading & Empty States ==================== */
 .loadingState,
 .emptyState {

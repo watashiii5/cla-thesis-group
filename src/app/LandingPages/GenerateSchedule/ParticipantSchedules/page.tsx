@@ -17,6 +17,7 @@ interface ScheduleRow {
   time_slot: string
   campus: string
   seat_no: number
+  batch_date: string | null
 }
 
 // Helper function to fetch ALL rows (bypass 1000 limit)
@@ -70,6 +71,40 @@ async function fetchAllRows(table: string, filters: any = {}) {
 
   console.log(`✅ Total rows fetched from ${table}: ${allData.length}`)
   return allData
+}
+
+// ✅ NEW: Format full date & time
+function formatDateTime(dateString: string | null, timeString: string): string {
+  if (!dateString) return 'N/A'
+  try {
+    const date = new Date(dateString)
+    const dateFormatted = date.toLocaleDateString('en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    })
+    
+    // Format time to 12-hour with AM/PM
+    const [hours, minutes] = timeString.split(':').map(Number)
+    const period = hours >= 12 ? 'PM' : 'AM'
+    const hours12 = hours % 12 || 12
+    const timeFormatted = `${hours12}:${minutes.toString().padStart(2, '0')} ${period}`
+    
+    return `${dateFormatted}, ${timeFormatted}`
+  } catch {
+    return `${dateString} ${timeString}`
+  }
+}
+
+// ✅ NEW: Parse time slot into start/end times
+function parseTimeSlot(timeSlot: string): { start: string; end: string } {
+  try {
+    const [start, end] = timeSlot.split(' - ').map(t => t.trim())
+    return { start, end }
+  } catch {
+    return { start: timeSlot, end: timeSlot }
+  }
 }
 
 function ParticipantSchedulesContent() {
@@ -154,7 +189,8 @@ function ParticipantSchedulesContent() {
           room: batch?.room || 'N/A',
           time_slot: batch?.time_slot || 'N/A',
           campus: batch?.campus || 'Main Campus',
-          seat_no: assignment.seat_no
+          seat_no: assignment.seat_no,
+          batch_date: batch?.batch_date || null
         }
       })
 
@@ -212,24 +248,41 @@ function ParticipantSchedulesContent() {
     }
   }
 
+  // ✅ UPDATED: Include start/end date & time in CSV
   async function handleExportCSV() {
     if (scheduleData.length === 0) {
       alert('No data to export')
       return
     }
 
-    const headers = ['Participant #', 'Name', 'Email', 'PWD', 'Batch', 'Room', 'Time', 'Campus', 'Seat No']
-    const rows = scheduleData.map(row => [
-      row.participant_number,
-      row.name,
-      row.email,
-      row.is_pwd ? 'Yes' : 'No',
-      row.batch_name,
-      row.room,
-      row.time_slot,
-      row.campus,
-      row.seat_no.toString()
-    ])
+    const headers = [
+      'Participant #', 
+      'Name', 
+      'Email', 
+      'PWD', 
+      'Batch', 
+      'Starting Date & Time', 
+      'Ending Date & Time',
+      'Room', 
+      'Campus', 
+      'Seat No'
+    ]
+    
+    const rows = scheduleData.map(row => {
+      const { start, end } = parseTimeSlot(row.time_slot)
+      return [
+        row.participant_number,
+        row.name,
+        row.email,
+        row.is_pwd ? 'Yes' : 'No',
+        row.batch_name,
+        formatDateTime(row.batch_date, start),
+        formatDateTime(row.batch_date, end),
+        row.room,
+        row.campus,
+        row.seat_no.toString()
+      ]
+    })
 
     const csv = [headers, ...rows]
       .map(row => row.map(cell => `"${cell}"`).join(','))
@@ -376,41 +429,50 @@ function ParticipantSchedulesContent() {
                         <th>Email</th>
                         <th>PWD</th>
                         <th>Batch</th>
+                        <th>🗓️ Starting Date & Time</th>
+                        <th>🏁 Ending Date & Time</th>
                         <th>Room</th>
-                        <th>Time Slot</th>
                         <th>Campus</th>
                         <th>Seat</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {scheduleData.map((row, idx) => (
-                        <tr key={row.id || idx}>
-                          <td className={styles.fontSemibold}>{row.participant_number}</td>
-                          <td>{row.name}</td>
-                          <td className={styles.emailCell}>{row.email}</td>
-                          <td>
-                            <span className={`${styles.pwdBadge} ${row.is_pwd ? styles.yes : styles.no}`}>
-                              {row.is_pwd ? (
-                                <>
-                                  <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
-                                    <path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.5 16c-.83 0-1.5-.67-1.5-1.5S5.67 13 6.5 13s1.5.67 1.5 1.5S7.33 16 6.5 16zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z"/>
-                                  </svg>
-                                  Yes
-                                </>
-                              ) : (
-                                'No'
-                              )}
-                            </span>
-                          </td>
-                          <td>
-                            <span className={styles.batchBadge}>{row.batch_name}</span>
-                          </td>
-                          <td className={styles.roomCell}>{row.room}</td>
-                          <td className={styles.timeCell}>{row.time_slot}</td>
-                          <td className={styles.locationCell}>{row.campus}</td>
-                          <td className={styles.seatCell}>{row.seat_no}</td>
-                        </tr>
-                      ))}
+                      {scheduleData.map((row, idx) => {
+                        const { start, end } = parseTimeSlot(row.time_slot)
+                        return (
+                          <tr key={row.id || idx}>
+                            <td className={styles.fontSemibold}>{row.participant_number}</td>
+                            <td>{row.name}</td>
+                            <td className={styles.emailCell}>{row.email}</td>
+                            <td>
+                              <span className={`${styles.pwdBadge} ${row.is_pwd ? styles.yes : styles.no}`}>
+                                {row.is_pwd ? (
+                                  <>
+                                    <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
+                                      <path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.5 16c-.83 0-1.5-.67-1.5-1.5S5.67 13 6.5 13s1.5.67 1.5 1.5S7.33 16 6.5 16zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z"/>
+                                    </svg>
+                                    Yes
+                                  </>
+                                ) : (
+                                  'No'
+                                )}
+                              </span>
+                            </td>
+                            <td>
+                              <span className={styles.batchBadge}>{row.batch_name}</span>
+                            </td>
+                            <td className={styles.dateTimeCell}>
+                              {formatDateTime(row.batch_date, start)}
+                            </td>
+                            <td className={styles.dateTimeCell}>
+                              {formatDateTime(row.batch_date, end)}
+                            </td>
+                            <td className={styles.roomCell}>{row.room}</td>
+                            <td className={styles.locationCell}>{row.campus}</td>
+                            <td className={styles.seatCell}>{row.seat_no}</td>
+                          </tr>
+                        )
+                      })}
                     </tbody>
                   </table>
                 </div>

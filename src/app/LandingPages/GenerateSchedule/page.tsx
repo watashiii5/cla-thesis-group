@@ -28,8 +28,10 @@ interface ScheduleConfig {
   eventType: 'Admission_Test' | 'Enrollment' | 'Orientation' | 'Custom'
   scheduleDate: string
   startTime: string
+  endDate: string // ✅ NEW: End date
   endTime: string
   durationPerBatch: number // in minutes
+  durationUnit: 'minutes' | 'hours' // ✅ NEW: Duration unit
   prioritizePWD: boolean
   emailNotification: boolean
 }
@@ -121,8 +123,10 @@ export default function GenerateSchedulePage() {
     eventType: 'Admission_Test',
     scheduleDate: '',
     startTime: '08:00',
+    endDate: '', // ✅ NEW
     endTime: '18:00',
     durationPerBatch: 60,
+    durationUnit: 'minutes', // ✅ NEW
     prioritizePWD: true,
     emailNotification: false
   })
@@ -134,6 +138,29 @@ export default function GenerateSchedulePage() {
   useEffect(() => {
     fetchData()
   }, [])
+
+  // ✅ NEW: Auto-set end date when start date changes
+  useEffect(() => {
+    if (config.scheduleDate && !config.endDate) {
+      setConfig(prev => ({ ...prev, endDate: prev.scheduleDate }))
+    }
+  }, [config.scheduleDate])
+
+  // ✅ NEW: Convert duration to minutes based on unit
+  const getDurationInMinutes = () => {
+    if (config.durationUnit === 'hours') {
+      return config.durationPerBatch * 60
+    }
+    return config.durationPerBatch
+  }
+
+  // ✅ NEW: Validate date range
+  const isValidDateRange = () => {
+    if (!config.scheduleDate || !config.endDate) return false
+    const start = new Date(config.scheduleDate)
+    const end = new Date(config.endDate)
+    return start <= end
+  }
 
   const fetchData = async () => {
     setLoading(true)
@@ -187,9 +214,51 @@ export default function GenerateSchedulePage() {
     }
   }
 
+  // ✅ Update handleGenerateSchedule validation
   const handleGenerateSchedule = async () => {
+    // ✅ Enhanced validation
     if (!config.campusGroupId || !config.participantGroupId || !config.eventName || !config.scheduleDate) {
       alert('Please fill in all required fields')
+      return
+    }
+
+    if (!config.endDate) {
+      alert('Please select an end date for the schedule')
+      return
+    }
+
+    if (!isValidDateRange()) {
+      alert('End date must be on or after the start date')
+      return
+    }
+
+    // ✅ NEW: Calculate total available time across all days
+    const start = new Date(`${config.scheduleDate}T${config.startTime}`)
+    const end = new Date(`${config.endDate}T${config.endTime}`)
+    const totalMinutes = (end.getTime() - start.getTime()) / (1000 * 60)
+    const durationInMinutes = getDurationInMinutes()
+    
+    // Calculate daily time window
+    const [startHour, startMin] = config.startTime.split(':').map(Number)
+    const [endHour, endMin] = config.endTime.split(':').map(Number)
+    const dailyMinutes = (endHour * 60 + endMin) - (startHour * 60 + startMin)
+    
+    if (dailyMinutes <= 0) {
+      alert('⚠️ Invalid time range: End time must be after start time')
+      return
+    }
+    
+    if (durationInMinutes > dailyMinutes) {
+      const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
+      alert(
+        `⚠️ Batch duration (${config.durationPerBatch} ${config.durationUnit}) exceeds daily time window.\n\n` +
+        `Daily window: ${Math.floor(dailyMinutes / 60)}h ${dailyMinutes % 60}m\n` +
+        `Batch duration: ${Math.floor(durationInMinutes / 60)}h ${durationInMinutes % 60}m\n\n` +
+        `You selected ${days} day(s), but each batch is longer than one day.\n\n` +
+        `Please either:\n` +
+        `• Reduce batch duration\n` +
+        `• Extend daily time window`
+      )
       return
     }
 
@@ -199,6 +268,9 @@ export default function GenerateSchedulePage() {
     try {
       const startTime = performance.now()
 
+      // ✅ Convert duration to minutes for backend
+      const durationInMinutes = getDurationInMinutes()
+
       const requestBody = {
         campusGroupId: config.campusGroupId,
         participantGroupId: config.participantGroupId,
@@ -206,13 +278,15 @@ export default function GenerateSchedulePage() {
         eventType: config.eventType,
         scheduleDate: config.scheduleDate,
         startTime: config.startTime,
+        endDate: config.endDate, // ✅ NEW
         endTime: config.endTime,
-        durationPerBatch: config.durationPerBatch,
+        durationPerBatch: durationInMinutes, // ✅ Always in minutes for backend
         prioritizePWD: config.prioritizePWD,
         emailNotification: config.emailNotification
       }
 
       console.log('🚀 Sending schedule request:', requestBody)
+      console.log(`📊 Duration: ${config.durationPerBatch} ${config.durationUnit} = ${durationInMinutes} minutes`)
 
       // ✅ USE NEXT.JS API ROUTE INSTEAD OF DIRECT FASTAPI CALL
       const response = await fetch('/api/schedule/generate', {
@@ -309,6 +383,25 @@ export default function GenerateSchedulePage() {
   const getTodayDate = () => {
     const today = new Date()
     return today.toISOString().split('T')[0]
+  }
+
+  // ✅ NEW: Calculate total schedule duration display
+  const getScheduleDurationDisplay = () => {
+    if (!config.scheduleDate || !config.endDate || !isValidDateRange()) return ''
+    
+    const start = new Date(`${config.scheduleDate}T${config.startTime}`)
+    const end = new Date(`${config.endDate}T${config.endTime}`)
+    const diffMs = end.getTime() - start.getTime()
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+    const diffHours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
+    
+    if (diffDays === 0) {
+      return `Same day event (${diffHours} hours)`
+    } else if (diffDays === 1) {
+      return `2-day event`
+    } else {
+      return `${diffDays + 1}-day event`
+    }
   }
 
   return (
@@ -549,6 +642,7 @@ export default function GenerateSchedulePage() {
                 </div>
               </div>
 
+              {/* ✅ UPDATED: Schedule Settings with End Date and Duration Unit */}
               <div className={styles.formCard}>
                 <h2 className={styles.formSectionTitle}>
                   <svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24">
@@ -558,9 +652,16 @@ export default function GenerateSchedulePage() {
                   Schedule Settings
                 </h2>
                 
+                {/* ✅ NEW: Start Date & Time Row */}
                 <div className={styles.formRow}>
                   <div className={styles.formGroup}>
-                    <label className={styles.formLabel}>Schedule Date *</label>
+                    <label className={styles.formLabel}>
+                      Start Date *
+                      <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16" style={{display: 'inline', marginLeft: '6px'}}>
+                        <path d="M19 4H5C3.89543 4 3 4.89543 3 6V20C3 21.1046 3.89543 22 5 22H19C20.1046 22 21 21.1046 21 20V6C21 4.89543 20.1046 4 19 4Z" stroke="currentColor" strokeWidth="2"/>
+                        <path d="M16 2V6M8 2V6M3 10H21" stroke="currentColor" strokeWidth="2"/>
+                      </svg>
+                    </label>
                     <input
                       type="date"
                       value={config.scheduleDate}
@@ -571,22 +672,12 @@ export default function GenerateSchedulePage() {
                   </div>
 
                   <div className={styles.formGroup}>
-                    <label className={styles.formLabel}>Duration per Batch (minutes) *</label>
-                    <input
-                      type="number"
-                      value={config.durationPerBatch}
-                      onChange={(e) => setConfig({...config, durationPerBatch: parseInt(e.target.value) || 60})}
-                      min="30"
-                      max="240"
-                      step="15"
-                      className={styles.formInput}
-                    />
-                  </div>
-                </div>
-
-                <div className={styles.formRow}>
-                  <div className={styles.formGroup}>
-                    <label className={styles.formLabel}>Start Time *</label>
+                    <label className={styles.formLabel}>
+                      Start Time *
+                      <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16" style={{display: 'inline', marginLeft: '6px'}}>
+                        <path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/>
+                      </svg>
+                    </label>
                     <input
                       type="time"
                       value={config.startTime}
@@ -594,9 +685,37 @@ export default function GenerateSchedulePage() {
                       className={styles.formInput}
                     />
                   </div>
+                </div>
+
+                {/* ✅ NEW: End Date & Time Row */}
+                <div className={styles.formRow}>
+                  <div className={styles.formGroup}>
+                    <label className={styles.formLabel}>
+                      End Date *
+                      <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16" style={{display: 'inline', marginLeft: '6px'}}>
+                        <path d="M19 4H5C3.89543 4 3 4.89543 3 6V20C3 21.1046 3.89543 22 5 22H19C20.1046 22 21 21.1046 21 20V6C21 4.89543 20.1046 4 19 4Z" stroke="currentColor" strokeWidth="2"/>
+                        <path d="M16 2V6M8 2V6M3 10H21" stroke="currentColor" strokeWidth="2"/>
+                      </svg>
+                    </label>
+                    <input
+                      type="date"
+                      value={config.endDate}
+                      onChange={(e) => setConfig({...config, endDate: e.target.value})}
+                      min={config.scheduleDate || getTodayDate()}
+                      className={`${styles.formInput} ${!isValidDateRange() && config.endDate ? styles.inputError : ''}`}
+                    />
+                    {!isValidDateRange() && config.endDate && (
+                      <span className={styles.errorText}>End date must be after start date</span>
+                    )}
+                  </div>
 
                   <div className={styles.formGroup}>
-                    <label className={styles.formLabel}>End Time *</label>
+                    <label className={styles.formLabel}>
+                      End Time *
+                      <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16" style={{display: 'inline', marginLeft: '6px'}}>
+                        <path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/>
+                      </svg>
+                    </label>
                     <input
                       type="time"
                       value={config.endTime}
@@ -604,6 +723,55 @@ export default function GenerateSchedulePage() {
                       className={styles.formInput}
                     />
                   </div>
+                </div>
+
+                {/* ✅ NEW: Duration Info Display */}
+                {config.scheduleDate && config.endDate && isValidDateRange() && (
+                  <div className={styles.durationInfo}>
+                    <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
+                      <path d="M11 17c0 .55.45 1 1 1s1-.45 1-1-.45-1-1-1-1 .45-1 1zm0-14v4h2V5.08c3.39.49 6 3.39 6 6.92 0 3.87-3.13 7-7 7s-7-3.13-7-7c0-1.68.59-3.22 1.58-4.42L12 13l1.41-1.41-6.8-6.8v.02C4.42 6.45 3 9.05 3 12c0 4.97 4.02 9 9 9 4.97 0 9-4.03 9-9s-4.03-9-9-9h-1zm7 9c0-.55-.45-1-1-1s-1 .45-1 1 .45 1 1 1 1-.45 1-1zM6 12c0 .55.45 1 1 1s1-.45 1-1-.45-1-1-1-1 .45-1 1z"/>
+                    </svg>
+                    <span>{getScheduleDurationDisplay()}</span>
+                  </div>
+                )}
+
+                {/* ✅ NEW: Duration Per Batch with Unit Selection */}
+                <div className={styles.formRow}>
+                  <div className={styles.formGroup}>
+                    <label className={styles.formLabel}>Duration per Batch *</label>
+                    <input
+                      type="number"
+                      value={config.durationPerBatch}
+                      onChange={(e) => setConfig({...config, durationPerBatch: parseInt(e.target.value) || 1})}
+                      min="1"
+                      max={config.durationUnit === 'hours' ? "24" : "1440"}
+                      step="1"
+                      className={styles.formInput}
+                    />
+                  </div>
+
+                  <div className={styles.formGroup}>
+                    <label className={styles.formLabel}>Unit</label>
+                    <select
+                      value={config.durationUnit}
+                      onChange={(e) => setConfig({...config, durationUnit: e.target.value as 'minutes' | 'hours'})}
+                      className={styles.formSelect}
+                    >
+                      <option value="minutes">Minutes</option>
+                      <option value="hours">Hours</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* ✅ NEW: Duration Display Helper */}
+                <div className={styles.durationHelper}>
+                  <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
+                  </svg>
+                  <span>
+                    Each batch will last <strong>{getDurationInMinutes()} minutes</strong>
+                    {config.durationUnit === 'hours' && ` (${config.durationPerBatch} ${config.durationPerBatch === 1 ? 'hour' : 'hours'})`}
+                  </span>
                 </div>
 
                 <div className={styles.formOptions}>
@@ -637,7 +805,7 @@ export default function GenerateSchedulePage() {
                 <button 
                   className={styles.btnGenerate}
                   onClick={handleGenerateSchedule}
-                  disabled={scheduling || !config.campusGroupId || !config.participantGroupId || !config.eventName || !config.scheduleDate}
+                  disabled={scheduling || !config.campusGroupId || !config.participantGroupId || !config.eventName || !config.scheduleDate || !config.endDate || !isValidDateRange()}
                 >
                   {scheduling ? (
                     <>

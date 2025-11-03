@@ -11,7 +11,8 @@ import {
   XCircle, 
   ArrowRight,
   FileSpreadsheet,
-  Info
+  Info,
+  AlertTriangle
 } from 'lucide-react'
 import styles from './styles/bQtime.module.css'
 import React, { useState } from 'react'
@@ -57,6 +58,127 @@ export default function BeforeQtimeHomePage(): JSX.Element {
   const parseCSV = (text: string): string[][] => {
     const lines = text.trim().split('\n')
     return lines.map(line => line.split(',').map(cell => cell.trim()))
+  }
+
+  // Validate CSV headers
+  const validateCampusHeaders = (headers: string[]): boolean => {
+    const expectedHeaders = ['Campus', 'Building', 'Room', 'Capacity']
+    
+    if (headers.length !== expectedHeaders.length) {
+      return false
+    }
+    
+    return headers.every((header, index) => 
+      header.toLowerCase() === expectedHeaders[index].toLowerCase()
+    )
+  }
+
+  const validateParticipantHeaders = (headers: string[]): boolean => {
+    const expectedHeaders = [
+      'Participant Number',
+      'Name',
+      'PWD',
+      'Email',
+      'Province',
+      'City',
+      'Country'
+    ]
+    
+    if (headers.length !== expectedHeaders.length) {
+      return false
+    }
+    
+    return headers.every((header, index) => {
+      const cleanHeader = header.toLowerCase().trim()
+      const expectedHeader = expectedHeaders[index].toLowerCase()
+      
+      // For PWD column, accept both "PWD" and "PWD (Yes/No)"
+      if (index === 2) {
+        return cleanHeader === 'pwd' || cleanHeader === 'pwd (yes/no)'
+      }
+      
+      return cleanHeader === expectedHeader
+    })
+  }
+
+  // Validate campus file on selection
+  const handleCampusFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setCampusError(null)
+    setCampusMessage(null)
+
+    try {
+      const text = await file.text()
+      const rows = parseCSV(text)
+
+      if (rows.length < 1) {
+        throw new Error('CSV file is empty or invalid.')
+      }
+
+      const headers = rows[0]
+      if (!validateCampusHeaders(headers)) {
+        // Reset the file input
+        e.target.value = ''
+        throw new Error(
+          '❌ INVALID CSV FORMAT DETECTED!\n\n' +
+          '📋 Expected headers (exact format):\n' +
+          'Campus, Building, Room, Capacity\n\n' +
+          `❗ Found headers:\n${headers.join(', ')}\n\n` +
+          '⚠️ This file cannot be uploaded. Please fix the headers and try again.'
+        )
+      }
+
+      // File is valid
+      setCampusFile(file)
+      setCampusMessage('✅ CSV format validated successfully!')
+    } catch (err: any) {
+      console.error('Campus file validation error:', err)
+      setCampusFile(null)
+      setCampusError(err?.message ?? String(err))
+    }
+  }
+
+  // Validate participant file on selection
+  const handleParticipantFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setParticipantError(null)
+    setParticipantMessage(null)
+
+    try {
+      const text = await file.text()
+      const rows = parseCSV(text)
+
+      if (rows.length < 1) {
+        throw new Error('CSV file is empty or invalid.')
+      }
+
+      const headers = rows[0]
+      if (!validateParticipantHeaders(headers)) {
+        // Reset the file input
+        e.target.value = ''
+        throw new Error(
+          '❌ INVALID CSV FORMAT DETECTED!\n\n' +
+          '📋 Expected headers (exact format):\n' +
+          'Participant Number, Name, PWD, Email, Province, City, Country\n' +
+          'OR\n' +
+          'Participant Number, Name, PWD (Yes/No), Email, Province, City, Country\n\n' +
+          `❗ Found headers:\n${headers.join(', ')}\n\n` +
+          '⚠️ This file cannot be uploaded. Please fix the headers and try again.'
+        )
+      }
+
+      // File is valid
+      setParticipantFile(file)
+      setParticipantMessage('✅ CSV format validated successfully!')
+    } catch (err: any) {
+      console.error('Participant file validation error:', err)
+      setParticipantFile(null)
+      setParticipantError(err?.message ?? String(err))
+    }
   }
 
   // Get next upload group ID by finding max + 1
@@ -105,7 +227,7 @@ export default function BeforeQtimeHomePage(): JSX.Element {
       const rows = parseCSV(text)
 
       if (rows.length < 2) {
-        throw new Error('CSV file must contain headers and at least one data row.')
+        throw new Error('CSV file must contain at least one data row.')
       }
 
       const dataRows = rows.slice(1)
@@ -171,7 +293,7 @@ export default function BeforeQtimeHomePage(): JSX.Element {
       const rows = parseCSV(text)
 
       if (rows.length < 2) {
-        throw new Error('CSV file must contain headers and at least one data row.')
+        throw new Error('CSV file must contain at least one data row.')
       }
 
       const dataRows = rows.slice(1)
@@ -259,6 +381,10 @@ export default function BeforeQtimeHomePage(): JSX.Element {
                 <FileSpreadsheet size={14} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '4px' }} />
                 Example: Main Campus, Building A, Room 101, 30
               </small>
+              <div style={{ marginTop: '8px', padding: '8px', background: '#fef3c7', borderRadius: '4px', fontSize: '12px' }}>
+                <AlertTriangle size={14} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '4px', color: '#d97706' }} />
+                <strong style={{ color: '#92400e' }}>Important:</strong> <span style={{ color: '#2e2a28ff' }}>The file will be validated immediately upon selection. Only files with correct headers will be accepted.</span>
+              </div>
             </div>
 
             <div className={styles['form-group']}>
@@ -287,18 +413,13 @@ export default function BeforeQtimeHomePage(): JSX.Element {
                   id="campusFile"
                   type="file"
                   accept=".csv"
-                  onChange={(e) => {
-                    if (e.target.files && e.target.files[0]) {
-                      setCampusFile(e.target.files[0])
-                      setCampusError(null)
-                    }
-                  }}
+                  onChange={handleCampusFileChange}
                   className={styles['file-input']}
                   required
                 />
               </label>
               {campusFile && (
-                <small style={{ color: '#2563eb', fontSize: '12px', marginTop: '4px' }}>
+                <small style={{ color: '#10b981', fontSize: '12px', marginTop: '4px', fontWeight: '600' }}>
                   <CheckCircle2 size={14} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '4px' }} />
                   Selected: {campusFile.name}
                 </small>
@@ -321,7 +442,7 @@ export default function BeforeQtimeHomePage(): JSX.Element {
               </div>
             )}
             {campusError && (
-              <div className={`${styles['message']} ${styles['error']}`}>
+              <div className={`${styles['message']} ${styles['error']}`} style={{ whiteSpace: 'pre-line' }}>
                 <XCircle size={18} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '8px' }} />
                 {campusError}
               </div>
@@ -340,11 +461,19 @@ export default function BeforeQtimeHomePage(): JSX.Element {
                 <Info size={16} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '6px' }} />
                 Expected CSV Format:
               </h3>
-              <p>Participant Number, Name, PWD (Yes/No), Email, Province, City, Country</p>
+              <p>Participant Number, Name, PWD, Email, Province, City, Country</p>
               <small style={{ color: '#64748b', marginTop: '8px', display: 'block' }}>
                 <FileSpreadsheet size={14} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '4px' }} />
                 Example: 2024001, John Doe, No, john@email.com, Metro Manila, Manila, Philippines
               </small>
+              <div style={{ marginTop: '8px', padding: '8px', background: '#dbeafe', borderRadius: '4px', fontSize: '12px' }}>
+                <Info size={14} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '4px', color: '#2563eb' }} />
+                <strong style={{ color: '#1e40af' }}>Note:</strong> <span style={{ color: '#1e3a8a' }}>PWD column accepts both "PWD" and "PWD (Yes/No)" formats.</span>
+              </div>
+              <div style={{ marginTop: '8px', padding: '8px', background: '#fef3c7', borderRadius: '4px', fontSize: '12px' }}>
+                <AlertTriangle size={14} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '4px', color: '#d97706' }} />
+                <strong style={{ color: '#92400e' }}>Important:</strong> <span style={{ color: '#2e2a28ff' }}>The file will be validated immediately upon selection. Only files with correct headers will be accepted.</span>
+              </div>
             </div>
 
             <div className={styles['form-group']}>
@@ -373,18 +502,13 @@ export default function BeforeQtimeHomePage(): JSX.Element {
                   id="participantFile"
                   type="file"
                   accept=".csv"
-                  onChange={(e) => {
-                    if (e.target.files && e.target.files[0]) {
-                      setParticipantFile(e.target.files[0])
-                      setParticipantError(null)
-                    }
-                  }}
+                  onChange={handleParticipantFileChange}
                   className={styles['file-input']}
                   required
                 />
               </label>
               {participantFile && (
-                <small style={{ color: '#2563eb', fontSize: '12px', marginTop: '4px' }}>
+                <small style={{ color: '#10b981', fontSize: '12px', marginTop: '4px', fontWeight: '600' }}>
                   <CheckCircle2 size={14} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '4px' }} />
                   Selected: {participantFile.name}
                 </small>
@@ -407,7 +531,7 @@ export default function BeforeQtimeHomePage(): JSX.Element {
               </div>
             )}
             {participantError && (
-              <div className={`${styles['message']} ${styles['error']}`}>
+              <div className={`${styles['message']} ${styles['error']}`} style={{ whiteSpace: 'pre-line' }}>
                 <XCircle size={18} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '8px' }} />
                 {participantError}
               </div>

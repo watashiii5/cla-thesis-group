@@ -6,7 +6,7 @@ import MenuBar from '@/app/components/MenuBar'
 import Sidebar from '@/app/components/Sidebar'
 import styles from './ViewSchedule.module.css'
 import { supabase } from '@/lib/supabaseClient'
-import { FaTrash, FaEye, FaBuilding, FaCheckCircle, FaExclamationTriangle } from 'react-icons/fa'
+import { FaTrash, FaEye, FaBuilding, FaCheckCircle, FaExclamationTriangle, FaCalendarAlt } from 'react-icons/fa'
 
 interface Schedule {
   id: number
@@ -14,6 +14,7 @@ interface Schedule {
   event_type: string
   schedule_date: string
   start_time: string
+  end_date: string | null  // ✅ NEW
   end_time: string
   scheduled_count: number
   unscheduled_count: number
@@ -76,6 +77,26 @@ export default function ViewSchedulePage() {
     })
   }
 
+  // ✅ NEW: Format date range
+  const formatDateRange = (startDate: string, endDate: string | null) => {
+    const start = formatDate(startDate)
+    if (!endDate || endDate === startDate) {
+      return start
+    }
+    const end = formatDate(endDate)
+    return `${start} - ${end}`
+  }
+
+  // ✅ NEW: Calculate duration in days
+  const calculateDuration = (startDate: string, endDate: string | null) => {
+    if (!endDate || endDate === startDate) return 1
+    const start = new Date(startDate)
+    const end = new Date(endDate)
+    const diffTime = Math.abs(end.getTime() - start.getTime())
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1
+    return diffDays
+  }
+
   return (
     <div className={styles.qtimeLayout}>
       <MenuBar 
@@ -129,82 +150,103 @@ export default function ViewSchedulePage() {
           {/* Schedules Grid */}
           {!loading && schedules.length > 0 && (
             <div className={styles.schedulesGrid}>
-              {schedules.map((schedule) => (
-                <div key={schedule.id} className={styles.scheduleCard}>
-                  {/* Delete Button */}
-                  <button
-                    onClick={() => handleDelete(schedule.id)}
-                    className={styles.deleteIconButton}
-                    title="Delete schedule"
-                  >
-                    <FaTrash />
-                  </button>
+              {schedules.map((schedule) => {
+                const duration = calculateDuration(schedule.schedule_date, schedule.end_date)
+                const isMultiDay = duration > 1
 
-                  {/* Card Header */}
-                  <div className={styles.scheduleCardHeader}>
-                    <h2 className={styles.scheduleTitle}>{schedule.event_name}</h2>
-                    <span className={styles.statusBadge}>completed</span>
-                  </div>
+                return (
+                  <div key={schedule.id} className={styles.scheduleCard}>
+                    {/* Delete Button */}
+                    <button
+                      onClick={() => handleDelete(schedule.id)}
+                      className={styles.deleteIconButton}
+                      title="Delete schedule"
+                    >
+                      <FaTrash />
+                    </button>
 
-                  {/* Info Grid */}
-                  <div className={styles.scheduleInfoGrid}>
-                    <div className={styles.infoItem}>
-                      <span className={styles.infoLabel}>TYPE</span>
-                      <span className={styles.infoValue}>{schedule.event_type.replace('_', ' ')}</span>
+                    {/* Card Header */}
+                    <div className={styles.scheduleCardHeader}>
+                      <h2 className={styles.scheduleTitle}>{schedule.event_name}</h2>
+                      <span className={styles.statusBadge}>completed</span>
                     </div>
-                    <div className={styles.infoItem}>
-                      <span className={styles.infoLabel}>DATE</span>
-                      <span className={styles.infoValue}>{formatDate(schedule.schedule_date)}</span>
-                    </div>
-                    <div className={styles.infoItem}>
-                      <span className={styles.infoLabel}>TIME</span>
-                      <span className={styles.infoValue}>
-                        {schedule.start_time} - {schedule.end_time}
-                      </span>
-                    </div>
-                    <div className={styles.infoItem}>
-                      <span className={styles.infoLabel}>CREATED</span>
-                      <span className={styles.infoValue}>{formatDate(schedule.created_at)}</span>
-                    </div>
-                  </div>
 
-                  {/* Stats */}
-                  <div className={styles.statsContainer}>
-                    <div className={`${styles.statBadge} ${styles.success}`}>
-                      <FaCheckCircle className={`${styles.statIcon} ${styles.success}`} />
-                      <div>
-                        <div className={styles.statLabel}>Scheduled</div>
-                        <div className={styles.statValue}>{schedule.scheduled_count}</div>
+                    {/* Info Grid */}
+                    <div className={styles.scheduleInfoGrid}>
+                      <div className={styles.infoItem}>
+                        <span className={styles.infoLabel}>TYPE</span>
+                        <span className={styles.infoValue}>{schedule.event_type.replace('_', ' ')}</span>
+                      </div>
+                      
+                      {/* ✅ NEW: Show date range */}
+                      <div className={styles.infoItem}>
+                        <span className={styles.infoLabel}>
+                          {isMultiDay ? '📅 DATE RANGE' : '📅 DATE'}
+                        </span>
+                        <span className={styles.infoValue}>
+                          {formatDateRange(schedule.schedule_date, schedule.end_date)}
+                        </span>
+                      </div>
+
+                      {/* ✅ NEW: Show duration if multi-day */}
+                      {isMultiDay && (
+                        <div className={styles.infoItem}>
+                          <span className={styles.infoLabel}>⏱️ DURATION</span>
+                          <span className={styles.infoValue}>{duration} days</span>
+                        </div>
+                      )}
+                      
+                      <div className={styles.infoItem}>
+                        <span className={styles.infoLabel}>TIME</span>
+                        <span className={styles.infoValue}>
+                          {schedule.start_time} - {schedule.end_time}
+                        </span>
+                      </div>
+                      
+                      <div className={styles.infoItem}>
+                        <span className={styles.infoLabel}>CREATED</span>
+                        <span className={styles.infoValue}>{formatDate(schedule.created_at)}</span>
                       </div>
                     </div>
-                    {schedule.unscheduled_count > 0 && (
-                      <div className={`${styles.statBadge} ${styles.warning}`}>
-                        <FaExclamationTriangle className={`${styles.statIcon} ${styles.warning}`} />
+
+                    {/* Stats */}
+                    <div className={styles.statsContainer}>
+                      <div className={`${styles.statBadge} ${styles.success}`}>
+                        <FaCheckCircle className={`${styles.statIcon} ${styles.success}`} />
                         <div>
-                          <div className={styles.statLabel}>Unscheduled</div>
-                          <div className={styles.statValue}>{schedule.unscheduled_count}</div>
+                          <div className={styles.statLabel}>Scheduled</div>
+                          <div className={styles.statValue}>{schedule.scheduled_count}</div>
                         </div>
                       </div>
-                    )}
-                  </div>
+                      {schedule.unscheduled_count > 0 && (
+                        <div className={`${styles.statBadge} ${styles.warning}`}>
+                          <FaExclamationTriangle className={`${styles.statIcon} ${styles.warning}`} />
+                          <div>
+                            <div className={styles.statLabel}>Unscheduled</div>
+                            <div className={styles.statValue}>{schedule.unscheduled_count}</div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
 
-                  {/* Actions */}
-                  <div className={styles.scheduleActions}>
-                    <button
-                      onClick={() => router.push(`/LandingPages/GenerateSchedule/ParticipantSchedules?scheduleId=${schedule.id}`)}
-                      className={styles.viewButton}
-                    >
-                      <FaEye /> View Participants
-                    </button>
-                    <button
-                      onClick={() => router.push(`/LandingPages/GenerateSchedule/CampusSchedules?scheduleId=${schedule.id}`)}
-                      className={`${styles.viewButton} ${styles.campusView}`}
-                    >
-                      <FaBuilding /> Campus Layout
-                    </button>
+                    {/* Actions */}
+                    <div className={styles.scheduleActions}>
+                      <button
+                        onClick={() => router.push(`/LandingPages/GenerateSchedule/ParticipantSchedules?scheduleId=${schedule.id}`)}
+                        className={styles.viewButton}
+                      >
+                        <FaEye /> View Participants
+                      </button>
+                      <button
+                        onClick={() => router.push(`/LandingPages/GenerateSchedule/CampusSchedules?scheduleId=${schedule.id}`)}
+                        className={`${styles.viewButton} ${styles.campusView}`}
+                      >
+                        <FaBuilding /> Campus Layout
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </div>

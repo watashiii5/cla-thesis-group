@@ -22,7 +22,8 @@ import {
   ChevronDown,
   ChevronRight,
   MapPin,
-  Hash
+  Hash,
+  AlertTriangle
 } from 'lucide-react'
 import './styles.css'
 
@@ -89,6 +90,12 @@ export default function CampusCapacityPage() {
     capacity: 0
   })
   const [deletingRoom, setDeletingRoom] = useState<number | null>(null)
+
+  // Delete campus states
+  const [showDeleteCampusModal, setShowDeleteCampusModal] = useState(false)
+  const [campusToDelete, setCampusToDelete] = useState<CampusFile | null>(null)
+  const [deletingCampus, setDeletingCampus] = useState(false)
+  const [successMessage, setSuccessMessage] = useState('')
 
   useEffect(() => {
     fetchCampusFiles()
@@ -315,6 +322,52 @@ export default function CampusCapacityPage() {
     }
   }
 
+  const handleDeleteCampusClick = (e: React.MouseEvent, campus: CampusFile) => {
+    e.stopPropagation()
+    setCampusToDelete(campus)
+    setShowDeleteCampusModal(true)
+  }
+
+  const handleDeleteCampus = async () => {
+    if (!campusToDelete) return
+
+    setDeletingCampus(true)
+    try {
+      console.log(`🗑️ Deleting campus ${campusToDelete.upload_group_id}...`)
+
+      // Delete all rooms in this campus
+      const { error } = await supabase
+        .from('campuses')
+        .delete()
+        .eq('upload_group_id', campusToDelete.upload_group_id)
+
+      if (error) throw error
+
+      // If the deleted campus was selected, clear selection
+      if (selectedCampus === campusToDelete.upload_group_id) {
+        setSelectedCampus(null)
+        setCampusData([])
+        setStats(null)
+        setExpandedBuildings(new Set())
+      }
+
+      // Refresh the campus list
+      await fetchCampusFiles()
+
+      setSuccessMessage(`✅ Campus "${campusToDelete.school_name}" deleted successfully!`)
+      setTimeout(() => setSuccessMessage(''), 3000)
+      
+      setShowDeleteCampusModal(false)
+      setCampusToDelete(null)
+    } catch (error) {
+      console.error('❌ Error deleting campus:', error)
+      setSuccessMessage('❌ Failed to delete campus')
+      setTimeout(() => setSuccessMessage(''), 3000)
+    } finally {
+      setDeletingCampus(false)
+    }
+  }
+
   const getFilteredFiles = () => {
     if (!searchTerm) return campusFiles
     return campusFiles.filter(file => 
@@ -372,6 +425,13 @@ export default function CampusCapacityPage() {
       
       <main className={`campus-main ${sidebarOpen ? 'with-sidebar' : 'full-width'}`}>
         <div className="campus-container">
+          {/* Success Message */}
+          {successMessage && (
+            <div className={`success-message ${successMessage.includes('❌') ? 'error' : 'success'}`}>
+              {successMessage}
+            </div>
+          )}
+
           <div className="campus-header">
             <button 
               className="back-button"
@@ -442,6 +502,13 @@ export default function CampusCapacityPage() {
                           <Check size={20} />
                         </div>
                       )}
+                      <button
+                        className="delete-campus-btn"
+                        onClick={(e) => handleDeleteCampusClick(e, file)}
+                        title="Delete entire campus"
+                      >
+                        <Trash2 size={18} />
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -784,6 +851,64 @@ export default function CampusCapacityPage() {
               >
                 <Check size={18} />
                 Add Room
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Campus Confirmation Modal */}
+      {showDeleteCampusModal && campusToDelete && (
+        <div className="modal-overlay" onClick={() => !deletingCampus && setShowDeleteCampusModal(false)}>
+          <div className="modal-content delete-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header delete-header">
+              <h3>
+                <AlertTriangle size={24} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '8px', color: '#ef4444' }} />
+                Delete Campus
+              </h3>
+              <button 
+                className="modal-close"
+                onClick={() => setShowDeleteCampusModal(false)}
+                disabled={deletingCampus}
+                title="Close modal"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="modal-body">
+              <div className="delete-warning">
+                <div className="warning-icon-wrapper">
+                  <AlertTriangle size={64} className="warning-icon" />
+                </div>
+                <h4>Are you absolutely sure?</h4>
+                <p>
+                  You are about to permanently delete the campus:
+                </p>
+                <div className="delete-batch-info">
+                  <strong>{campusToDelete.school_name}</strong>
+                  <span>{campusToDelete.row_count} rooms</span>
+                </div>
+                <p className="warning-text">
+                  This action <strong>CANNOT BE UNDONE</strong>. All {campusToDelete.row_count} rooms in this campus will be permanently removed from the database.
+                </p>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button 
+                className="modal-btn-cancel"
+                onClick={() => setShowDeleteCampusModal(false)}
+                disabled={deletingCampus}
+              >
+                <X size={18} />
+                Cancel
+              </button>
+              <button 
+                className="modal-btn-delete"
+                onClick={handleDeleteCampus}
+                disabled={deletingCampus}
+              >
+                <Trash2 size={18} />
+                {deletingCampus ? 'Deleting...' : 'Delete Campus'}
               </button>
             </div>
           </div>
