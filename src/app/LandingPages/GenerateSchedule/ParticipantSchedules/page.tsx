@@ -5,16 +5,73 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import MenuBar from '@/app/components/MenuBar'
 import Sidebar from '@/app/components/Sidebar'
 import './styles.css'
+import { supabase } from '@/lib/supabaseClient'
 
 interface ScheduleRow {
+  id: number
   participant_number: string
   name: string
   email: string
-  pwd: string
+  is_pwd: boolean  // ✅ Changed from 'pwd: string'
   batch_name: string
   room: string
   time_slot: string
   campus: string
+  seat_no: number  // ✅ Added this field
+}
+
+// Helper function to fetch ALL rows (bypass 1000 limit)
+async function fetchAllRows(table: string, filters: any = {}) {
+  const PAGE_SIZE = 1000
+  let allData: any[] = []
+  let page = 0
+  let hasMore = true
+
+  console.log(`🔄 Starting pagination for table: ${table}, filters:`, filters)
+
+  while (hasMore) {
+    const from = page * PAGE_SIZE
+    const to = from + PAGE_SIZE - 1
+
+    console.log(`   📄 Fetching page ${page + 1}: rows ${from}-${to}`)
+
+    let query = supabase
+      .from(table)
+      .select('*')
+      .range(from, to)
+      .order('id', { ascending: true })
+
+    // Apply filters
+    for (const [key, value] of Object.entries(filters)) {
+      query = query.eq(key, value)
+    }
+
+    const { data, error } = await query
+
+    if (error) {
+      console.error(`❌ Error on page ${page + 1}:`, error)
+      throw error
+    }
+    
+    if (!data || data.length === 0) {
+      console.log(`   ✅ No more data on page ${page + 1}`)
+      hasMore = false
+      break
+    }
+
+    console.log(`   ✅ Fetched ${data.length} rows on page ${page + 1}`)
+    allData = [...allData, ...data]
+    
+    if (data.length < PAGE_SIZE) {
+      console.log(`   ✅ Last page reached (${data.length} < ${PAGE_SIZE})`)
+      hasMore = false
+    }
+    
+    page++
+  }
+
+  console.log(`✅ Total rows fetched from ${table}: ${allData.length}`)
+  return allData
 }
 
 function ParticipantSchedulesContent() {
@@ -24,6 +81,7 @@ function ParticipantSchedulesContent() {
 
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [scheduleData, setScheduleData] = useState<ScheduleRow[]>([])
+  const [filteredData, setFilteredData] = useState<ScheduleRow[]>([])
   const [loading, setLoading] = useState(true)
   const [sendingEmails, setSendingEmails] = useState(false)
   const [emailMessage, setEmailMessage] = useState('')
@@ -36,23 +94,86 @@ function ParticipantSchedulesContent() {
     fetchScheduleData()
   }, [scheduleId])
 
-  async function fetchScheduleData() {
+  // Update the fetchScheduleData function:
+  const fetchScheduleData = async () => {
+    if (!scheduleId) return
+
+    setLoading(true)
     try {
-      console.log(`📥 Fetching schedule ${scheduleId}...`)
-      const res = await fetch(`/api/schedule/export/${scheduleId}`)
-      
-      if (!res.ok) {
-        console.error(`❌ Failed to fetch: ${res.status}`)
-        setEmailMessage(`Error: Failed to load schedule`)
+      console.log(`📥 Fetching schedule data for ID: ${scheduleId}`)
+
+      // ✅ Fetch ALL assignments (not limited to 1000)
+      const assignments = await fetchAllRows('schedule_assignments', {
+        schedule_summary_id: scheduleId
+      })
+
+      console.log(`✅ Loaded ${assignments.length} assignments`)
+
+      if (assignments.length === 0) {
+        setScheduleData([])
+        setFilteredData([])
+        setLoading(false)
         return
       }
 
-      const data = await res.json()
-      console.log(`✅ Got ${Array.isArray(data) ? data.length : 0} rows`)
-      setScheduleData(Array.isArray(data) ? data : [])
-    } catch (e: any) {
-      console.error('❌ Fetch error:', e)
-      setEmailMessage(`Error loading schedule: ${e.message}`)
+      // Get unique participant IDs
+      const participantIds = [...new Set(assignments.map((a: any) => a.participant_id))]
+      
+      // ✅ Fetch ALL participants (handle large datasets)
+      console.log(`📥 Fetching ${participantIds.length} participants...`)
+      let participants: any[] = []
+      
+      // Fetch in chunks of 1000 IDs at a time (Supabase query limit)
+      const CHUNK_SIZE = 1000
+      for (let i = 0; i < participantIds.length; i += CHUNK_SIZE) {
+        const chunk = participantIds.slice(i, i + CHUNK_SIZE)
+        const { data, error } = await supabase
+          .from('participants')
+          .select('*')
+          .in('id', chunk)
+        
+        if (error) throw error
+        if (data) participants = [...participants, ...data]
+      }
+
+      console.log(`✅ Fetched ${participants.length} participants`)
+
+      // ✅ Fetch ALL batches
+      const batches = await fetchAllRows('schedule_batches', {
+        schedule_summary_id: scheduleId
+      })
+
+      console.log(`✅ Fetched ${batches.length} batches`)
+
+      // Create lookup maps
+      const participantMap = new Map(participants.map(p => [p.id, p]))
+      const batchMap = new Map(batches.map(b => [b.id, b]))
+
+      // Combine data
+      const combinedData: ScheduleRow[] = assignments.map((assignment: any) => {
+        const participant = participantMap.get(assignment.participant_id)
+        const batch = batchMap.get(assignment.schedule_batch_id)
+
+        return {
+          id: assignment.id,
+          participant_number: participant?.participant_number || 'N/A',
+          name: participant?.name || 'N/A',
+          email: participant?.email || 'N/A',
+          is_pwd: assignment.is_pwd,  // ✅ Keep as boolean
+          batch_name: batch?.batch_name || 'N/A',
+          room: batch?.room || 'N/A',
+          time_slot: batch?.time_slot || 'N/A',
+          campus: batch?.campus || 'Main Campus',
+          seat_no: assignment.seat_no
+        }
+      })
+
+      console.log(`✅ Combined ${combinedData.length} schedule entries`)
+
+      setScheduleData(combinedData)
+      setFilteredData(combinedData)
+    } catch (error) {
+      console.error('❌ Error fetching schedule data:', error)
     } finally {
       setLoading(false)
     }
@@ -107,16 +228,17 @@ function ParticipantSchedulesContent() {
       return
     }
 
-    const headers = ['Participant #', 'Name', 'Email', 'PWD', 'Batch', 'Room', 'Time', 'Campus']
+    const headers = ['Participant #', 'Name', 'Email', 'PWD', 'Batch', 'Room', 'Time', 'Campus', 'Seat No']
     const rows = scheduleData.map(row => [
       row.participant_number,
       row.name,
       row.email,
-      row.pwd,
+      row.is_pwd ? 'Yes' : 'No',  // ✅ Convert boolean to string
       row.batch_name,
       row.room,
       row.time_slot,
       row.campus,
+      row.seat_no.toString()  // ✅ Added seat number
     ])
 
     const csv = [headers, ...rows]
@@ -206,13 +328,13 @@ function ParticipantSchedulesContent() {
                   </thead>
                   <tbody>
                     {scheduleData.map((row, idx) => (
-                      <tr key={idx}>
+                      <tr key={row.id || idx}>
                         <td className="font-semibold">{row.participant_number}</td>
                         <td>{row.name}</td>
                         <td>{row.email}</td>
                         <td>
-                          <span className={`pwd-badge ${row.pwd === 'Yes' ? 'yes' : 'no'}`}>
-                            {row.pwd}
+                          <span className={`pwd-badge ${row.is_pwd ? 'yes' : 'no'}`}>
+                            {row.is_pwd ? 'Yes' : 'No'}
                           </span>
                         </td>
                         <td>

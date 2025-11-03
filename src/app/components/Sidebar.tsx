@@ -2,7 +2,19 @@
 
 import React, { useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
-import { FaHome, FaUpload, FaGraduationCap, FaUsers, FaCalendarAlt, FaChartBar, FaChevronDown, FaChevronRight } from 'react-icons/fa'
+import { 
+  FaHome, 
+  FaUpload, 
+  FaGraduationCap, 
+  FaUsers, 
+  FaCalendarAlt, 
+  FaChevronDown, 
+  FaChevronRight, 
+  FaBuilding,
+  FaCalendarPlus,
+  FaEye,
+  FaClipboardList
+} from 'react-icons/fa'
 import './Sidebar.css'
 
 interface SidebarProps {
@@ -25,9 +37,26 @@ export default function Sidebar({ isOpen }: SidebarProps) {
       path: '/LandingPages/GenerateSchedule',
       hasSubmenu: true,
       submenu: [
-        { label: 'Generate Schedule', path: '/LandingPages/GenerateSchedule' },
-        { label: 'View Schedules', path: '/LandingPages/GenerateSchedule/ViewSchedule' },
-        { label: 'Participant Schedules', path: '/LandingPages/GenerateSchedule/ParticipantSchedules' },
+        { 
+          label: 'Generate Schedule', 
+          path: '/LandingPages/GenerateSchedule',
+          icon: FaCalendarPlus
+        },
+        { 
+          label: 'View Schedules', 
+          path: '/LandingPages/GenerateSchedule/ViewSchedule',
+          icon: FaEye
+        },
+        { 
+          label: 'Participant Schedules', 
+          path: '/LandingPages/GenerateSchedule/ParticipantSchedules',
+          icon: FaClipboardList
+        },
+        { 
+          label: 'Campus Schedules', 
+          path: '/LandingPages/GenerateSchedule/CampusSchedules',
+          icon: FaBuilding
+        },
       ]
     },
   ]
@@ -65,9 +94,10 @@ export default function Sidebar({ isOpen }: SidebarProps) {
                       <button
                         key={subIndex}
                         onClick={() => handleNavigation(subItem.path)}
-                        className={`submenu-item ${pathname === subItem.path ? 'active' : ''}`}
+                        className={`submenu-item ${pathname.startsWith(subItem.path) ? 'active' : ''}`}
                       >
-                        {subItem.label}
+                        {subItem.icon && <subItem.icon className="submenu-item-icon" />}
+                        <span>{subItem.label}</span>
                       </button>
                     ))}
                   </div>

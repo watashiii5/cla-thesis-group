@@ -149,7 +149,7 @@
   gap: 1.5rem;
 }
 
-/* Schedule Card */
+/* Schedule Card - Fixed structure to push buttons to bottom */
 .schedule-card {
   background: white;
   border-radius: 16px;
@@ -157,6 +157,10 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
   border: 1px solid #e5e7eb;
   transition: all 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  position: relative;
 }
 
 .schedule-card:hover {
@@ -165,16 +169,51 @@
   border-color: #667eea;
 }
 
+/* Delete Icon Button - Top Right - Professional Design */
+.delete-icon-button {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: rgba(255, 255, 255, 0.95);
+  color: #6b7280;
+  border: 2px solid rgba(229, 231, 235, 0.8);
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 10;
+  font-size: 0.95rem;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.delete-icon-button:hover {
+  background: #fee2e2;
+  color: #dc2626;
+  border-color: #fecaca;
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 0 8px 20px rgba(220, 38, 38, 0.25);
+}
+
+.delete-icon-button:active {
+  transform: translateY(0) scale(0.98);
+  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.2);
+}
+
 /* Card Header */
 .schedule-card-header {
   padding: 1.75rem;
   background: linear-gradient(135deg, #435296 0%, #2c285c 100%);
   color: white;
-  text-align: center;          /* Centers text and inline elements horizontally */
-  display: flex;               /* Enables flexbox */
-  flex-direction: column;      /* Stacks child elements vertically */
-  justify-content: center;     /* Centers content vertically */
-  align-items: center;         /* Centers content horizontally */
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
 }
 
 .schedule-title {
@@ -184,6 +223,7 @@
   line-height: 1.3;
   text-align: center;
   color: #f0eeee;
+  padding-right: 50px; /* Space for delete button */
 }
 
 .status-badge {
@@ -204,6 +244,8 @@
   grid-template-columns: repeat(2, 1fr);
   gap: 1.25rem;
   border-bottom: 1px solid #f3f4f6;
+  flex-grow: 0;
+  flex-shrink: 0;
 }
 
 .info-item {
@@ -233,62 +275,75 @@
   gap: 1rem;
   background: #f9fafb;
   flex-wrap: wrap;
+  flex-grow: 1;
+  align-content: flex-start;
 }
 
 .stat-badge {
-  flex: 1;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 1rem;
+  padding: 1rem 1.25rem;
   background: white;
-  border-radius: 10px;
+  border-radius: 12px;
   border: 2px solid transparent;
   transition: all 0.2s ease;
+  width: fit-content;
 }
 
 .stat-badge.success {
-  border-color: #31c076;
+  border-color: #10b981;
+  background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
 }
 
 .stat-badge.warning {
-  border-color: #fcc17f;
+  border-color: #f59e0b;
+  background: linear-gradient(135deg, #fed7aa 0%, #fde68a 100%);
 }
 
 .stat-icon {
-  font-size: 1.75rem;
+  font-size: 1.5rem;
   line-height: 1;
-  padding: 0.8rem;
-}
-.stat-icon.success{
-  color: #059669;
-  background: hsl(149, 100%, 77%);
-  border-radius: 20%;
-}
-.stat-icon.warning{
-  color: #ea580c;
-  background: hsl(33, 100%, 77%);
-  border-radius: 20%;
+  padding: 0.65rem;
+  flex-shrink: 0;
+  border-radius: 10px;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.stat-badge div {
+.stat-icon.success {
+  color: #ffffff;
+  background: #10b981;
+}
+
+.stat-icon.warning {
+  color: #ffffff;
+  background: #f59e0b;
+}
+
+.stat-badge > div {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
 }
 
 .stat-label {
-  font-size: 0.75rem;
-  color: #6b7280;
-  font-weight: 600;
+  font-size: 0.7rem;
+  color: #374151;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  white-space: nowrap;
 }
 
 .stat-value {
-  font-size: 1.75rem;
+  font-size: 1.5rem;
   font-weight: 800;
   line-height: 1;
+  white-space: nowrap;
 }
 
 .stat-badge.success .stat-value {
@@ -296,213 +351,60 @@
 }
 
 .stat-badge.warning .stat-value {
-  color: #ea580c;
+  color: #d97706;
 }
 
-/* Actions */
+/* Actions - Always at bottom */
 .schedule-actions {
   padding: 1.75rem;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
+  flex-direction: column;
   gap: 0.75rem;
+  margin-top: auto;
+  flex-shrink: 0;
 }
 
-.view-button,
-.delete-button {
+.view-button {
   padding: 0.875rem 1.25rem;
   border: none;
-  border-radius: 10px;
+  border-radius: 12px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   font-size: 0.95rem;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-}
-
-.view-button {
   background: #667eea;
   color: white;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
 }
 
 .view-button:hover {
   background: #5568d3;
   transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 8px 20px rgba(102, 126, 234, 0.35);
 }
 
-.delete-button {
-  background: white;
-  color: #dc2626;
-  border: 2px solid #dc2626;
+.view-button:active {
+  transform: translateY(0);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
 }
 
-.delete-button:hover {
-  background: #dc2626;
-  color: white;
-  transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(220, 38, 38, 0.25);
+.view-button.campus-view {
+  background: #10b981;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
 }
 
-/* Modal Styles */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  padding: 2rem;
+.view-button.campus-view:hover {
+  background: #059669;
+  box-shadow: 0 8px 20px rgba(16, 185, 129, 0.35);
 }
 
-.modal-container {
-  background: white;
-  border-radius: 16px;
-  max-width: 900px;
-  width: 100%;
-  max-height: 85vh;
-  display: flex;
-  flex-direction: column;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-}
-
-.modal-header {
-  padding: 2rem;
-  border-bottom: 1px solid #e5e7eb;
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-}
-
-.modal-title {
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: #1f2937;
-  margin: 0;
-}
-
-.modal-subtitle {
-  color: #6b7280;
-  font-size: 0.9rem;
-  margin-top: 0.25rem;
-}
-
-.modal-close {
-  background: #f3f4f6;
-  border: none;
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
-  font-size: 1.5rem;
-  cursor: pointer;
-  color: #6b7280;
-  transition: all 0.2s ease;
-}
-
-.modal-close:hover {
-  background: #e5e7eb;
-  color: #374151;
-}
-
-.modal-content {
-  padding: 2rem;
-  overflow-y: auto;
-  flex: 1;
-}
-
-.table-container {
-  overflow-x: auto;
-  border-radius: 12px;
-  border: 1px solid #e5e7eb;
-}
-
-.schedule-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.schedule-table thead {
-  background: #f9fafb;
-}
-
-.schedule-table th {
-  padding: 1rem;
-  text-align: left;
-  font-weight: 700;
-  font-size: 0.85rem;
-  color: #374151;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  border-bottom: 2px solid #e5e7eb;
-}
-
-.schedule-table td {
-  padding: 1rem;
-  font-size: 0.95rem;
-  color: #1f2937;
-  border-bottom: 1px solid #f3f4f6;
-}
-
-.schedule-table tbody tr:hover {
-  background: #f9fafb;
-}
-
-.font-semibold {
-  font-weight: 600;
-}
-
-.pwd-badge {
-  padding: 0.35rem 0.85rem;
-  border-radius: 20px;
-  font-size: 0.8rem;
-  font-weight: 600;
-  display: inline-block;
-}
-
-.pwd-badge.yes {
-  background: #d1fae5;
-  color: #065f46;
-}
-
-.pwd-badge.no {
-  background: #f3f4f6;
-  color: #6b7280;
-}
-
-.modal-footer {
-  padding: 1.5rem 2rem;
-  border-top: 1px solid #e5e7eb;
-  display: flex;
-  gap: 1rem;
-  justify-content: flex-end;
-}
-
-.secondary-button {
-  padding: 0.75rem 1.5rem;
-  background: white;
-  color: #374151;
-  border: 2px solid #e5e7eb;
-  border-radius: 8px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.secondary-button:hover {
-  background: #f9fafb;
-  border-color: #d1d5db;
-}
-
-.empty-state-small {
-  text-align: center;
-  padding: 3rem 2rem;
-  color: #6b7280;
+.view-button.campus-view:active {
+  transform: translateY(0);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
 }
 
 /* Responsive Design */
@@ -537,17 +439,67 @@
     flex-direction: column;
   }
 
-  .schedule-actions {
+  .stat-badge {
+    flex: none;
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .page-header {
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .back-button,
+  .refresh-button {
+    width: 100%;
+  }
+
+  .welcome-section {
+    padding: 1.5rem;
+  }
+
+  .page-title {
+    font-size: 1.75rem;
+  }
+
+  .schedules-grid {
     grid-template-columns: 1fr;
   }
 
-  .modal-overlay {
-    padding: 1rem;
+  .schedule-card-header {
+    padding: 1.25rem;
   }
 
-  .modal-header,
-  .modal-content,
-  .modal-footer {
-    padding: 1.5rem;
+  .schedule-title {
+    font-size: 1.25rem;
+    padding-right: 45px;
+  }
+
+  .delete-icon-button {
+    width: 36px;
+  font-size: 1.5rem; 
+}
+
+
+    .stat-value {  
+font-size: 1.25rem;  
+    }    
+
+    .stat-icon {  
+      font-size: 0.85rem;
+      height: 36px;    
+      height: 36px;
+
+    }    
+    
+  .schedule-info-grid,
+  .stats-container,
+  .schedule-actions {
+    font-size: 0.85rem;
+    top: 0.875rem;
+    right: 0.875rem;
+    padding: 1.25rem;
   }
 }

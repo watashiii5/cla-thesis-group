@@ -81,10 +81,12 @@
 .submenu {
   background: #f9f9f9;
   padding: 0.5rem 0;
+  border-left: 3px solid #e8ebfa;
 }
 
 .submenu-item {
-  display: block;
+  display: flex;
+  align-items: center;
   width: 100%;
   padding: 0.75rem 1.5rem 0.75rem 3.5rem;
   background: none;
@@ -95,6 +97,12 @@
   color: #666;
   font-size: 0.9rem;
   font-weight: 500;
+  gap: 0.5rem;
+}
+
+.submenu-item-icon {
+  font-size: 0.9rem;
+  min-width: 16px;
 }
 
 .submenu-item:hover {
@@ -106,6 +114,7 @@
   color: #667eea;
   font-weight: 600;
   background: #e8ebfa;
+  border-left: 3px solid #667eea;
 }
 
 /* Scrollbar styling */

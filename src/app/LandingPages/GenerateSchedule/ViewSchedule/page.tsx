@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import Sidebar from '@/app/components/Sidebar'
 import MenuBar from '@/app/components/MenuBar'
-import { supabase } from '@/lib/supabase'
+import Sidebar from '@/app/components/Sidebar'
 import './styles.css'
+import { supabase } from '@/lib/supabaseClient'
+import { FaTrash } from 'react-icons/fa'
 
 interface Schedule {
   id: number
@@ -41,37 +42,30 @@ export default function ViewSchedulePage() {
       setSchedules(data || [])
     } catch (error) {
       console.error('Error fetching schedules:', error)
-      alert('Failed to load schedules')
     } finally {
       setLoading(false)
     }
   }
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Delete this schedule? All associated data will be removed.')) {
+    if (!confirm('Are you sure you want to delete this schedule? This action cannot be undone.')) {
       return
     }
 
     try {
-      const { error: batchError } = await supabase
-        .from('schedule_batches')
-        .delete()
-        .eq('schedule_summary_id', id)
-
-      if (batchError) throw batchError
-
-      const { error: summaryError } = await supabase
+      // Delete from schedule_summary (cascade will handle related tables)
+      const { error } = await supabase
         .from('schedule_summary')
         .delete()
         .eq('id', id)
 
-      if (summaryError) throw summaryError
+      if (error) throw error
 
-      alert('✅ Schedule deleted successfully!')
-      fetchSchedules()
-    } catch (error) {
+      alert('Schedule deleted successfully!')
+      fetchSchedules() // Refresh the list
+    } catch (error: any) {
       console.error('Error deleting schedule:', error)
-      alert('❌ Failed to delete schedule')
+      alert('Failed to delete schedule: ' + error.message)
     }
   }
 
@@ -86,110 +80,128 @@ export default function ViewSchedulePage() {
   return (
     <div className="qtime-layout">
       <MenuBar 
-        onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
+        onToggleSidebar={() => setSidebarOpen(!sidebarOpen)} 
         showSidebarToggle={true}
         showAccountIcon={true}
       />
       <Sidebar isOpen={sidebarOpen} />
       
-      <main className={`qtime-main ${sidebarOpen ? 'with-sidebar' : 'full-width'}`}>
+      <main className={`qtime-main ${sidebarOpen ? '' : 'full-width'}`}>
         <div className="qtime-container">
+          {/* Header */}
           <div className="page-header">
-            <button
-              onClick={() => router.push('/LandingPages/GenerateSchedule')}
-              className="back-button"
-            >
-              ← Back to Generate
+            <button onClick={() => router.back()} className="back-button">
+              ← Back
             </button>
-            <button
-              onClick={fetchSchedules}
-              className="refresh-button"
-            >
+            <button onClick={fetchSchedules} className="refresh-button">
               🔄 Refresh
             </button>
           </div>
 
+          {/* Welcome Section */}
           <div className="welcome-section">
-            <h1 className="page-title">📊 View Schedules</h1>
-            <p className="page-subtitle">Browse and manage all generated schedules</p>
+            <h1 className="page-title">📅 Scheduled Events</h1>
+            <p className="page-subtitle">View and manage all your scheduled events</p>
           </div>
 
-          {loading ? (
+          {/* Loading State */}
+          {loading && (
             <div className="loading-state">
               <div className="spinner"></div>
               <p>Loading schedules...</p>
             </div>
-          ) : schedules.length === 0 ? (
+          )}
+
+          {/* Empty State */}
+          {!loading && schedules.length === 0 && (
             <div className="empty-state">
-              <div className="empty-icon">📅</div>
+              <div className="empty-icon">📭</div>
               <h2>No Schedules Yet</h2>
-              <p>Generate your first schedule to get started</p>
-              <button
+              <p>Create your first schedule to get started!</p>
+              <button 
                 onClick={() => router.push('/LandingPages/GenerateSchedule')}
                 className="primary-button"
               >
-                🚀 Generate New Schedule
+                + Create Schedule
               </button>
             </div>
-          ) : (
+          )}
+
+          {/* Schedules Grid */}
+          {!loading && schedules.length > 0 && (
             <div className="schedules-grid">
               {schedules.map((schedule) => (
                 <div key={schedule.id} className="schedule-card">
+                  {/* Delete Button - Top Right */}
+                  <button
+                    onClick={() => handleDelete(schedule.id)}
+                    className="delete-icon-button"
+                    title="Delete schedule"
+                  >
+                    <FaTrash />
+                  </button>
+
+                  {/* Card Header */}
                   <div className="schedule-card-header">
-                    <h3 className="schedule-title">{schedule.event_name}</h3>
+                    <h2 className="schedule-title">{schedule.event_name}</h2>
                     <span className="status-badge">completed</span>
                   </div>
 
+                  {/* Info Grid */}
                   <div className="schedule-info-grid">
                     <div className="info-item">
-                      <span className="info-label">Type</span>
+                      <span className="info-label">TYPE</span>
                       <span className="info-value">{schedule.event_type.replace('_', ' ')}</span>
                     </div>
                     <div className="info-item">
-                      <span className="info-label">Date</span>
+                      <span className="info-label">DATE</span>
                       <span className="info-value">{formatDate(schedule.schedule_date)}</span>
                     </div>
                     <div className="info-item">
-                      <span className="info-label">Time</span>
-                      <span className="info-value">{schedule.start_time} - {schedule.end_time}</span>
+                      <span className="info-label">TIME</span>
+                      <span className="info-value">
+                        {schedule.start_time} - {schedule.end_time}
+                      </span>
                     </div>
                     <div className="info-item">
-                      <span className="info-label">Created</span>
+                      <span className="info-label">CREATED</span>
                       <span className="info-value">{formatDate(schedule.created_at)}</span>
                     </div>
                   </div>
 
+                  {/* Stats */}
                   <div className="stats-container">
                     <div className="stat-badge success">
-                      <span className="stat-icon success">✓</span>
+                      <div className="stat-icon success">✓</div>
                       <div>
-                        <span className="stat-label">Scheduled</span>
-                        <span className="stat-value">{schedule.scheduled_count}</span>
+                        <div className="stat-label">Scheduled</div>
+                        <div className="stat-value">{schedule.scheduled_count}</div>
                       </div>
                     </div>
                     {schedule.unscheduled_count > 0 && (
                       <div className="stat-badge warning">
-                        <span className="stat-icon warning">⚠</span>
+                        <div className="stat-icon warning">⚠</div>
                         <div>
-                          <span className="stat-label">Unscheduled</span>
-                          <span className="stat-value">{schedule.unscheduled_count}</span>
+                          <div className="stat-label">Unscheduled</div>
+                          <div className="stat-value">{schedule.unscheduled_count}</div>
                         </div>
                       </div>
                     )}
                   </div>
 
+                  {/* Actions - Always at bottom */}
                   <div className="schedule-actions">
                     <button
                       onClick={() => router.push(`/LandingPages/GenerateSchedule/ParticipantSchedules?scheduleId=${schedule.id}`)}
                       className="view-button"
                     >
-                      👁 View Participants
+                      👁️ View Participants
                     </button>
                     <button
-                      onClick={() => handleDelete(schedule.id)}
-                      className="delete-button"
+                      onClick={() => router.push(`/LandingPages/GenerateSchedule/CampusSchedules?scheduleId=${schedule.id}`)}
+                      className="view-button campus-view"
                     >
-                      🗑 Delete
+                      🏛️ Campus Layout
                     </button>
                   </div>
                 </div>
