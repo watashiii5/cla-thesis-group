@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import MenuBar from '@/app/components/MenuBar'
@@ -41,6 +41,66 @@ interface ScheduleResult {
   unscheduled_count: number
   execution_time: number
   schedule_data: any[]
+  schedule_summary_id?: number
+  pwd_stats?: {
+    pwd_scheduled: number
+    pwd_unscheduled: number
+    non_pwd_scheduled: number
+    non_pwd_unscheduled: number
+  }
+}
+
+// Helper to fetch ALL rows
+async function fetchAllRows(table: string, filters: any = {}) {
+  const PAGE_SIZE = 1000
+  let allData: any[] = []
+  let page = 0
+  let hasMore = true
+
+  console.log(`🔄 Starting pagination for table: ${table}, filters:`, filters)
+
+  while (hasMore) {
+    const from = page * PAGE_SIZE
+    const to = from + PAGE_SIZE - 1
+
+    console.log(`   📄 Fetching page ${page + 1}: rows ${from}-${to}`)
+
+    let query = supabase
+      .from(table)
+      .select('*')
+      .range(from, to)
+      .order('id', { ascending: true }) // Order by ID for consistency
+
+    for (const [key, value] of Object.entries(filters)) {
+      query = query.eq(key, value)
+    }
+
+    const { data, error } = await query
+
+    if (error) {
+      console.error(`❌ Error on page ${page + 1}:`, error)
+      throw error
+    }
+    
+    if (!data || data.length === 0) {
+      console.log(`   ✅ No more data on page ${page + 1}`)
+      hasMore = false
+      break
+    }
+
+    console.log(`   ✅ Fetched ${data.length} rows on page ${page + 1}`)
+    allData = [...allData, ...data]
+    
+    if (data.length < PAGE_SIZE) {
+      console.log(`   ✅ Last page reached (${data.length} < ${PAGE_SIZE})`)
+      hasMore = false
+    }
+    
+    page++
+  }
+
+  console.log(`✅ Total rows fetched from ${table}: ${allData.length}`)
+  return allData
 }
 
 export default function GenerateSchedulePage() {
@@ -52,7 +112,7 @@ export default function GenerateSchedulePage() {
   // Data
   const [campusFiles, setCampusFiles] = useState<CampusFile[]>([])
   const [participantFiles, setParticipantFiles] = useState<ParticipantFile[]>([])
-  
+
   // Form State
   const [config, setConfig] = useState<ScheduleConfig>({
     campusGroupId: null,
@@ -78,15 +138,11 @@ export default function GenerateSchedulePage() {
   const fetchData = async () => {
     setLoading(true)
     try {
-      // Fetch campus files
-      const { data: campusData, error: campusError } = await supabase
-        .from('campuses')
-        .select('upload_group_id, school_name, file_name')
-        .order('upload_group_id', { ascending: false })
+      // Fetch ALL campus files
+      console.log('📥 Fetching ALL campus files...')
+      const campusData = await fetchAllRows('campuses')
 
-      if (campusError) throw campusError
-
-      const campusGrouped = campusData?.reduce((acc: any[], curr) => {
+      const campusGrouped = campusData.reduce((acc: any[], curr) => {
         const existing = acc.find(item => item.upload_group_id === curr.upload_group_id)
         if (existing) {
           existing.row_count++
@@ -101,15 +157,11 @@ export default function GenerateSchedulePage() {
         return acc
       }, [])
 
-      // Fetch participant files
-      const { data: participantData, error: participantError } = await supabase
-        .from('participants')
-        .select('upload_group_id, batch_name, file_name')
-        .order('upload_group_id', { ascending: false })
+      // Fetch ALL participant files
+      console.log('📥 Fetching ALL participant files...')
+      const participantData = await fetchAllRows('participants')
 
-      if (participantError) throw participantError
-
-      const participantGrouped = participantData?.reduce((acc: any[], curr) => {
+      const participantGrouped = participantData.reduce((acc: any[], curr) => {
         const existing = acc.find(item => item.upload_group_id === curr.upload_group_id)
         if (existing) {
           existing.row_count++
@@ -126,6 +178,8 @@ export default function GenerateSchedulePage() {
 
       setCampusFiles(campusGrouped || [])
       setParticipantFiles(participantGrouped || [])
+      
+      console.log(`✅ Campus groups: ${campusGrouped.length}, Participant groups: ${participantGrouped.length}`)
     } catch (error) {
       console.error('Error fetching data:', error)
     } finally {
@@ -145,7 +199,6 @@ export default function GenerateSchedulePage() {
     try {
       const startTime = performance.now()
 
-      // Fixed: Ensure data is sent correctly
       const requestBody = {
         campusGroupId: config.campusGroupId,
         participantGroupId: config.participantGroupId,
@@ -159,8 +212,9 @@ export default function GenerateSchedulePage() {
         emailNotification: config.emailNotification
       }
 
-      console.log('Sending request:', requestBody) // Debug log
+      console.log('🚀 Sending schedule request:', requestBody)
 
+      // ✅ USE NEXT.JS API ROUTE INSTEAD OF DIRECT FASTAPI CALL
       const response = await fetch('/api/schedule/generate', {
         method: 'POST',
         headers: {
@@ -174,12 +228,12 @@ export default function GenerateSchedulePage() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }))
-        console.error('API Error:', errorData) // Debug log
-        throw new Error(errorData.detail || errorData.error || `Server error: ${response.status}`)
+        console.error('API Error:', errorData)
+        throw new Error(errorData.error || errorData.detail || `Server error: ${response.status}`)
       }
 
       const result = await response.json()
-      console.log('API Response:', result) // Debug log
+      console.log('✅ API Response:', result)
       
       setScheduleResult({
         success: true,
@@ -187,7 +241,9 @@ export default function GenerateSchedulePage() {
         scheduled_count: result.scheduled_count,
         unscheduled_count: result.unscheduled_count,
         execution_time: parseFloat(executionTime),
-        schedule_data: result.schedule_data
+        schedule_data: result.assignments || [],
+        schedule_summary_id: result.schedule_summary_id,
+        pwd_stats: result.pwd_stats
       })
 
       setShowResults(true)
@@ -196,7 +252,7 @@ export default function GenerateSchedulePage() {
       
       let errorMessage = 'Failed to generate schedule'
       
-      if (error.message === 'Failed to fetch') {
+      if (error.message.includes('Failed to fetch') || error.message.includes('Backend returned 500')) {
         errorMessage = '⚠️ Cannot connect to scheduling server. Please ensure the backend is running.'
       } else {
         errorMessage = error.message || errorMessage

@@ -49,7 +49,8 @@ app.add_middleware(
 )
 
 # Include routers
-app.include_router(schedule_router, prefix="/api/schedule", tags=["schedule"])
+from api.schedule import routes as schedule_routes
+app.include_router(schedule_routes.router)
 
 # Health check endpoint
 @app.get("/health")
