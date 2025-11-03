@@ -1,7 +1,7 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useEffect, useState, Suspense } from 'react'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import MenuBar from '@/app/components/MenuBar'
 import Sidebar from '@/app/components/Sidebar'
@@ -32,6 +32,60 @@ interface ParticipantStats {
   totalParticipants: number
   totalPWD: number
   percentagePWD: number
+}
+
+// Helper function to fetch ALL rows (bypass 1000 limit)
+async function fetchAllRows(table: string, filters: any = {}) {
+  const PAGE_SIZE = 1000
+  let allData: any[] = []
+  let page = 0
+  let hasMore = true
+
+  console.log(`🔄 Starting pagination for table: ${table}, filters:`, filters)
+
+  while (hasMore) {
+    const from = page * PAGE_SIZE
+    const to = from + PAGE_SIZE - 1
+
+    console.log(`   📄 Fetching page ${page + 1}: rows ${from}-${to}`)
+
+    let query = supabase
+      .from(table)
+      .select('*')
+      .range(from, to)
+      .order('created_at', { ascending: false }) // Add ordering for consistency
+
+    // Apply filters
+    for (const [key, value] of Object.entries(filters)) {
+      query = query.eq(key, value)
+    }
+
+    const { data, error } = await query
+
+    if (error) {
+      console.error(`❌ Error on page ${page + 1}:`, error)
+      throw error
+    }
+    
+    if (!data || data.length === 0) {
+      console.log(`   ✅ No more data on page ${page + 1}`)
+      hasMore = false
+      break
+    }
+
+    console.log(`   ✅ Fetched ${data.length} rows on page ${page + 1}`)
+    allData = [...allData, ...data]
+    
+    if (data.length < PAGE_SIZE) {
+      console.log(`   ✅ Last page reached (${data.length} < ${PAGE_SIZE})`)
+      hasMore = false
+    }
+    
+    page++
+  }
+
+  console.log(`✅ Total rows fetched from ${table}: ${allData.length}`)
+  return allData
 }
 
 export default function ParticipantsPage() {
@@ -107,19 +161,13 @@ export default function ParticipantsPage() {
     setLoading(true)
     try {
       console.log('📂 Fetching participant files...')
-      const { data, error } = await supabase
-        .from('participants')
-        .select('upload_group_id, batch_name, file_name, created_at')
-        .order('created_at', { ascending: false })
+      
+      // Fetch ALL participants (not limited to 1000)
+      const allData = await fetchAllRows('participants')
 
-      if (error) {
-        console.error('❌ Participant error:', error)
-        throw error
-      }
+      console.log('✅ Participant data fetched:', allData.length, 'rows')
 
-      console.log('✅ Participant data fetched:', data?.length, 'rows')
-
-      const grouped = data?.reduce((acc: any[], curr) => {
+      const grouped = allData.reduce((acc: any[], curr) => {
         const existing = acc.find(item => item.upload_group_id === curr.upload_group_id)
         if (existing) {
           existing.row_count++
@@ -134,6 +182,9 @@ export default function ParticipantsPage() {
         }
         return acc
       }, [])
+
+      // Sort by created_at descending
+      grouped.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
 
       setParticipantFiles(grouped || [])
     } catch (error) {
@@ -158,17 +209,23 @@ export default function ParticipantsPage() {
     setDataSearchTerm('')
     
     try {
-      const { data, error } = await supabase
-        .from('participants')
-        .select('*')
-        .eq('upload_group_id', groupId)
-        .order('participant_number', { ascending: true })
+      console.log(`📥 Fetching ALL participants for group ${groupId}...`)
+      
+      // Fetch ALL participants for this group (bypass 1000 limit)
+      const allData = await fetchAllRows('participants', { upload_group_id: groupId })
+      
+      // Sort by participant_number
+      allData.sort((a, b) => {
+        const numA = parseInt(a.participant_number) || 0
+        const numB = parseInt(b.participant_number) || 0
+        return numA - numB
+      })
 
-      if (error) throw error
+      console.log(`✅ Loaded ${allData.length} participants for group ${groupId}`)
 
-      setParticipantData(data || [])
-      setFilteredData(data || [])
-      calculateStats(data || [])
+      setParticipantData(allData)
+      setFilteredData(allData)
+      calculateStats(allData)
     } catch (error) {
       console.error('❌ Error fetching participant data:', error)
     } finally {

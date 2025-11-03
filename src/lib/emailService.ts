@@ -18,6 +18,35 @@ export interface EmailRecipient {
   campus?: string
 }
 
+export interface EmailOptions {
+  to: string
+  subject: string
+  html: string
+}
+
+/**
+ * Send a single email - NEW FUNCTION ADDED
+ */
+export async function sendEmail(options: EmailOptions): Promise<any> {
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
+    throw new Error('EMAIL_USER or EMAIL_PASSWORD not configured')
+  }
+
+  try {
+    const info = await transporter.sendMail({
+      from: `"Qtime Scheduler" <${process.env.EMAIL_USER}>`,
+      to: options.to,
+      subject: options.subject,
+      html: options.html,
+    })
+
+    return info
+  } catch (error: any) {
+    console.error(`❌ Error sending email to ${options.to}:`, error.message)
+    throw error
+  }
+}
+
 /**
  * Send batch emails to multiple participants via Gmail
  */
@@ -38,7 +67,7 @@ export async function sendBatchEmails(recipients: EmailRecipient[]) {
 
     try {
       await transporter.sendMail({
-        from: process.env.EMAIL_USER,
+        from: `"Qtime Scheduler" <${process.env.EMAIL_USER}>`,
         to: recipient.email,
         subject: `✅ Your Schedule Confirmed: ${recipient.batch_name || 'Test'}`,
         html: generateEmailHTML(recipient),
@@ -90,7 +119,7 @@ export async function sendBatchNotification(
 
   try {
     const mailInfo = await transporter.sendMail({
-      from: process.env.EMAIL_USER,
+      from: `"Qtime Scheduler" <${process.env.EMAIL_USER}>`,
       to: recipient.email,
       subject: `📅 Test Schedule: ${batchDetails.batch_name}`,
       html: generateBatchEmailHTML(recipient, batchDetails),
@@ -225,45 +254,45 @@ function generateEmailHTML(recipient: EmailRecipient): string {
       <body>
         <div class="container">
           <div class="header">
-            <h1> Your Schedule is Confirmed!</h1>
+            <h1>✅ Your Schedule is Confirmed!</h1>
             <p>Your admission test schedule is ready</p>
           </div>
           
           <div class="content">
-            <p class="greeting">Hi <strong> ${recipient.name}</strong>,</p>
+            <p class="greeting">Hi <strong>${recipient.name}</strong>,</p>
             <p>Great news! Your admission test schedule has been confirmed. Please review your details below:</p>
             
             <div class="details">
               <div class="detail-row">
-                <span class="detail-label">Participant Number: </span>
-                <span class="detail-value"><strong> ${recipient.participant_number || 'N/A'}</strong></span>
+                <span class="detail-label">📋 Participant Number:</span>
+                <span class="detail-value"><strong>${recipient.participant_number || 'N/A'}</strong></span>
               </div>
               <div class="detail-row">
-                <span class="detail-label">Batch: </span>
-                <span class="detail-value"><strong> ${recipient.batch_name || 'N/A'}</strong></span>
+                <span class="detail-label">📦 Batch:</span>
+                <span class="detail-value"><strong>${recipient.batch_name || 'N/A'}</strong></span>
               </div>
               <div class="detail-row">
-                <span class="detail-label">Test Time: </span>
-                <span class="detail-value"><strong> ${recipient.time_slot || 'N/A'}</strong></span>
+                <span class="detail-label">⏰ Test Time:</span>
+                <span class="detail-value"><strong>${recipient.time_slot || 'N/A'}</strong></span>
               </div>
               <div class="detail-row">
-                <span class="detail-label">Room: </span>
-                <span class="detail-value"><strong> ${recipient.room || 'N/A'}</strong></span>
+                <span class="detail-label">🏢 Room:</span>
+                <span class="detail-value"><strong>${recipient.room || 'N/A'}</strong></span>
               </div>
               <div class="detail-row">
-                <span class="detail-label">Campus: </span>
-                <span class="detail-value"><strong> ${recipient.campus || 'N/A'}</strong></span>
+                <span class="detail-label">🏫 Campus:</span>
+                <span class="detail-value"><strong>${recipient.campus || 'N/A'}</strong></span>
               </div>
             </div>
 
             <div class="important">
               <h3>⚠️ Important Reminders</h3>
               <ul>
-                <li><strong>Arrive Early:</strong> Come 15 minutes before your scheduled time </li>
+                <li><strong>Arrive Early:</strong> Come 15 minutes before your scheduled time</li>
                 <li><strong>Bring ID:</strong> Valid government-issued ID required</li>
-                <li><strong>No Devices:</strong> Mobile phones and electronic devices not allowed </li>
-                <li><strong>Bring Supplies:</strong> Pen, pencil, and eraser required </li>
-                <li><strong>Be Punctual:</strong> Latecomers may not be admitted </li>
+                <li><strong>No Devices:</strong> Mobile phones and electronic devices not allowed</li>
+                <li><strong>Bring Supplies:</strong> Pen, pencil, and eraser required</li>
+                <li><strong>Be Punctual:</strong> Latecomers may not be admitted</li>
               </ul>
             </div>
 
@@ -274,7 +303,7 @@ function generateEmailHTML(recipient: EmailRecipient): string {
           <div class="footer">
             <p><strong>CLA Admission Test Scheduler</strong></p>
             <p>This is an automated email. Please do not reply to this message.</p>
-            <p>&copy; 2024 Cla State University. All rights reserved.</p>
+            <p>&copy; 2024 CLA State University. All rights reserved.</p>
           </div>
         </div>
       </body>

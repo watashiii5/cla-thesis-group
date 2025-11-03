@@ -23,6 +23,41 @@ interface ParticipantFile {
   row_count: number
 }
 
+// Helper function to fetch ALL rows (bypass 1000 limit)
+async function fetchAllRows(table: string, selectFields: string = '*') {
+  const PAGE_SIZE = 1000
+  let allData: any[] = []
+  let page = 0
+  let hasMore = true
+
+  while (hasMore) {
+    const from = page * PAGE_SIZE
+    const to = from + PAGE_SIZE - 1
+
+    const { data, error } = await supabase
+      .from(table)
+      .select(selectFields)
+      .range(from, to)
+      .order('created_at', { ascending: false })
+
+    if (error) throw error
+    if (!data || data.length === 0) {
+      hasMore = false
+      break
+    }
+
+    allData = [...allData, ...data]
+    
+    if (data.length < PAGE_SIZE) {
+      hasMore = false
+    }
+    
+    page++
+  }
+
+  return allData
+}
+
 export default function QtimeHomePage() {
   const router = useRouter()
   const [sidebarOpen, setSidebarOpen] = useState(true)
@@ -37,44 +72,16 @@ export default function QtimeHomePage() {
   const fetchUploadedFiles = async () => {
     setLoading(true)
     try {
-      console.log('Fetching campus files...')
-      const { data: campusData, error: campusError } = await supabase
-        .from('campuses')
-        .select('upload_group_id, school_name, file_name, created_at')
-        .order('created_at', { ascending: false })
+      console.log('📂 Fetching ALL campus files...')
+      const campusData = await fetchAllRows('campuses', 'upload_group_id, school_name, file_name, created_at')
+      console.log('✅ Campus data fetched:', campusData.length, 'rows')
 
-      if (campusError) {
-        console.error('Campus error details:', {
-          message: campusError.message,
-          details: campusError.details,
-          hint: campusError.hint,
-          code: campusError.code
-        })
-        throw campusError
-      }
-
-      console.log('Campus data fetched:', campusData?.length, 'rows')
-
-      console.log('Fetching participant files...')
-      const { data: participantData, error: participantError } = await supabase
-        .from('participants')
-        .select('upload_group_id, batch_name, file_name, created_at')
-        .order('created_at', { ascending: false })
-
-      if (participantError) {
-        console.error('Participant error details:', {
-          message: participantError.message,
-          details: participantError.details,
-          hint: participantError.hint,
-          code: participantError.code
-        })
-        throw participantError
-      }
-
-      console.log('Participant data fetched:', participantData?.length, 'rows')
+      console.log('📂 Fetching ALL participant files...')
+      const participantData = await fetchAllRows('participants', 'upload_group_id, batch_name, file_name, created_at')
+      console.log('✅ Participant data fetched:', participantData.length, 'rows')
 
       // Group campus files by upload_group_id
-      const campusGrouped = campusData?.reduce((acc: any[], curr) => {
+      const campusGrouped = campusData.reduce((acc: any[], curr) => {
         const existing = acc.find(item => item.upload_group_id === curr.upload_group_id)
         if (existing) {
           existing.row_count++
@@ -91,7 +98,7 @@ export default function QtimeHomePage() {
       }, [])
 
       // Group participant files by upload_group_id
-      const participantGrouped = participantData?.reduce((acc: any[], curr) => {
+      const participantGrouped = participantData.reduce((acc: any[], curr) => {
         const existing = acc.find(item => item.upload_group_id === curr.upload_group_id)
         if (existing) {
           existing.row_count++
@@ -110,16 +117,11 @@ export default function QtimeHomePage() {
       setCampusFiles(campusGrouped || [])
       setParticipantFiles(participantGrouped || [])
       
-      console.log('Files set successfully')
+      console.log('✅ Files grouped successfully')
+      console.log('📊 Campus groups:', campusGrouped)
+      console.log('📊 Participant groups:', participantGrouped)
     } catch (err: any) {
-      console.error('Error fetching files:', {
-        error: err,
-        message: err?.message,
-        details: err?.details,
-        hint: err?.hint,
-        code: err?.code,
-        stack: err?.stack
-      })
+      console.error('❌ Error fetching files:', err)
     } finally {
       setLoading(false)
     }
