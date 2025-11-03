@@ -1,69 +1,80 @@
+
 /* ==================== Layout ==================== */
-.qtime-layout {
+.qtimeLayout {
   display: flex;
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--primary-gradient);
 }
 
-.qtime-main {
+.qtimeMain {
   flex: 1;
   margin-left: 280px;
+  margin-top: 80px;
   transition: margin-left 0.3s ease;
-  padding: 20px;
+  padding: 30px;
+  min-height: calc(100vh - 80px);
 }
 
-.qtime-main.full-width {
+.qtimeMain.fullWidth {
   margin-left: 0;
 }
 
-.campus-container {
+.campusContainer {
   max-width: 1400px;
   margin: 0 auto;
 }
 
 /* ==================== Header ==================== */
-.campus-header {
+.campusHeader {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 30px;
-  background: white;
+  background: rgba(255, 255, 255, 0.95);
   padding: 25px 30px;
   border-radius: 16px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
-.header-left {
+.headerLeft {
   display: flex;
   align-items: center;
   gap: 20px;
 }
 
-.header-info {
+.headerInfo {
   display: flex;
   flex-direction: column;
   gap: 5px;
 }
 
-.campus-title {
+.campusTitle {
   font-size: 32px;
   font-weight: 700;
-  color: #1a202c;
+  color: var(--text-dark);
   margin: 0;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
-.campus-subtitle {
+.campusTitle svg {
+  font-size: 36px;
+  color: var(--primary-medium);
+}
+
+.campusSubtitle {
   font-size: 16px;
-  color: #718096;
+  color: var(--text-medium);
   margin: 0;
+  font-weight: 500;
 }
 
-.back-button {
-  padding: 10px 20px;
-  background: #667eea;
+.backButton {
+  padding: 12px 24px;
+  background: var(--primary-gradient);
   color: white;
   border: none;
   border-radius: 10px;
@@ -74,92 +85,101 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  box-shadow: 0 4px 15px rgba(26, 54, 93, 0.3);
 }
 
-.back-button:hover {
-  background: #5568d3;
+.backButton:hover {
   transform: translateY(-2px);
-  box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 6px 20px rgba(26, 54, 93, 0.4);
 }
 
 /* ==================== Stats Grid ==================== */
-.stats-grid {
+.statsGrid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 20px;
   margin-bottom: 30px;
 }
 
-.stat-card {
-  background: white;
+.statCard {
+  background: rgba(255, 255, 255, 0.95);
   padding: 25px;
   border-radius: 16px;
   display: flex;
   align-items: center;
   gap: 20px;
-  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
   transition: all 0.3s ease;
   border-left: 5px solid;
+  backdrop-filter: blur(10px);
 }
 
-.stat-card:hover {
+.statCard:hover {
   transform: translateY(-5px);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
 }
 
-.stat-card.blue { border-left-color: #4299e1; }
-.stat-card.green { border-left-color: #48bb78; }
-.stat-card.purple { border-left-color: #9f7aea; }
-.stat-card.orange { border-left-color: #ed8936; }
-.stat-card.teal { border-left-color: #38b2ac; }
-.stat-card.red { border-left-color: #f56565; }
+.statCard.blue { border-left-color: #3182ce; }
+.statCard.green { border-left-color: #48bb78; }
+.statCard.purple { border-left-color: #2c5282; }
+.statCard.orange { border-left-color: #ed8936; }
+.statCard.teal { border-left-color: #319795; }
+.statCard.red { border-left-color: #f56565; }
 
-.stat-icon {
+.statIcon {
   font-size: 40px;
   line-height: 1;
 }
 
-.stat-content {
+.statCard.blue .statIcon { color: #3182ce; }
+.statCard.green .statIcon { color: #48bb78; }
+.statCard.purple .statIcon { color: #2c5282; }
+.statCard.orange .statIcon { color: #ed8936; }
+.statCard.teal .statIcon { color: #319795; }
+.statCard.red .statIcon { color: #f56565; }
+
+.statContent {
   display: flex;
   flex-direction: column;
   gap: 5px;
 }
 
-.stat-label {
+.statLabel {
   font-size: 13px;
-  color: #718096;
+  color: var(--text-light);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
-.stat-value {
+.statValue {
   font-size: 32px;
   font-weight: 700;
-  color: #1a202c;
+  color: var(--text-dark);
   line-height: 1;
 }
 
 /* ==================== Campus View ==================== */
-.campus-view {
+.campusView {
   display: flex;
   flex-direction: column;
   gap: 30px;
 }
 
-.building-card {
-  background: white;
+.buildingCard {
+  background: rgba(255, 255, 255, 0.95);
   border-radius: 20px;
   padding: 30px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
   transition: all 0.3s ease;
+  backdrop-filter: blur(10px);
 }
 
-.building-card:hover {
+.buildingCard:hover {
   box-shadow: 0 15px 50px rgba(0, 0, 0, 0.15);
 }
 
-.building-header {
+.buildingHeader {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -168,34 +188,39 @@
   border-bottom: 3px solid #f7fafc;
 }
 
-.building-name {
+.buildingName {
   font-size: 28px;
   font-weight: 700;
-  color: #1a202c;
+  color: var(--text-dark);
   margin: 0;
   display: flex;
   align-items: center;
   gap: 12px;
 }
 
-.room-count {
+.buildingName svg {
+  color: var(--primary-medium);
+  font-size: 32px;
+}
+
+.roomCount {
   font-size: 14px;
   font-weight: 600;
-  color: #667eea;
-  background: #f0f4ff;
+  color: var(--primary-medium);
+  background: #e6f2ff;
   padding: 8px 16px;
   border-radius: 20px;
 }
 
 /* ==================== Rooms Grid ==================== */
-.rooms-grid {
+.roomsGrid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 20px;
 }
 
-.room-card {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+.roomCard {
+  background: var(--primary-gradient);
   border-radius: 16px;
   padding: 20px;
   cursor: pointer;
@@ -203,9 +228,10 @@
   color: white;
   position: relative;
   overflow: hidden;
+  box-shadow: 0 5px 15px rgba(26, 54, 93, 0.3);
 }
 
-.room-card::before {
+.roomCard::before {
   content: '';
   position: absolute;
   top: 0;
@@ -217,28 +243,28 @@
   transition: opacity 0.3s ease;
 }
 
-.room-card:hover::before {
+.roomCard:hover::before {
   opacity: 1;
 }
 
-.room-card:hover {
+.roomCard:hover {
   transform: translateY(-8px);
-  box-shadow: 0 15px 40px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 15px 40px rgba(26, 54, 93, 0.4);
 }
 
-.room-header {
+.roomHeader {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 15px;
 }
 
-.room-number {
+.roomNumber {
   font-size: 20px;
   font-weight: 700;
 }
 
-.utilization-badge {
+.utilizationBadge {
   padding: 5px 12px;
   border-radius: 12px;
   font-size: 12px;
@@ -246,25 +272,25 @@
   background: rgba(255, 255, 255, 0.2);
 }
 
-.utilization-badge.high {
+.utilizationBadge.high {
   background: #f56565;
 }
 
-.utilization-badge.medium {
+.utilizationBadge.medium {
   background: #ed8936;
 }
 
-.utilization-badge.low {
+.utilizationBadge.low {
   background: #48bb78;
 }
 
-.room-body {
+.roomBody {
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
-.room-stat {
+.roomStat {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -272,7 +298,11 @@
   font-weight: 600;
 }
 
-.pwd-indicator {
+.roomStat svg {
+  font-size: 18px;
+}
+
+.pwdIndicator {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -284,35 +314,41 @@
   font-weight: 600;
 }
 
+.pwdIndicator svg {
+  font-size: 16px;
+}
+
 /* ==================== Room View ==================== */
-.room-view {
-  background: white;
+.roomView {
+  background: rgba(255, 255, 255, 0.95);
   border-radius: 20px;
   padding: 30px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(10px);
 }
 
-.room-info-card {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+.roomInfoCard {
+  background: var(--primary-gradient);
   border-radius: 16px;
   padding: 30px;
   margin-bottom: 30px;
   color: white;
+  box-shadow: 0 5px 20px rgba(26, 54, 93, 0.3);
 }
 
-.info-row {
+.infoRow {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 30px;
 }
 
-.info-item {
+.infoItem {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-.info-label {
+.infoLabel {
   font-size: 13px;
   font-weight: 600;
   opacity: 0.9;
@@ -320,79 +356,99 @@
   letter-spacing: 0.5px;
 }
 
-.info-value {
+.infoValue {
   font-size: 28px;
   font-weight: 700;
 }
 
-.section-title {
+.sectionTitle {
   font-size: 22px;
   font-weight: 700;
-  color: #1a202c;
+  color: var(--text-dark);
   margin: 30px 0 20px 0;
   display: flex;
   align-items: center;
   gap: 10px;
 }
 
+.sectionTitle svg {
+  color: var(--primary-medium);
+  font-size: 24px;
+}
+
 /* ==================== Batches Timeline ==================== */
-.batches-timeline {
+.batchesTimeline {
   display: flex;
   flex-direction: column;
   gap: 15px;
 }
 
-.batch-card {
+.batchCard {
   background: #f7fafc;
   border-radius: 16px;
   padding: 20px;
   cursor: pointer;
   transition: all 0.3s ease;
-  border-left: 5px solid #667eea;
+  border-left: 5px solid var(--primary-medium);
 }
 
-.batch-card:hover {
+.batchCard:hover {
   background: #edf2f7;
   transform: translateX(10px);
   box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
 }
 
-.batch-header {
+.batchHeader {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 10px;
 }
 
-.batch-name {
+.batchName {
   font-size: 18px;
   font-weight: 700;
-  color: #1a202c;
+  color: var(--text-dark);
 }
 
-.pwd-badge {
+.pwdBadge {
   padding: 5px 12px;
   background: #48bb78;
   color: white;
   border-radius: 12px;
   font-size: 12px;
   font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 5px;
 }
 
-.batch-time {
+.pwdBadge svg {
   font-size: 14px;
-  color: #4a5568;
+}
+
+.batchTime {
+  font-size: 14px;
+  color: var(--text-medium);
   margin-bottom: 15px;
   font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
-.batch-stats {
+.batchTime svg {
+  color: var(--primary-medium);
+  font-size: 16px;
+}
+
+.batchStats {
   display: flex;
   align-items: center;
   gap: 20px;
 }
 
-.batch-stat {
+.batchStat {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -401,11 +457,16 @@
   color: #2d3748;
 }
 
-.batch-utilization {
+.batchStat svg {
+  color: var(--primary-medium);
+  font-size: 18px;
+}
+
+.batchUtilization {
   flex: 1;
 }
 
-.progress-bar {
+.progressBar {
   width: 100%;
   height: 8px;
   background: #e2e8f0;
@@ -413,36 +474,38 @@
   overflow: hidden;
 }
 
-.progress-fill {
+.progressFill {
   height: 100%;
-  background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+  background: var(--primary-gradient);
   transition: width 0.3s ease;
 }
 
 /* ==================== Batch View ==================== */
-.batch-view {
-  background: white;
+.batchView {
+  background: rgba(255, 255, 255, 0.95);
   border-radius: 20px;
   padding: 30px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(10px);
 }
 
-.batch-info-card {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+.batchInfoCard {
+  background: var(--primary-gradient);
   border-radius: 16px;
   padding: 30px;
   margin-bottom: 30px;
   color: white;
+  box-shadow: 0 5px 20px rgba(26, 54, 93, 0.3);
 }
 
 /* ==================== Seating Grid ==================== */
-.seating-grid {
+.seatingGrid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
   gap: 20px;
 }
 
-.seat-card {
+.seatCard {
   background: #f7fafc;
   border-radius: 16px;
   padding: 20px;
@@ -451,67 +514,67 @@
   position: relative;
 }
 
-.seat-card:hover {
+.seatCard:hover {
   transform: translateY(-5px);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-  border-color: #667eea;
+  border-color: var(--primary-medium);
 }
 
-.seat-card.pwd-seat {
+.seatCard.pwdSeat {
   background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
   color: white;
   border-color: #48bb78;
 }
 
-.seat-number {
+.seatNumber {
   font-size: 14px;
   font-weight: 700;
-  color: #667eea;
+  color: var(--primary-medium);
   margin-bottom: 15px;
   padding-bottom: 10px;
   border-bottom: 2px solid #e2e8f0;
 }
 
-.seat-card.pwd-seat .seat-number {
+.seatCard.pwdSeat .seatNumber {
   color: white;
   border-bottom-color: rgba(255, 255, 255, 0.3);
 }
 
-.seat-info {
+.seatInfo {
   display: flex;
   flex-direction: column;
   gap: 5px;
 }
 
-.participant-name {
+.participantName {
   font-size: 16px;
   font-weight: 700;
-  color: #1a202c;
+  color: var(--text-dark);
 }
 
-.seat-card.pwd-seat .participant-name {
+.seatCard.pwdSeat .participantName {
   color: white;
 }
 
-.participant-number {
+.participantNumber {
   font-size: 13px;
-  color: #718096;
+  color: var(--text-light);
   font-weight: 600;
 }
 
-.seat-card.pwd-seat .participant-number {
+.seatCard.pwdSeat .participantNumber {
   color: rgba(255, 255, 255, 0.9);
 }
 
-.seat-pwd-badge {
+.seatPwdBadge {
   position: absolute;
   top: 15px;
   right: 15px;
   font-size: 24px;
 }
 
-/* ==================== Loading & Empty States ==================== */
-.loading-state {
+/* ==================== Loading State ==================== */
+.loadingState {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -534,51 +597,57 @@
   to { transform: rotate(360deg); }
 }
 
-.loading-state p {
+.loadingState p {
   font-size: 18px;
   font-weight: 600;
 }
 
 /* ==================== Responsive Design ==================== */
-@media (max-width: 768px) {
-  .qtime-main {
+@media (max-width: 1024px) {
+  .qtimeMain {
     margin-left: 0;
-    padding: 15px;
+    margin-top: 70px;
+  }
+}
+
+@media (max-width: 768px) {
+  .qtimeMain {
+    padding: 20px 15px;
   }
 
-  .campus-header {
+  .campusHeader {
     flex-direction: column;
     align-items: flex-start;
     gap: 15px;
   }
 
-  .campus-title {
+  .campusTitle {
     font-size: 24px;
   }
 
-  .stats-grid {
+  .statsGrid {
     grid-template-columns: repeat(2, 1fr);
   }
 
-  .rooms-grid {
+  .roomsGrid {
     grid-template-columns: 1fr;
   }
 
-  .seating-grid {
+  .seatingGrid {
     grid-template-columns: 1fr;
   }
 
-  .info-row {
+  .infoRow {
     grid-template-columns: repeat(2, 1fr);
   }
 }
 
 @media (max-width: 480px) {
-  .stats-grid {
+  .statsGrid {
     grid-template-columns: 1fr;
   }
 
-  .info-row {
+  .infoRow {
     grid-template-columns: 1fr;
   }
 }

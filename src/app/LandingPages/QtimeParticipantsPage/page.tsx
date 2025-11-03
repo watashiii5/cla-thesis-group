@@ -5,6 +5,23 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import MenuBar from '@/app/components/MenuBar'
 import Sidebar from '@/app/components/Sidebar'
+import { 
+  Users, 
+  ArrowLeft, 
+  Search, 
+  FolderOpen, 
+  Calendar,
+  UserPlus,
+  Edit2,
+  Trash2,
+  Settings,
+  Check,
+  X,
+  BarChart3,
+  Accessibility,
+  Mail,
+  MapPin
+} from 'lucide-react'
 import './styles.css'
 
 interface ParticipantFile {
@@ -53,7 +70,7 @@ async function fetchAllRows(table: string, filters: any = {}) {
       .from(table)
       .select('*')
       .range(from, to)
-      .order('created_at', { ascending: false }) // Add ordering for consistency
+      .order('created_at', { ascending: false })
 
     // Apply filters
     for (const [key, value] of Object.entries(filters)) {
@@ -162,7 +179,6 @@ export default function ParticipantsPage() {
     try {
       console.log('📂 Fetching participant files...')
       
-      // Fetch ALL participants (not limited to 1000)
       const allData = await fetchAllRows('participants')
 
       console.log('✅ Participant data fetched:', allData.length, 'rows')
@@ -183,7 +199,6 @@ export default function ParticipantsPage() {
         return acc
       }, [])
 
-      // Sort by created_at descending
       grouped.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
 
       setParticipantFiles(grouped || [])
@@ -211,10 +226,8 @@ export default function ParticipantsPage() {
     try {
       console.log(`📥 Fetching ALL participants for group ${groupId}...`)
       
-      // Fetch ALL participants for this group (bypass 1000 limit)
       const allData = await fetchAllRows('participants', { upload_group_id: groupId })
       
-      // Sort by participant_number
       allData.sort((a, b) => {
         const numA = parseInt(a.participant_number) || 0
         const numB = parseInt(b.participant_number) || 0
@@ -300,9 +313,6 @@ export default function ParticipantsPage() {
     }
   }
 
-  // CRUD: READ - Already implemented in display
-
-  // CRUD: UPDATE - Edit Participant
   const handleEditClick = (participant: Participant) => {
     setEditingParticipant(participant.id!)
     setEditForm({
@@ -368,9 +378,8 @@ export default function ParticipantsPage() {
     }
   }
 
-  // CRUD: DELETE - Remove Participant
   const handleDelete = async (participantId: number) => {
-    if (!confirm('🗑️ Are you sure you want to delete this participant? This action cannot be undone.')) return
+    if (!confirm('Are you sure you want to delete this participant? This action cannot be undone.')) return
 
     setDeletingParticipant(participantId)
     setShowActionsFor(null)
@@ -431,11 +440,12 @@ export default function ParticipantsPage() {
               className="back-button"
               onClick={() => router.push('/LandingPages/QtimeHomePage')}
             >
-              ← Back to Home
+              <ArrowLeft size={18} />
+              Back to Home
             </button>
             <div className="header-title-section">
               <div className="header-icon-wrapper">
-                <span className="header-large-icon">👥</span>
+                <Users className="header-large-icon" size={48} />
               </div>
               <div className="header-text">
                 <h1 className="participants-title">Participants Overview</h1>
@@ -453,9 +463,12 @@ export default function ParticipantsPage() {
             <>
               <div className="selection-section">
                 <div className="search-header">
-                  <h2>📂 Select Batch</h2>
+                  <h2>
+                    <FolderOpen size={24} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '8px' }} />
+                    Select Batch
+                  </h2>
                   <div className="search-box">
-                    <span className="search-icon">🔍</span>
+                    <Search className="search-icon" size={18} />
                     <input
                       type="text"
                       placeholder="Search batch..."
@@ -473,16 +486,24 @@ export default function ParticipantsPage() {
                       className={`batch-select-card ${selectedBatch === file.upload_group_id ? 'selected' : ''}`}
                       onClick={() => handleSelectBatch(file.upload_group_id)}
                     >
-                      <div className="batch-card-icon">📋</div>
+                      <div className="batch-card-icon">
+                        <FolderOpen size={36} />
+                      </div>
                       <div className="batch-card-content">
                         <h3 className="batch-card-name">{file.batch_name}</h3>
-                        <p className="batch-card-meta">👤 {file.row_count} participants</p>
+                        <p className="batch-card-meta">
+                          <Users size={14} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '4px' }} />
+                          {file.row_count} participants
+                        </p>
                         <p className="batch-card-date">
-                          📅 Uploaded: {new Date(file.created_at).toLocaleDateString()}
+                          <Calendar size={14} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '4px' }} />
+                          Uploaded: {new Date(file.created_at).toLocaleDateString()}
                         </p>
                       </div>
                       {selectedBatch === file.upload_group_id && (
-                        <div className="selected-indicator">✓</div>
+                        <div className="selected-indicator">
+                          <Check size={20} />
+                        </div>
                       )}
                     </div>
                   ))}
@@ -507,21 +528,27 @@ export default function ParticipantsPage() {
                       {stats && (
                         <div className="stats-grid">
                           <div className="stat-card">
-                            <div className="stat-icon">👥</div>
+                            <div className="stat-icon">
+                              <Users size={28} />
+                            </div>
                             <div className="stat-content">
                               <p className="stat-label">Total Participants</p>
                               <h3 className="stat-value">{stats.totalParticipants}</h3>
                             </div>
                           </div>
                           <div className="stat-card">
-                            <div className="stat-icon">♿</div>
+                            <div className="stat-icon">
+                              <Accessibility size={28} />
+                            </div>
                             <div className="stat-content">
                               <p className="stat-label">PWD Participants</p>
                               <h3 className="stat-value">{stats.totalPWD}</h3>
                             </div>
                           </div>
                           <div className="stat-card">
-                            <div className="stat-icon">📊</div>
+                            <div className="stat-icon">
+                              <BarChart3 size={28} />
+                            </div>
                             <div className="stat-content">
                               <p className="stat-label">PWD Percentage</p>
                               <h3 className="stat-value">{stats.percentagePWD}%</h3>
@@ -532,10 +559,13 @@ export default function ParticipantsPage() {
 
                       <div className="data-section">
                         <div className="section-header-actions">
-                          <h2 className="section-heading">👤 Participants List</h2>
+                          <h2 className="section-heading">
+                            <Users size={24} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '8px' }} />
+                            Participants List
+                          </h2>
                           <div className="header-actions">
                             <div className="search-box">
-                              <span className="search-icon">🔍</span>
+                              <Search className="search-icon" size={18} />
                               <input
                                 type="text"
                                 placeholder="Search by name, number, or email..."
@@ -548,7 +578,8 @@ export default function ParticipantsPage() {
                               className="add-participant-button"
                               onClick={() => setShowAddModal(true)}
                             >
-                              ➕ Add Participant
+                              <UserPlus size={20} />
+                              Add Participant
                             </button>
                           </div>
                         </div>
@@ -632,14 +663,14 @@ export default function ParticipantsPage() {
                                               onClick={() => handleEditSave(participant.id!)}
                                               title="Save changes"
                                             >
-                                              ✓
+                                              <Check size={16} />
                                             </button>
                                             <button 
                                               className="cancel-btn-inline"
                                               onClick={handleEditCancel}
                                               title="Cancel editing"
                                             >
-                                              ✕
+                                              <X size={16} />
                                             </button>
                                           </div>
                                         </td>
@@ -650,7 +681,12 @@ export default function ParticipantsPage() {
                                         <td>{participant.name}</td>
                                         <td>
                                           <span className={`pwd-badge ${participant.is_pwd ? 'pwd-yes' : 'pwd-no'}`}>
-                                            {participant.is_pwd ? '♿ Yes' : 'No'}
+                                            {participant.is_pwd ? (
+                                              <>
+                                                <Accessibility size={14} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '4px' }} />
+                                                Yes
+                                              </>
+                                            ) : 'No'}
                                           </span>
                                         </td>
                                         <td>{participant.email}</td>
@@ -666,7 +702,7 @@ export default function ParticipantsPage() {
                                               }}
                                               title="More options"
                                             >
-                                              ⚙️
+                                              <Settings size={18} />
                                             </button>
                                             
                                             {showActions && (
@@ -675,14 +711,16 @@ export default function ParticipantsPage() {
                                                   className="action-option edit-option"
                                                   onClick={() => handleEditClick(participant)}
                                                 >
-                                                  ✏️ Edit
+                                                  <Edit2 size={16} />
+                                                  Edit
                                                 </button>
                                                 <button 
                                                   className="action-option delete-option"
                                                   onClick={() => handleDelete(participant.id!)}
                                                   disabled={deletingParticipant === participant.id}
                                                 >
-                                                  {deletingParticipant === participant.id ? '⏳ Deleting...' : '🗑️ Delete'}
+                                                  <Trash2 size={16} />
+                                                  {deletingParticipant === participant.id ? 'Deleting...' : 'Delete'}
                                                 </button>
                                               </div>
                                             )}
@@ -710,7 +748,9 @@ export default function ParticipantsPage() {
 
               {!selectedBatch && !loading && participantFiles.length > 0 && (
                 <div className="empty-selection">
-                  <div className="empty-icon">👆</div>
+                  <div className="empty-icon">
+                    <Users size={80} />
+                  </div>
                   <p>Please select a batch above to view participant details</p>
                 </div>
               )}
@@ -724,13 +764,16 @@ export default function ParticipantsPage() {
         <div className="modal-overlay" onClick={() => setShowAddModal(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>➕ Add New Participant</h3>
+              <h3>
+                <UserPlus size={24} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '8px' }} />
+                Add New Participant
+              </h3>
               <button 
                 className="modal-close"
                 onClick={() => setShowAddModal(false)}
                 title="Close modal"
               >
-                ✕
+                <X size={20} />
               </button>
             </div>
             <div className="modal-body">
@@ -761,11 +804,15 @@ export default function ParticipantsPage() {
                     checked={addForm.is_pwd}
                     onChange={(e) => setAddForm({...addForm, is_pwd: e.target.checked})}
                   />
+                  <Accessibility size={20} style={{ marginLeft: '4px', marginRight: '4px' }} />
                   <span>Person with Disability (PWD)</span>
                 </label>
               </div>
               <div className="form-group">
-                <label>Email * <span className="required-indicator">(Required)</span></label>
+                <label>
+                  <Mail size={16} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '4px' }} />
+                  Email * <span className="required-indicator">(Required)</span>
+                </label>
                 <input
                   type="email"
                   value={addForm.email}
@@ -775,7 +822,10 @@ export default function ParticipantsPage() {
                 />
               </div>
               <div className="form-group">
-                <label>Province</label>
+                <label>
+                  <MapPin size={16} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '4px' }} />
+                  Province
+                </label>
                 <input
                   type="text"
                   value={addForm.province}
@@ -785,7 +835,10 @@ export default function ParticipantsPage() {
                 />
               </div>
               <div className="form-group">
-                <label>City</label>
+                <label>
+                  <MapPin size={16} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '4px' }} />
+                  City
+                </label>
                 <input
                   type="text"
                   value={addForm.city}
@@ -800,12 +853,14 @@ export default function ParticipantsPage() {
                 className="modal-btn-cancel"
                 onClick={() => setShowAddModal(false)}
               >
+                <X size={18} />
                 Cancel
               </button>
               <button 
                 className="modal-btn-save"
                 onClick={handleAddParticipant}
               >
+                <Check size={18} />
                 Add Participant
               </button>
             </div>

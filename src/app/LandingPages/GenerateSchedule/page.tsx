@@ -1,11 +1,11 @@
 'use client'
-
+import styles from './GenerateSchedule.module.css'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import MenuBar from '@/app/components/MenuBar'
 import Sidebar from '@/app/components/Sidebar'
-import './styles.css'
+
 
 interface CampusFile {
   upload_group_id: number
@@ -312,7 +312,7 @@ export default function GenerateSchedulePage() {
   }
 
   return (
-    <div className="schedule-layout">
+    <div className={styles.scheduleLayout}>
       <MenuBar 
         onToggleSidebar={() => setSidebarOpen(!sidebarOpen)} 
         showSidebarToggle={true}
@@ -320,90 +320,127 @@ export default function GenerateSchedulePage() {
       />
       <Sidebar isOpen={sidebarOpen} />
       
-      <main className={`schedule-main ${sidebarOpen ? 'with-sidebar' : 'full-width'}`}>
-        <div className="schedule-container">
-          <div className="schedule-header">
-            <button 
-              className="back-button"
+      <main className={`${styles.scheduleMain} ${!sidebarOpen ? styles.fullWidth : ''}`}>
+        <div className={styles.scheduleContainer}>
+          <div className={styles.scheduleHeader}>
+            <button className={styles.backButton}
               onClick={() => router.push('/LandingPages/QtimeHomePage')}
             >
-              ← Back to Home
+              <span className={styles.iconBack}>←</span>
+              Back to Home
             </button>
-            <div className="header-title-section">
-              <div className="header-icon-wrapper">
-                <span className="header-large-icon">📅</span>
+            <div className={styles.headerTitleSection}>
+              <div className={styles.headerIconWrapper}>
+                <svg className={styles.headerLargeIcon} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M19 4H5C3.89543 4 3 4.89543 3 6V20C3 21.1046 3.89543 22 5 22H19C20.1046 22 21 21.1046 21 20V6C21 4.89543 20.1046 4 19 4Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M16 2V6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M8 2V6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M3 10H21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
               </div>
-              <div className="header-text">
-                <h1 className="schedule-title">Generate Schedule</h1>
-                <p className="schedule-subtitle">Create optimized schedules with PWD priority</p>
+              <div className={styles.headerText}>
+                <h1 className={styles.scheduleTitle}>Generate Schedule</h1>
+                <p className={styles.scheduleSubtitle}>Create optimized schedules with PWD priority</p>
               </div>
             </div>
           </div>
 
           {loading ? (
-            <div className="loading-state">
-              <div className="spinner"></div>
+            <div className={styles.loadingState}>
+              <div className={styles.spinner}></div>
               <p>Loading data...</p>
             </div>
           ) : showResults && scheduleResult ? (
-            // Results View
-            <div className="results-section">
-              <div className={`results-banner ${scheduleResult.success ? 'success' : 'error'}`}>
-                <span className="results-icon">
-                  {scheduleResult.success ? '✅' : '❌'}
+            <div className={styles.resultsSection}>
+              <div className={`${styles.resultsBanner} ${scheduleResult.success ? styles.success : styles.error}`}>
+                <span className={styles.resultsIcon}>
+                  {scheduleResult.success ? (
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/>
+                    </svg>
+                  ) : (
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z"/>
+                    </svg>
+                  )}
                 </span>
-                <div className="results-info">
+                <div className={styles.resultsInfo}>
                   <h2>{scheduleResult.message}</h2>
                   <p>Execution time: {scheduleResult.execution_time}s</p>
                 </div>
               </div>
 
-              <div className="stats-grid">
-                <div className="stat-card success">
-                  <div className="stat-icon">✓</div>
-                  <div className="stat-content">
-                    <p className="stat-label">Scheduled</p>
-                    <h3 className="stat-value">{scheduleResult.scheduled_count}</h3>
+              <div className={styles.statsGrid}>
+                <div className={`${styles.statCard} ${styles.success}`}>
+                  <div className={styles.statIcon}>
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/>
+                    </svg>
+                  </div>
+                  <div className={styles.statContent}>
+                    <p className={styles.statLabel}>Scheduled</p>
+                    <h3 className={styles.statValue}>{scheduleResult.scheduled_count}</h3>
                   </div>
                 </div>
-                <div className="stat-card warning">
-                  <div className="stat-icon">⚠</div>
-                  <div className="stat-content">
-                    <p className="stat-label">Unscheduled</p>
-                    <h3 className="stat-value">{scheduleResult.unscheduled_count}</h3>
+                <div className={`${styles.statCard} ${styles.warning}`}>
+                  <div className={styles.statIcon}>
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/>
+                    </svg>
+                  </div>
+                  <div className={styles.statContent}>
+                    <p className={styles.statLabel}>Unscheduled</p>
+                    <h3 className={styles.statValue}>{scheduleResult.unscheduled_count}</h3>
                   </div>
                 </div>
-                <div className="stat-card info">
-                  <div className="stat-icon">⏱</div>
-                  <div className="stat-content">
-                    <p className="stat-label">Processing Time</p>
-                    <h3 className="stat-value">{scheduleResult.execution_time}s</h3>
+                <div className={`${styles.statCard} ${styles.info}`}>
+                  <div className={styles.statIcon}>
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/>
+                    </svg>
+                  </div>
+                  <div className={styles.statContent}>
+                    <p className={styles.statLabel}>Processing Time</p>
+                    <h3 className={styles.statValue}>{scheduleResult.execution_time}s</h3>
                   </div>
                 </div>
               </div>
 
-              <div className="results-actions">
-                <button className="btn-secondary" onClick={handleReschedule}>
-                  🔄 Generate New Schedule
+              <div className={styles.resultsActions}>
+                <button className={styles.btnSecondary} onClick={handleReschedule}>
+                  <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+                  </svg>
+                  Generate New Schedule
                 </button>
-                <button className="btn-primary" onClick={handleSendEmails}>
-                  📧 Send Email Notifications
+                <button className={styles.btnPrimary} onClick={handleSendEmails}>
+                  <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
+                  </svg>
+                  Send Email Notifications
                 </button>
                 <button 
-                  className="btn-view"
+                  className={styles.btnView}
                   onClick={() => router.push('/LandingPages/GenerateSchedule/ViewSchedule')}
                 >
-                  👁 View Full Schedule
+                  <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
+                  </svg>
+                  View Full Schedule
                 </button>
               </div>
 
               {scheduleResult.unscheduled_count > 0 && (
-                <div className="warning-box">
-                  <span className="warning-icon">⚠️</span>
-                  <div className="warning-content">
+                <div className={styles.warningBox}>
+                  <span className={styles.warningIcon}>
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/>
+                    </svg>
+                  </span>
+                  <div className={styles.warningContent}>
                     <h4>Some participants couldn't be scheduled</h4>
                     <p>Consider adding more rooms or extending the time range.</p>
-                    <button className="btn-link" onClick={() => router.push('/LandingPages/BeforeQtimeHomePage')}>
+                    <button className={styles.btnLink} onClick={() => router.push('/LandingPages/BeforeQtimeHomePage')}>
                       Add More Rooms →
                     </button>
                   </div>
@@ -411,28 +448,32 @@ export default function GenerateSchedulePage() {
               )}
             </div>
           ) : (
-            // Configuration Form
-            <div className="form-section">
-              <div className="form-card">
-                <h2 className="form-section-title">📋 Event Information</h2>
+            <div className={styles.formSection}>
+              <div className={styles.formCard}>
+                <h2 className={styles.formSectionTitle}>
+                  <svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24">
+                    <path d="M19 3h-4.18C14.4 1.84 13.3 1 12 1c-1.3 0-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm2 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/>
+                  </svg>
+                  Event Information
+                </h2>
                 
-                <div className="form-group">
-                  <label className="form-label">Event Name *</label>
+                <div className={styles.formGroup}>
+                  <label className={styles.formLabel}>Event Name *</label>
                   <input
                     type="text"
                     value={config.eventName}
                     onChange={(e) => setConfig({...config, eventName: e.target.value})}
                     placeholder="e.g., Admission Test 2024"
-                    className="form-input"
+                    className={styles.formInput}
                   />
                 </div>
 
-                <div className="form-group">
-                  <label className="form-label">Event Type *</label>
+                <div className={styles.formGroup}>
+                  <label className={styles.formLabel}>Event Type *</label>
                   <select
                     value={config.eventType}
                     onChange={(e) => setConfig({...config, eventType: e.target.value as any})}
-                    className="form-select"
+                    className={styles.formSelect}
                   >
                     <option value="Admission_Test">Admission Test</option>
                     <option value="Enrollment">Enrollment</option>
@@ -442,63 +483,95 @@ export default function GenerateSchedulePage() {
                 </div>
               </div>
 
-              <div className="form-card">
-                <h2 className="form-section-title">🏢 Select Campus</h2>
-                <div className="selection-grid">
+              <div className={styles.formCard}>
+                <h2 className={styles.formSectionTitle}>
+                  <svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24">
+                    <path d="M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10zm-2-8h-2v2h2v-2zm0 4h-2v2h2v-2z"/>
+                  </svg>
+                  Select Campus
+                </h2>
+                <div className={styles.selectionGrid}>
                   {campusFiles.map(file => (
                     <div 
                       key={file.upload_group_id}
-                      className={`selection-card ${config.campusGroupId === file.upload_group_id ? 'selected' : ''}`}
+                      className={`${styles.selectionCard} ${config.campusGroupId === file.upload_group_id ? styles.selected : ''}`}
                       onClick={() => setConfig({...config, campusGroupId: file.upload_group_id})}
                     >
-                      <span className="selection-icon">🏛️</span>
+                      <span className={styles.selectionIcon}>
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10zm-2-8h-2v2h2v-2zm0 4h-2v2h2v-2z"/>
+                        </svg>
+                      </span>
                       <h3>{file.school_name}</h3>
                       <p>{file.row_count} rooms available</p>
                       {config.campusGroupId === file.upload_group_id && (
-                        <div className="selected-badge">✓</div>
+                        <div className={styles.selectedBadge}>
+                          <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/>
+                          </svg>
+                        </div>
                       )}
                     </div>
                   ))}
                 </div>
               </div>
 
-              <div className="form-card">
-                <h2 className="form-section-title">👥 Select Participants</h2>
-                <div className="selection-grid">
+              <div className={styles.formCard}>
+                <h2 className={styles.formSectionTitle}>
+                  <svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24">
+                    <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
+                  </svg>
+                  Select Participants
+                </h2>
+                <div className={styles.selectionGrid}>
                   {participantFiles.map(file => (
                     <div 
                       key={file.upload_group_id}
-                      className={`selection-card ${config.participantGroupId === file.upload_group_id ? 'selected' : ''}`}
+                      className={`${styles.selectionCard} ${config.participantGroupId === file.upload_group_id ? styles.selected : ''}`}
                       onClick={() => setConfig({...config, participantGroupId: file.upload_group_id})}
                     >
-                      <span className="selection-icon">👨‍🎓</span>
+                      <span className={styles.selectionIcon}>
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
+                        </svg>
+                      </span>
                       <h3>{file.batch_name}</h3>
                       <p>{file.row_count} participants</p>
                       {config.participantGroupId === file.upload_group_id && (
-                        <div className="selected-badge">✓</div>
+                        <div className={styles.selectedBadge}>
+                          <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/>
+                          </svg>
+                        </div>
                       )}
                     </div>
                   ))}
                 </div>
               </div>
 
-              <div className="form-card">
-                <h2 className="form-section-title">📆 Schedule Settings</h2>
+              <div className={styles.formCard}>
+                <h2 className={styles.formSectionTitle}>
+                  <svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24">
+                    <path d="M19 4H5C3.89543 4 3 4.89543 3 6V20C3 21.1046 3.89543 22 5 22H19C20.1046 22 21 21.1046 21 20V6C21 4.89543 20.1046 4 19 4Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M16 2V6M8 2V6M3 10H21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                  Schedule Settings
+                </h2>
                 
-                <div className="form-row">
-                  <div className="form-group">
-                    <label className="form-label">Schedule Date *</label>
+                <div className={styles.formRow}>
+                  <div className={styles.formGroup}>
+                    <label className={styles.formLabel}>Schedule Date *</label>
                     <input
                       type="date"
                       value={config.scheduleDate}
                       onChange={(e) => setConfig({...config, scheduleDate: e.target.value})}
                       min={getTodayDate()}
-                      className="form-input"
+                      className={styles.formInput}
                     />
                   </div>
 
-                  <div className="form-group">
-                    <label className="form-label">Duration per Batch (minutes) *</label>
+                  <div className={styles.formGroup}>
+                    <label className={styles.formLabel}>Duration per Batch (minutes) *</label>
                     <input
                       type="number"
                       value={config.durationPerBatch}
@@ -506,68 +579,77 @@ export default function GenerateSchedulePage() {
                       min="30"
                       max="240"
                       step="15"
-                      className="form-input"
+                      className={styles.formInput}
                     />
                   </div>
                 </div>
 
-                <div className="form-row">
-                  <div className="form-group">
-                    <label className="form-label">Start Time *</label>
+                <div className={styles.formRow}>
+                  <div className={styles.formGroup}>
+                    <label className={styles.formLabel}>Start Time *</label>
                     <input
                       type="time"
                       value={config.startTime}
                       onChange={(e) => setConfig({...config, startTime: e.target.value})}
-                      className="form-input"
+                      className={styles.formInput}
                     />
                   </div>
 
-                  <div className="form-group">
-                    <label className="form-label">End Time *</label>
+                  <div className={styles.formGroup}>
+                    <label className={styles.formLabel}>End Time *</label>
                     <input
                       type="time"
                       value={config.endTime}
                       onChange={(e) => setConfig({...config, endTime: e.target.value})}
-                      className="form-input"
+                      className={styles.formInput}
                     />
                   </div>
                 </div>
 
-                <div className="form-options">
-                  <label className="checkbox-label">
+                <div className={styles.formOptions}>
+                  <label className={styles.checkboxLabel}>
                     <input
                       type="checkbox"
                       checked={config.prioritizePWD}
                       onChange={(e) => setConfig({...config, prioritizePWD: e.target.checked})}
                     />
-                    <span>♿ Prioritize PWD Participants (Scheduled First)</span>
+                    <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
+                      <path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.5 16c-.83 0-1.5-.67-1.5-1.5S5.67 13 6.5 13s1.5.67 1.5 1.5S7.33 16 6.5 16zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z"/>
+                    </svg>
+                    <span>Prioritize PWD Participants (Scheduled First)</span>
                   </label>
 
-                  <label className="checkbox-label">
+                  <label className={styles.checkboxLabel}>
                     <input
                       type="checkbox"
                       checked={config.emailNotification}
                       onChange={(e) => setConfig({...config, emailNotification: e.target.checked})}
                     />
-                    <span>📧 Send Email Notifications After Scheduling</span>
+                    <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
+                      <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
+                    </svg>
+                    <span>Send Email Notifications After Scheduling</span>
                   </label>
                 </div>
               </div>
 
-              <div className="form-actions">
+              <div className={styles.formActions}>
                 <button 
-                  className="btn-generate"
+                  className={styles.btnGenerate}
                   onClick={handleGenerateSchedule}
                   disabled={scheduling || !config.campusGroupId || !config.participantGroupId || !config.eventName || !config.scheduleDate}
                 >
                   {scheduling ? (
                     <>
-                      <span className="spinner-small"></span>
+                      <span className={styles.spinnerSmall}></span>
                       Generating Schedule...
                     </>
                   ) : (
                     <>
-                      🚀 Generate Schedule
+                      <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
+                        <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                      </svg>
+                      Generate Schedule
                     </>
                   )}
                 </button>

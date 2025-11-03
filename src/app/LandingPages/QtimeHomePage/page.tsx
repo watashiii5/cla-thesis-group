@@ -5,6 +5,18 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import MenuBar from '@/app/components/MenuBar'
 import Sidebar from '@/app/components/Sidebar'
+import { 
+  Calendar, 
+  FileText, 
+  Users, 
+  Eye, 
+  Sparkles,
+  FolderOpen,
+  Clock,
+  Hash,
+  Plus,
+  Building2
+} from 'lucide-react'
 import './styles.css'
 
 interface CampusFile {
@@ -151,24 +163,33 @@ export default function QtimeHomePage() {
       <main className={`qtime-main ${sidebarOpen ? 'with-sidebar' : 'full-width'}`}>
         <div className="qtime-container">
           <div className="welcome-section">
-            <h1 className="page-title">Welcome to Qtime Scheduler</h1>
+            <h1 className="page-title">
+              <Calendar size={36} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '12px' }} />
+              Welcome to Qtime Scheduler
+            </h1>
             <p className="page-subtitle">Manage your schedules, campuses, and participants efficiently</p>
           </div>
 
           {loading ? (
-            <div className="loading-state">Loading your data...</div>
+            <div className="loading-state">
+              <div className="spinner"></div>
+              <p>Loading your data...</p>
+            </div>
           ) : (
             <>
               {/* Check if files exist */}
               {campusFiles.length === 0 && participantFiles.length === 0 ? (
                 <div className="empty-state">
-                  <div className="empty-icon">📁</div>
+                  <div className="empty-icon">
+                    <FolderOpen size={80} />
+                  </div>
                   <h2>No CSV Files Uploaded Yet</h2>
                   <p>Start by uploading your campus and participant CSV files</p>
                   <button 
                     className="primary-button"
                     onClick={() => router.push('/LandingPages/BeforeQtimeHomePage')}
                   >
+                    <Plus size={24} />
                     Upload CSV Files
                   </button>
                 </div>
@@ -177,24 +198,37 @@ export default function QtimeHomePage() {
                   {/* Campus Files Section */}
                   {campusFiles.length > 0 && (
                     <div className="file-section">
-                      <h2 className="section-title">Campus Capacity Files</h2>
+                      <h2 className="section-title">
+                        <Building2 size={24} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '8px' }} />
+                        Campus Capacity Files
+                      </h2>
                       <div className="file-cards">
                         {campusFiles.map((file) => (
                           <div key={file.upload_group_id} className="file-card">
                             <div className="file-card-header">
-                              <span className="file-icon">🎓</span>
-                              <span className="file-id">ID: {file.upload_group_id}</span>
+                              <div className="file-icon">
+                                <Building2 size={32} />
+                              </div>
+                              <span className="file-id">
+                                <Hash size={12} style={{ display: 'inline-block', verticalAlign: 'middle' }} />
+                                {file.upload_group_id}
+                              </span>
                             </div>
                             <h3 className="file-name">{file.school_name}</h3>
                             <p className="file-details">{file.file_name}</p>
-                            <p className="file-meta">{file.row_count} rooms</p>
+                            <p className="file-meta">
+                              <Building2 size={16} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '6px' }} />
+                              {file.row_count} rooms
+                            </p>
                             <p className="file-date">
+                              <Clock size={14} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '6px' }} />
                               {new Date(file.created_at).toLocaleDateString()}
                             </p>
                             <button 
                               className="view-button"
                               onClick={() => handleGenerateCampusUI(file.upload_group_id)}
                             >
+                              <Eye size={20} />
                               View Details
                             </button>
                           </div>
@@ -206,24 +240,37 @@ export default function QtimeHomePage() {
                   {/* Participant Files Section */}
                   {participantFiles.length > 0 && (
                     <div className="file-section">
-                      <h2 className="section-title">Participant Files</h2>
+                      <h2 className="section-title">
+                        <Users size={24} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '8px' }} />
+                        Participant Files
+                      </h2>
                       <div className="file-cards">
                         {participantFiles.map((file) => (
                           <div key={file.upload_group_id} className="file-card">
                             <div className="file-card-header">
-                              <span className="file-icon">👥</span>
-                              <span className="file-id">ID: {file.upload_group_id}</span>
+                              <div className="file-icon">
+                                <Users size={32} />
+                              </div>
+                              <span className="file-id">
+                                <Hash size={12} style={{ display: 'inline-block', verticalAlign: 'middle' }} />
+                                {file.upload_group_id}
+                              </span>
                             </div>
                             <h3 className="file-name">{file.batch_name}</h3>
                             <p className="file-details">{file.file_name}</p>
-                            <p className="file-meta">{file.row_count} participants</p>
+                            <p className="file-meta">
+                              <Users size={16} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '6px' }} />
+                              {file.row_count} participants
+                            </p>
                             <p className="file-date">
+                              <Clock size={14} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '6px' }} />
                               {new Date(file.created_at).toLocaleDateString()}
                             </p>
                             <button 
                               className="view-button"
                               onClick={() => handleGenerateParticipantUI(file.upload_group_id)}
                             >
+                              <Eye size={20} />
                               View Details
                             </button>
                           </div>
@@ -241,7 +288,8 @@ export default function QtimeHomePage() {
                     className="generate-schedule-button"
                     onClick={handleGenerateSchedule}
                   >
-                    🚀 Generate Schedule
+                    <Sparkles size={24} />
+                    Generate Schedule
                   </button>
                 </div>
               )}

@@ -1,20 +1,19 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { 
-  FaHome, 
-  FaUpload, 
-  FaGraduationCap, 
-  FaUsers, 
-  FaCalendarAlt, 
-  FaChevronDown, 
-  FaChevronRight, 
-  FaBuilding,
-  FaCalendarPlus,
-  FaEye,
-  FaClipboardList
-} from 'react-icons/fa'
+  Home,
+  Upload,
+  Building2,
+  Users,
+  Calendar,
+  ChevronDown,
+  ChevronRight,
+  CalendarPlus,
+  Eye,
+  ClipboardList
+} from 'lucide-react'
 import './Sidebar.css'
 
 interface SidebarProps {
@@ -26,13 +25,20 @@ export default function Sidebar({ isOpen }: SidebarProps) {
   const pathname = usePathname()
   const [scheduleMenuOpen, setScheduleMenuOpen] = useState(false)
 
+  // Auto-expand schedule menu if on a schedule-related page
+  useEffect(() => {
+    if (pathname.includes('/GenerateSchedule')) {
+      setScheduleMenuOpen(true)
+    }
+  }, [pathname])
+
   const menuItems = [
-    { icon: FaHome, label: 'Home', path: '/LandingPages/QtimeHomePage' },
-    { icon: FaUpload, label: 'Upload CSV', path: '/LandingPages/BeforeQtimeHomePage' },
-    { icon: FaGraduationCap, label: 'Campus Capacity', path: '/LandingPages/QtimeCampusCapacityPage' },
-    { icon: FaUsers, label: 'Participants', path: '/LandingPages/QtimeParticipantsPage' },
+    { icon: Home, label: 'Home', path: '/LandingPages/QtimeHomePage' },
+    { icon: Upload, label: 'Upload CSV', path: '/LandingPages/BeforeQtimeHomePage' },
+    { icon: Building2, label: 'Campus Capacity', path: '/LandingPages/QtimeCampusCapacityPage' },
+    { icon: Users, label: 'Participants', path: '/LandingPages/QtimeParticipantsPage' },
     { 
-      icon: FaCalendarAlt, 
+      icon: Calendar, 
       label: 'Schedule', 
       path: '/LandingPages/GenerateSchedule',
       hasSubmenu: true,
@@ -40,22 +46,23 @@ export default function Sidebar({ isOpen }: SidebarProps) {
         { 
           label: 'Generate Schedule', 
           path: '/LandingPages/GenerateSchedule',
-          icon: FaCalendarPlus
+          icon: CalendarPlus,
+          exact: true
         },
         { 
           label: 'View Schedules', 
           path: '/LandingPages/GenerateSchedule/ViewSchedule',
-          icon: FaEye
+          icon: Eye
         },
         { 
           label: 'Participant Schedules', 
           path: '/LandingPages/GenerateSchedule/ParticipantSchedules',
-          icon: FaClipboardList
+          icon: ClipboardList
         },
         { 
           label: 'Campus Schedules', 
           path: '/LandingPages/GenerateSchedule/CampusSchedules',
-          icon: FaBuilding
+          icon: Building2
         },
       ]
     },
@@ -69,6 +76,13 @@ export default function Sidebar({ isOpen }: SidebarProps) {
     setScheduleMenuOpen(!scheduleMenuOpen)
   }
 
+  const isActiveSubmenu = (subItem: any) => {
+    if (subItem.exact) {
+      return pathname === subItem.path
+    }
+    return pathname.startsWith(subItem.path) && pathname !== '/LandingPages/GenerateSchedule'
+  }
+
   return (
     <aside className={`sidebar ${isOpen ? 'open' : 'closed'}`}>
       <nav className="sidebar-nav">
@@ -80,12 +94,12 @@ export default function Sidebar({ isOpen }: SidebarProps) {
                   onClick={toggleScheduleMenu}
                   className={`sidebar-item ${scheduleMenuOpen ? 'active' : ''}`}
                 >
-                  <item.icon className="sidebar-icon" />
+                  <item.icon className="sidebar-icon" size={20} />
                   <span className="sidebar-label">{item.label}</span>
                   {scheduleMenuOpen ? (
-                    <FaChevronDown className="submenu-icon" />
+                    <ChevronDown className="submenu-icon" size={16} />
                   ) : (
-                    <FaChevronRight className="submenu-icon" />
+                    <ChevronRight className="submenu-icon" size={16} />
                   )}
                 </button>
                 {scheduleMenuOpen && (
@@ -94,9 +108,9 @@ export default function Sidebar({ isOpen }: SidebarProps) {
                       <button
                         key={subIndex}
                         onClick={() => handleNavigation(subItem.path)}
-                        className={`submenu-item ${pathname.startsWith(subItem.path) ? 'active' : ''}`}
+                        className={`submenu-item ${isActiveSubmenu(subItem) ? 'active' : ''}`}
                       >
-                        {subItem.icon && <subItem.icon className="submenu-item-icon" />}
+                        {subItem.icon && <subItem.icon className="submenu-item-icon" size={16} />}
                         <span>{subItem.label}</span>
                       </button>
                     ))}
@@ -108,7 +122,7 @@ export default function Sidebar({ isOpen }: SidebarProps) {
                 onClick={() => handleNavigation(item.path)}
                 className={`sidebar-item ${pathname === item.path ? 'active' : ''}`}
               >
-                <item.icon className="sidebar-icon" />
+                <item.icon className="sidebar-icon" size={20} />
                 <span className="sidebar-label">{item.label}</span>
               </button>
             )}
