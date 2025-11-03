@@ -311,19 +311,35 @@
   box-shadow: 0 4px 8px rgba(26, 54, 93, 0.3);
 }
 
-.empty-results {
-  text-align: center;
-  padding: 60px 40px;
-  color: var(--text-light);
-  background: var(--bg-gray-50);
-  border-radius: 14px;
-  border: 2px dashed var(--border-color);
+/* Delete Batch Button */
+.delete-batch-btn {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+  color: var(--danger-red);
+  border: 2px solid #fecaca;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  z-index: 10;
 }
 
-.empty-results p {
-  font-size: 16px;
-  font-weight: 500;
-  margin: 0;
+.delete-batch-btn:hover {
+  background: var(--danger-red);
+  color: white;
+  border-color: var(--danger-red);
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+}
+
+.delete-batch-btn:active {
+  transform: scale(0.95);
 }
 
 /* ==================== Stats Grid ==================== */
@@ -940,4 +956,129 @@
   .header-large-icon {
     font-size: 36px;
   }
+}
+
+/* ==================== Delete Modal Styles ==================== */
+.modal-content.delete-modal {
+  max-width: 500px;
+}
+
+.modal-header.delete-header {
+  background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+  border-bottom-color: #fecaca;
+}
+
+.delete-warning {
+  text-align: center;
+  padding: 20px 0;
+}
+
+.warning-icon-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.warning-icon {
+  color: #ef4444;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.05);
+  }
+}
+
+.delete-warning h4 {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-dark);
+  margin: 0 0 16px 0;
+}
+
+.delete-warning p {
+  font-size: 15px;
+  color: var(--text-medium);
+  margin: 12px 0;
+  line-height: 1.6;
+}
+
+.delete-batch-info {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  padding: 16px 20px;
+  border-radius: 10px;
+  margin: 16px 0;
+  border: 2px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.delete-batch-info strong {
+  font-size: 18px;
+  color: var(--primary-dark);
+  font-weight: 700;
+}
+
+.delete-batch-info span {
+  font-size: 14px;
+  color: var(--text-light);
+  font-weight: 600;
+}
+
+.warning-text {
+  background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+  padding: 14px 18px;
+  border-radius: 10px;
+  border-left: 4px solid var(--danger-red);
+  margin: 16px 0;
+  font-size: 14px !important;
+  color: #991b1b !important;
+  font-weight: 600;
+}
+
+.warning-text strong {
+  color: var(--danger-red);
+  text-transform: uppercase;
+  font-weight: 800;
+}
+
+.modal-btn-delete {
+  flex: 1;
+  padding: 14px 24px;
+  border: none;
+  border-radius: 10px;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: linear-gradient(135deg, var(--danger-red) 0%, #dc2626 100%);
+  color: white;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}
+
+.modal-btn-delete:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(239, 68, 68, 0.4);
+}
+
+.modal-btn-delete:active {
+  transform: scale(0.98);
+}
+
+.modal-btn-delete:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
 }
