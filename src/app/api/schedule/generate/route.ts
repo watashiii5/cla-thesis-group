@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 
+// ✅ Add backend URL configuration
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000'
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
@@ -10,7 +13,7 @@ export async function POST(request: NextRequest) {
       eventName,
       eventType,
       scheduleDate,
-      startDate,  // ✅ ADD THIS
+      startDate,  // ✅ KEEP THIS
       startTime,
       endDate,
       endTime,
@@ -25,13 +28,14 @@ export async function POST(request: NextRequest) {
       eventName,
       eventType,
       scheduleDate,
-      startDate,  // ✅ LOG THIS
+      startDate,  // ✅ KEEP LOGGING THIS
       endDate,
       durationPerBatch
     })
 
-    // ✅ Forward ALL fields to Python backend
-    const response = await fetch('http://127.0.0.1:8000/api/schedule/generate', {
+    // ✅ Use environment variable for backend URL (for production)
+    // ✅ Keep your exact field mapping - it's correct!
+    const response = await fetch(`${BACKEND_URL}/api/schedule/generate`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -42,7 +46,7 @@ export async function POST(request: NextRequest) {
         event_name: eventName,
         event_type: eventType,
         schedule_date: scheduleDate,
-        start_date: startDate,  // ✅ CRITICAL: Pass this
+        start_date: startDate,  // ✅ CRITICAL: Keep this
         start_time: startTime,
         end_date: endDate,
         end_time: endTime,
@@ -67,7 +71,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       { 
         error: error.message || 'Failed to generate schedule',
-        detail: error.toString()
+        detail: error.toString(),
+        backend_url: BACKEND_URL  // ✅ Add this for debugging
       },
       { status: 500 }
     )

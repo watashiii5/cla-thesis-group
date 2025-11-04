@@ -27,9 +27,9 @@ except ImportError as e:
 
 # Initialize FastAPI app
 app = FastAPI(
-    title="CLA Thesis Backend API",
-    description="Backend API for CLA Thesis Group Scheduling System",
-    version="0.1.0",
+    title="CLA Scheduler API",
+    description="Backend API for CLA Thesis Scheduling System",
+    version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc"
 )
@@ -38,8 +38,10 @@ app = FastAPI(
 origins = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "http://localhost:5173",           # Vite dev server
     "https://*.vercel.app",  # Allow all Vercel preview deployments
     "https://cla-thesis-group.vercel.app",  # Your production domain (update this)
+    os.environ.get("FRONTEND_URL", ""), # Custom domain from env
 ]
 
 app.add_middleware(
@@ -52,7 +54,7 @@ app.add_middleware(
 
 # Include routers
 from api.schedule import routes as schedule_routes
-app.include_router(schedule_routes.router)
+app.include_router(schedule_routes.router, prefix="/api/schedule", tags=["schedule"])
 
 # Health check endpoint
 @app.get("/health")
