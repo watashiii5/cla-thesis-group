@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, Suspense } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import MenuBar from '@/app/components/MenuBar'
 import Sidebar from '@/app/components/Sidebar'
@@ -872,9 +872,15 @@ function CampusSchedulesContent() {
   )
 }
 
+// Loading fallback
+function LoadingFallback() {
+  return <div>Loading campus schedules...</div>
+}
+
+// Main export wrapped in Suspense
 export default function CampusSchedulesPage() {
   return (
-    <Suspense fallback={<div>Loading...</div>}>
+    <Suspense fallback={<LoadingFallback />}>
       <CampusSchedulesContent />
     </Suspense>
   )

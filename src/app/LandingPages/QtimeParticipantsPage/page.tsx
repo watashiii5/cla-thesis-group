@@ -1,10 +1,10 @@
-'use client'
+'use client';
 
-import { useEffect, useState, Suspense } from 'react'
-import { useSearchParams, useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabaseClient'
-import MenuBar from '@/app/components/MenuBar'
-import Sidebar from '@/app/components/Sidebar'
+import { Suspense, useEffect, useState } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
+import { supabase } from '@/lib/supabaseClient';
+import MenuBar from '@/app/components/MenuBar';
+import Sidebar from '@/app/components/Sidebar';
 import { 
   Users, 
   ArrowLeft, 
@@ -22,8 +22,8 @@ import {
   Mail,
   MapPin,
   AlertTriangle
-} from 'lucide-react'
-import './styles.css'
+} from 'lucide-react';
+import './styles.css';
 
 interface ParticipantFile {
   upload_group_id: number
@@ -134,11 +134,12 @@ async function deleteInBatches(table: string, ids: number[], batchSize: number =
   return deletedCount
 }
 
-export default function ParticipantsPage() {
+function QtimeParticipantsPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const groupIdFromUrl = searchParams.get('id')
-  
+  const campus = searchParams.get('campus') || '';
+
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [participantFiles, setParticipantFiles] = useState<ParticipantFile[]>([])
   const [selectedBatch, setSelectedBatch] = useState<number | null>(null)
@@ -1139,5 +1140,14 @@ export default function ParticipantsPage() {
         </div>
       )}
     </div>
-  )
+  );
+}
+
+// ✅ Wrap with Suspense and export
+export default function QtimeParticipantsPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <QtimeParticipantsPageContent />
+    </Suspense>
+  );
 }

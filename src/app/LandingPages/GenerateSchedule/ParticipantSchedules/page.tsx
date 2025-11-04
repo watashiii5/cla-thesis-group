@@ -1,10 +1,11 @@
 'use client'
-import styles from './ParticipantSchedules.module.css'
-import { useEffect, useState, Suspense } from 'react'
+
+import { Suspense, useEffect, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import MenuBar from '@/app/components/MenuBar'
 import Sidebar from '@/app/components/Sidebar'
 import { supabase } from '@/lib/supabaseClient'
+import styles from './ParticipantSchedules.module.css'
 
 interface ScheduleRow {
   id: number
@@ -630,24 +631,15 @@ function ParticipantSchedulesContent() {
   )
 }
 
+// Loading fallback
+function LoadingFallback() {
+  return <div>Loading participant schedules...</div>
+}
+
+// Main export wrapped in Suspense
 export default function ParticipantSchedulesPage() {
   return (
-    <Suspense fallback={
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ 
-            width: '60px', 
-            height: '60px', 
-            border: '6px solid #e2e8f0',
-            borderTopColor: '#667eea',
-            borderRadius: '50%',
-            animation: 'spin 1s linear infinite',
-            margin: '0 auto 20px'
-          }}></div>
-          <p>Loading...</p>
-        </div>
-      </div>
-    }>
+    <Suspense fallback={<LoadingFallback />}>
       <ParticipantSchedulesContent />
     </Suspense>
   )
