@@ -1,41 +1,66 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional, Dict
-import os
 from pathlib import Path
 from dotenv import load_dotenv
 from supabase import create_client, Client
 from .scheduler import PriorityScheduler
-import logging
 from datetime import datetime
+import os
+import logging
 import json
 
+# ✅ FIXED: Load .env only if it exists (for local development)
+env_path = Path(__file__).parent.parent.parent / '.env'
+if env_path.exists():
+    load_dotenv(env_path)
+    print(f"✅ Loaded .env from: {env_path}")
+else:
+    print("⚠️  No .env file found, using environment variables from system")
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Load env files
-env_path = Path(__file__).parent.parent.parent / ".env"
-load_dotenv(env_path)
-root_env_path = Path(__file__).parent.parent.parent.parent / ".env.local"
-load_dotenv(root_env_path)
+router = APIRouter()
 
-router = APIRouter(prefix="/api/schedule", tags=["schedule"])
+# ✅ FIXED: Get environment variables with proper fallbacks
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+SERVICE_ROLE_KEY = os.environ.get("SERVICE_ROLE_KEY")
+SUPABASE_ANON_KEY = os.environ.get("SUPABASE_KEY") or os.environ.get("SUPABASE_ANON_KEY")
 
-# Read keys from backend .env (server-only)
-SUPABASE_URL = os.getenv("SUPABASE_URL") or os.getenv("NEXT_PUBLIC_SUPABASE_URL")
-SERVICE_ROLE = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-ANON = os.getenv("SUPABASE_ANON_KEY") or os.getenv("NEXT_PUBLIC_SUPABASE_ANON_KEY")
+# ✅ FIXED: Better error message with what we found
+logger.info(f"🔍 Checking environment variables...")
+logger.info(f"   SUPABASE_URL: {'✅ Found' if SUPABASE_URL else '❌ Missing'}")
+logger.info(f"   SERVICE_ROLE_KEY: {'✅ Found' if SERVICE_ROLE_KEY else '❌ Missing'}")
+logger.info(f"   SUPABASE_ANON_KEY: {'✅ Found' if SUPABASE_ANON_KEY else '❌ Missing'}")
 
-if not SUPABASE_URL:
-    raise RuntimeError("❌ SUPABASE_URL not configured in .env")
+# ✅ Use SERVICE_ROLE_KEY if available, otherwise ANON_KEY
+SUPABASE_KEY = SERVICE_ROLE_KEY or SUPABASE_ANON_KEY
 
-SUPABASE_KEY = SERVICE_ROLE or ANON
-if not SUPABASE_KEY:
-    raise RuntimeError("❌ SUPABASE_SERVICE_ROLE_KEY or SUPABASE_ANON_KEY required in .env")
+if not SUPABASE_URL or not SUPABASE_KEY:
+    error_msg = f"""
+    ❌ Missing required environment variables:
+    - SUPABASE_URL: {'✅' if SUPABASE_URL else '❌'}
+    - SERVICE_ROLE_KEY or SUPABASE_KEY: {'✅' if SUPABASE_KEY else '❌'}
+    
+    Please set these in Render dashboard:
+    1. Go to your service → Environment tab
+    2. Add: SUPABASE_URL, SERVICE_ROLE_KEY, SUPABASE_KEY
+    """
+    logger.error(error_msg)
+    raise RuntimeError(error_msg)
 
 logger.info(f"✅ Supabase URL: {SUPABASE_URL}")
-logger.info(f"✅ Using key type: {'SERVICE_ROLE' if SERVICE_ROLE else 'ANON'}")
+logger.info(f"✅ Using key type: {'SERVICE_ROLE' if SERVICE_ROLE_KEY else 'ANON'}")
 
-sb: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+# Initialize Supabase client
+try:
+    supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+    logger.info("✅ Supabase client initialized successfully")
+except Exception as e:
+    logger.error(f"❌ Failed to initialize Supabase client: {e}")
+    raise
 
 # ==================== Models ====================
 
