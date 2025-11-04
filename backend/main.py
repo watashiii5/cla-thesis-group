@@ -40,7 +40,7 @@ origins = [
     "http://127.0.0.1:3000",
     "http://localhost:5173",           # Vite dev server
     "https://*.vercel.app",  # Allow all Vercel preview deployments
-    "https://cla-thesis-group.vercel.app",  # Your production domain (update this)
+    "https://cla-thesis-group-git-main-jermainepasamba-4602s-projects.vercel.app",  # Your production domain (update this)
     os.environ.get("FRONTEND_URL", ""), # Custom domain from env
 ]
 
