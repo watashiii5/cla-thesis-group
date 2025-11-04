@@ -1,0 +1,654 @@
+'use client'
+import styles from './ParticipantSchedules.module.css'
+import { useEffect, useState, Suspense } from 'react'
+import { useSearchParams, useRouter } from 'next/navigation'
+import MenuBar from '@/app/components/MenuBar'
+import Sidebar from '@/app/components/Sidebar'
+import { supabase } from '@/lib/supabaseClient'
+
+interface ScheduleRow {
+  id: number
+  participant_number: string
+  name: string
+  email: string
+  is_pwd: boolean
+  batch_name: string
+  room: string
+  time_slot: string
+  campus: string
+  building: string
+  is_first_floor: boolean
+  seat_no: number
+  batch_date: string | null
+  start_time: string | null
+  end_time: string | null
+}
+
+// Helper function to fetch ALL rows (bypass 1000 limit)
+async function fetchAllRows(table: string, filters: any = {}) {
+  const PAGE_SIZE = 1000
+  let allData: any[] = []
+  let page = 0
+  let hasMore = true
+
+  console.log(`🔄 Starting pagination for table: ${table}, filters:`, filters)
+
+  while (hasMore) {
+    const from = page * PAGE_SIZE
+    const to = from + PAGE_SIZE - 1
+
+    console.log(`   📄 Fetching page ${page + 1}: rows ${from}-${to}`)
+
+    let query = supabase
+      .from(table)
+      .select('*')
+      .range(from, to)
+      .order('id', { ascending: true })
+
+    for (const [key, value] of Object.entries(filters)) {
+      query = query.eq(key, value)
+    }
+
+    const { data, error } = await query
+
+    if (error) {
+      console.error(`❌ Error on page ${page + 1}:`, error)
+      throw error
+    }
+    
+    if (!data || data.length === 0) {
+      console.log(`   ✅ No more data on page ${page + 1}`)
+      hasMore = false
+      break
+    }
+
+    console.log(`   ✅ Fetched ${data.length} rows on page ${page + 1}`)
+    allData = [...allData, ...data]
+    
+    if (data.length < PAGE_SIZE) {
+      console.log(`   ✅ Last page reached (${data.length} < ${PAGE_SIZE})`)
+      hasMore = false
+    }
+    
+    page++
+  }
+
+  console.log(`✅ Total rows fetched from ${table}: ${allData.length}`)
+  return allData
+}
+
+// ✅ Format full date & time
+function formatDateTime(dateString: string | null, timeString: string): string {
+  if (!dateString || !timeString) return 'N/A'
+  try {
+    const date = new Date(dateString)
+    const dateFormatted = date.toLocaleDateString('en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    })
+    
+    // Format time to 12-hour with AM/PM
+    const [hours, minutes] = timeString.split(':').map(Number)
+    const period = hours >= 12 ? 'PM' : 'AM'
+    const hours12 = hours % 12 || 12
+    const timeFormatted = `${hours12}:${minutes.toString().padStart(2, '0')} ${period}`
+    
+    return `${dateFormatted}, ${timeFormatted}`
+  } catch {
+    return `${dateString} ${timeString}`
+  }
+}
+
+// ✅ Parse time slot with fallback
+function parseTimeSlot(timeSlot: string, startTime?: string | null, endTime?: string | null): { start: string; end: string } {
+  // Prefer individual start/end times from database
+  if (startTime && endTime) {
+    return { start: startTime, end: endTime }
+  }
+  
+  // Fallback to parsing time_slot string
+  try {
+    const [start, end] = timeSlot.split(' - ').map(t => t.trim())
+    return { start: start || 'N/A', end: end || 'N/A' }
+  } catch {
+    return { start: timeSlot, end: timeSlot }
+  }
+}
+
+// ✅ Helper function to determine floor level from room number
+function getFloorLevel(room: string): { level: number; label: string } {
+  if (!room || room === 'N/A') {
+    return { level: 0, label: 'Unknown' }
+  }
+
+  const roomLower = String(room).toLowerCase().trim()
+  const digits = roomLower.replace(/\D/g, '')
+
+  if (digits.length === 0) {
+    return { level: 0, label: 'Unknown' }
+  }
+
+  const firstDigit = parseInt(digits[0])
+  
+  if (firstDigit === 1) return { level: 1, label: '1st Floor' }
+  if (firstDigit === 2) return { level: 2, label: '2nd Floor' }
+  if (firstDigit === 3) return { level: 3, label: '3rd Floor' }
+  if (firstDigit === 4) return { level: 4, label: '4th Floor' }
+  if (firstDigit === 5) return { level: 5, label: '5th Floor' }
+  if (firstDigit === 6) return { level: 6, label: '6th Floor' }
+  
+  return { level: firstDigit, label: `${firstDigit}${firstDigit === 1 ? 'st' : firstDigit === 2 ? 'nd' : firstDigit === 3 ? 'rd' : 'th'} Floor` }
+}
+
+// ✅ Helper function to get CSS class for floor badge
+function getFloorBadgeClass(styles: any, room: string): string {
+  const { level } = getFloorLevel(room)
+  
+  if (level === 1) return styles.firstFloorBadge
+  if (level === 2) return styles.secondFloorBadge
+  if (level === 3) return styles.thirdFloorBadge
+  
+  return styles.upperFloorBadge
+}
+
+// ✅ NEW: SVG Component for Wheelchair Icon (PWD)
+function WheelchairIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      className={className}
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path d="M10 2C5.58 2 2 5.58 2 10s3.58 8 8 8 8-3.58 8-8-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6-2.69 6-6 6zm3.5-9c.83 0 1.5-.67 1.5-1.5S14.33 4 13.5 4 12 4.67 12 5.5s.67 1.5 1.5 1.5z"/>
+      <path d="M10 18c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm0 6c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z"/>
+    </svg>
+  )
+}
+
+// ✅ NEW: SVG Component for Building Icon (Campus)
+function BuildingIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      className={className}
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path d="M19 13h-6V3h6v10zm-6-10h-6v6H7v4H3v6h18v-6h-4v-4h-6V3z"/>
+    </svg>
+  )
+}
+
+// ✅ NEW: SVG Component for Door/Room Icon
+function DoorIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      className={className}
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14h-4v-2h4v2zm0-4h-4v-2h4v2zm0-4h-4V7h4v2z"/>
+    </svg>
+  )
+}
+
+// ✅ NEW: SVG Component for Floor Icon
+function FloorIcon({ level }: { level: number }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      xmlns="http://www.w3.org/2000/svg"
+      style={{ width: '16px', height: '16px' }}
+    >
+      {level === 1 && (
+        <path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z"/>
+      )}
+      {level === 2 && (
+        <>
+          <path d="M12 4L4 8v6h16V8l-8-4z" opacity="0.3"/>
+          <path d="M12 10L4 14v6h16v-6l-8-4z"/>
+        </>
+      )}
+      {level === 3 && (
+        <>
+          <path d="M12 2L4 5v4h16V5l-8-3z" opacity="0.3"/>
+          <path d="M12 8L4 11v4h16v-4l-8-3z" opacity="0.6"/>
+          <path d="M12 14L4 17v4h16v-4l-8-3z"/>
+        </>
+      )}
+      {level > 3 && (
+        <>
+          <path d="M12 2L4 5v3h16V5l-8-3z" opacity="0.2"/>
+          <path d="M12 7L4 10v3h16v-3l-8-3z" opacity="0.5"/>
+          <path d="M12 12L4 15v3h16v-3l-8-3z" opacity="0.8"/>
+          <path d="M12 17L4 20v2h16v-2l-8-3z"/>
+        </>
+      )}
+    </svg>
+  )
+}
+
+function ParticipantSchedulesContent() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const scheduleId = searchParams.get('scheduleId')
+
+  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [scheduleData, setScheduleData] = useState<ScheduleRow[]>([])
+  const [filteredData, setFilteredData] = useState<ScheduleRow[]>([])
+  const [loading, setLoading] = useState(true)
+  const [sendingEmails, setSendingEmails] = useState(false)
+  const [emailMessage, setEmailMessage] = useState('')
+
+  useEffect(() => {
+    if (!scheduleId) {
+      setLoading(false)
+      return
+    }
+    fetchScheduleData()
+  }, [scheduleId])
+
+  const fetchScheduleData = async () => {
+    if (!scheduleId) return
+
+    setLoading(true)
+    try {
+      console.log(`📥 Fetching schedule data for ID: ${scheduleId}`)
+
+      const assignments = await fetchAllRows('schedule_assignments', {
+        schedule_summary_id: scheduleId
+      })
+
+      console.log(`✅ Loaded ${assignments.length} assignments`)
+
+      if (assignments.length === 0) {
+        setScheduleData([])
+        setFilteredData([])
+        setLoading(false)
+        return
+      }
+
+      const participantIds = [...new Set(assignments.map((a: any) => a.participant_id))]
+      
+      console.log(`📥 Fetching ${participantIds.length} participants...`)
+      let participants: any[] = []
+      
+      const CHUNK_SIZE = 1000
+      for (let i = 0; i < participantIds.length; i += CHUNK_SIZE) {
+        const chunk = participantIds.slice(i, i + CHUNK_SIZE)
+        const { data, error } = await supabase
+          .from('participants')
+          .select('*')
+          .in('id', chunk)
+        
+        if (error) throw error
+        if (data) participants = [...participants, ...data]
+      }
+
+      console.log(`✅ Fetched ${participants.length} participants`)
+
+      const batches = await fetchAllRows('schedule_batches', {
+        schedule_summary_id: scheduleId
+      })
+
+      console.log(`✅ Fetched ${batches.length} batches`)
+
+      const participantMap = new Map(participants.map(p => [p.id, p]))
+      const batchMap = new Map(batches.map(b => [b.id, b]))
+
+      // ✅ Include new fields from assignments and batches
+      const combinedData: ScheduleRow[] = assignments.map((assignment: any) => {
+        const participant = participantMap.get(assignment.participant_id)
+        const batch = batchMap.get(assignment.schedule_batch_id)
+
+        return {
+          id: assignment.id,
+          participant_number: participant?.participant_number || 'N/A',
+          name: participant?.name || 'N/A',
+          email: participant?.email || 'N/A',
+          is_pwd: assignment.is_pwd || false,
+          batch_name: batch?.batch_name || 'N/A',
+          room: assignment.room || batch?.room || 'N/A',
+          time_slot: batch?.time_slot || 'N/A',
+          campus: assignment.campus || batch?.campus || 'Main Campus',
+          building: assignment.building || batch?.building || 'N/A',
+          is_first_floor: assignment.is_first_floor ?? batch?.is_first_floor ?? false,
+          seat_no: assignment.seat_no || 0,
+          batch_date: assignment.batch_date || batch?.batch_date || null,
+          start_time: assignment.start_time || batch?.start_time || null,
+          end_time: assignment.end_time || batch?.end_time || null
+        }
+      })
+
+      console.log(`✅ Combined ${combinedData.length} schedule entries`)
+
+      setScheduleData(combinedData)
+      setFilteredData(combinedData)
+    } catch (error) {
+      console.error('❌ Error fetching schedule data:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleSendEmails() {
+    if (!scheduleId) {
+      setEmailMessage('❌ No schedule ID found')
+      return
+    }
+
+    setSendingEmails(true)
+    setEmailMessage('📧 Sending emails to all participants...')
+
+    try {
+      console.log(`\n${'='.repeat(80)}`)
+      console.log(`🚀 Sending emails for schedule ID: ${scheduleId}`)
+      console.log(`${'='.repeat(80)}`)
+
+      const res = await fetch('/api/schedule/send-batch-emails', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ schedule_id: Number(scheduleId) }),
+      })
+
+      const data = await res.json()
+
+      console.log(`\n📥 API Response:`, data)
+
+      if (res.ok) {
+        setEmailMessage(
+          `✅ ${data.message}${
+            data.failedList?.length > 0
+              ? ` | Failed: ${data.failedList.map((f: any) => f.email).join(', ')}`
+              : ''
+          }`
+        )
+      } else {
+        setEmailMessage(`❌ ${data.error || 'Unknown error'}`)
+      }
+    } catch (e: any) {
+      console.error('❌ Error:', e)
+      setEmailMessage(`❌ ${e.message}`)
+    } finally {
+      setSendingEmails(false)
+    }
+  }
+
+  // ✅ Include all new fields in CSV export
+  async function handleExportCSV() {
+    if (scheduleData.length === 0) {
+      alert('No data to export')
+      return
+    }
+
+    const headers = [
+      'Participant #', 
+      'Name', 
+      'Email', 
+      'PWD', 
+      'Batch', 
+      'Starting Date & Time', 
+      'Ending Date & Time',
+      'Campus',
+      'Building',
+      'Floor',
+      'Room', 
+      'Seat No'
+    ]
+    
+    const rows = scheduleData.map(row => {
+      const { start, end } = parseTimeSlot(row.time_slot, row.start_time, row.end_time)
+      const floor = getFloorLevel(row.room)
+      return [
+        row.participant_number,
+        row.name,
+        row.email,
+        row.is_pwd ? 'Yes' : 'No',
+        row.batch_name,
+        formatDateTime(row.batch_date, start),
+        formatDateTime(row.batch_date, end),
+        row.campus,
+        row.building,
+        floor.label,
+        row.room,
+        row.seat_no.toString()
+      ]
+    })
+
+    const csv = [headers, ...rows]
+      .map(row => row.map(cell => `"${cell}"`).join(','))
+      .join('\n')
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    link.href = URL.createObjectURL(blob)
+    link.download = `schedule_${scheduleId}_detailed.csv`
+    link.click()
+    URL.revokeObjectURL(link.href)
+  }
+
+  if (loading) {
+    return (
+      <div className={styles.scheduleLayout}>
+        <MenuBar onToggleSidebar={() => setSidebarOpen(!sidebarOpen)} showSidebarToggle={true} showAccountIcon={true} />
+        <Sidebar isOpen={sidebarOpen} />
+        <main className={`${styles.scheduleMain} ${!sidebarOpen ? styles.fullWidth : ''}`}>
+          <div className={styles.loadingState}>
+            <div className={styles.spinner}></div>
+            <p>Loading schedule data...</p>
+          </div>
+        </main>
+      </div>
+    )
+  }
+
+  return (
+    <div className={styles.scheduleLayout}>
+      <MenuBar onToggleSidebar={() => setSidebarOpen(!sidebarOpen)} showSidebarToggle={true} showAccountIcon={true} />
+      <Sidebar isOpen={sidebarOpen} />
+      
+      <main className={`${styles.scheduleMain} ${!sidebarOpen ? styles.fullWidth : ''}`}>
+        <div className={styles.scheduleContainer}>
+          <div className={styles.scheduleHeader}>
+            <button className={styles.backButton} onClick={() => router.back()}>
+              <span className={styles.iconBack}>←</span>
+              Back
+            </button>
+            <div className={styles.headerTitleSection}>
+              <div className={styles.headerIconWrapper}>
+                <svg className={styles.headerLargeIcon} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" fill="currentColor"/>
+                </svg>
+              </div>
+              <div className={styles.headerText}>
+                <h1 className={styles.scheduleTitle}>Participant Schedules</h1>
+                <p className={styles.scheduleSubtitle}>{scheduleData.length} participants scheduled</p>
+              </div>
+            </div>
+            <div className={styles.headerActions}>
+              <button
+                onClick={handleSendEmails}
+                disabled={sendingEmails || scheduleData.length === 0}
+                className={styles.btnPrimary}
+              >
+                <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
+                  <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
+                </svg>
+                {sendingEmails ? 'Sending...' : 'Send Emails'}
+              </button>
+              <button
+                onClick={handleExportCSV}
+                disabled={scheduleData.length === 0}
+                className={styles.btnSecondary}
+              >
+                <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
+                  <path d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
+                </svg>
+                Export CSV
+              </button>
+            </div>
+          </div>
+
+          {emailMessage && (
+            <div className={`${styles.message} ${emailMessage.includes('✅') ? styles.success : styles.error}`}>
+              {emailMessage}
+            </div>
+          )}
+
+          <div className={styles.tableSection}>
+            {scheduleData.length === 0 ? (
+              <div className={styles.emptyState}>
+                <div className={styles.emptyIcon}>
+                  <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M19 3H4.99C3.88 3 3 3.9 3 5L2.99 19c0 1.1.88 2 1.99 2H19c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 12h-4c0 1.66-1.35 3-3 3s-3-1.34-3-3H4.99V5H19v10z"/>
+                  </svg>
+                </div>
+                <h2>No schedule data found</h2>
+                <p>The schedule hasn't been generated yet or no participants were scheduled.</p>
+                <button className={styles.btnPrimary} onClick={() => router.push('/LandingPages/GenerateSchedule')}>
+                  <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
+                    <path d="M19 4H5C3.89543 4 3 4.89543 3 6V20C3 21.1046 3.89543 22 5 22H19C20.1046 22 21 21.1046 21 20V6C21 4.89543 20.1046 4 19 4Z" stroke="currentColor" strokeWidth="2"/>
+                    <path d="M16 2V6M8 2V6M3 10H21" stroke="currentColor" strokeWidth="2"/>
+                  </svg>
+                  Generate Schedule
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className={styles.statsGrid}>
+                  <div className={`${styles.statCard} ${styles.info}`}>
+                    <div className={styles.statIcon}>
+                      <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
+                      </svg>
+                    </div>
+                    <div className={styles.statContent}>
+                      <p className={styles.statLabel}>Total Participants</p>
+                      <h3 className={styles.statValue}>{scheduleData.length}</h3>
+                    </div>
+                  </div>
+                  <div className={`${styles.statCard} ${styles.success}`}>
+                    <div className={styles.statIcon}>
+                      <WheelchairIcon className={styles.wheelchairIcon} />
+                    </div>
+                    <div className={styles.statContent}>
+                      <p className={styles.statLabel}>PWD Participants</p>
+                      <h3 className={styles.statValue}>{scheduleData.filter(r => r.is_pwd).length}</h3>
+                    </div>
+                  </div>
+                  <div className={`${styles.statCard} ${styles.warning}`}>
+                    <div className={styles.statIcon}>
+                      <BuildingIcon className={styles.buildingIcon} />
+                    </div>
+                    <div className={styles.statContent}>
+                      <p className={styles.statLabel}>Unique Rooms</p>
+                      <h3 className={styles.statValue}>{new Set(scheduleData.map(r => r.room)).size}</h3>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ✅ Updated table with SVG icons */}
+                <div className={styles.tableScrollWrapper}>
+                  <div className={styles.tableContainer}>
+                    <table className={styles.participantsTable}>
+                      <thead>
+                        <tr>
+                          <th className={styles.stickyCol}>Participant #</th>
+                          <th className={styles.stickyCol2}>Name</th>
+                          <th>Email</th>
+                          <th>PWD</th>
+                          <th>Batch</th>
+                          <th>Starting Date & Time</th>
+                          <th>Ending Date & Time</th>
+                          <th>Campus</th>
+                          <th>Building</th>
+                          <th>Floor</th>
+                          <th>Room</th>
+                          <th>Seat</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {scheduleData.map((row, idx) => {
+                          const { start, end } = parseTimeSlot(row.time_slot, row.start_time, row.end_time)
+                          const floor = getFloorLevel(row.room)
+                          return (
+                            <tr key={row.id || idx}>
+                              <td className={`${styles.fontSemibold} ${styles.stickyCol}`}>{row.participant_number}</td>
+                              <td className={styles.stickyCol2}>{row.name}</td>
+                              <td className={styles.emailCell}>{row.email}</td>
+                              <td>
+                                <span className={`${styles.pwdBadge} ${row.is_pwd ? styles.yes : styles.no}`}>
+                                  {row.is_pwd && (
+                                    <WheelchairIcon className={styles.badgeIcon} />
+                                  )}
+                                  <span>{row.is_pwd ? 'Yes' : 'No'}</span>
+                                </span>
+                              </td>
+                              <td>
+                                <span className={styles.batchBadge}>{row.batch_name}</span>
+                              </td>
+                              <td className={styles.dateTimeCell}>
+                                {formatDateTime(row.batch_date, start)}
+                              </td>
+                              <td className={styles.dateTimeCell}>
+                                {formatDateTime(row.batch_date, end)}
+                              </td>
+                              <td className={styles.locationCell}>{row.campus}</td>
+                              <td className={styles.locationCell}>{row.building}</td>
+                              <td className={styles.floorCell}>
+                                {(() => {
+                                  const badgeClass = getFloorBadgeClass(styles, row.room)
+                                  
+                                  return (
+                                    <span className={badgeClass}>
+                                      <FloorIcon level={floor.level} />
+                                      {floor.label}
+                                    </span>
+                                  )
+                                })()}
+                              </td>
+                              <td className={styles.roomCell}>{row.room}</td>
+                              <td className={styles.seatCell}>{row.seat_no}</td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </main>
+    </div>
+  )
+}
+
+export default function ParticipantSchedulesPage() {
+  return (
+    <Suspense fallback={
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ 
+            width: '60px', 
+            height: '60px', 
+            border: '6px solid #e2e8f0',
+            borderTopColor: '#667eea',
+            borderRadius: '50%',
+            animation: 'spin 1s linear infinite',
+            margin: '0 auto 20px'
+          }}></div>
+          <p>Loading...</p>
+        </div>
+      </div>
+    }>
+      <ParticipantSchedulesContent />
+    </Suspense>
+  )
+}

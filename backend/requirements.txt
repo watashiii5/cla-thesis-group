@@ -1,0 +1,29 @@
+# Core Framework
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+
+# Data Validation
+pydantic==2.10.3
+pydantic-settings==2.6.1
+email-validator==2.2.0
+
+# Environment Variables
+python-dotenv==1.0.1
+
+# Database
+supabase==2.4.2
+
+# Task Scheduling
+APScheduler==3.10.4
+
+# Email
+python-multipart==0.0.6
+
+# Utilities
+requests==2.31.0
+python-dateutil==2.8.2
+pytz==2024.1
+
+# Development (optional, remove in production)
+black==24.1.1
+flake8==7.0.0

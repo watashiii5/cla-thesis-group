@@ -1,8 +1,38 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
+  --background: #f5f7fb;
   --foreground: #171717;
+  
+  /* Midnight Blue Theme Variables */
+  --primary-gradient: linear-gradient(135deg, #1a365d 0%, #2d3748 100%);
+  --primary-dark: #1a365d;
+  --primary-medium: #2c5282;
+  --primary-light: #4299e1;
+  --accent-blue: #3182ce;
+  --accent-teal: #319795;
+  --success-green: #48bb78;
+  --warning-orange: #ed8936;
+  --danger-red: #f56565;
+  --bg-dark: #0f172a;
+  --bg-medium: #1e293b;
+  --bg-light: #f8fafc;
+  --text-dark: #1a202c;
+  --text-medium: #4a5568;
+  --text-light: #718096;
+  --border-color: #e2e8f0;
+  --bg-white: #ffffff;
+  --bg-gray-50: #f8fafc;
+  --bg-gray-100: #f0f0f0;
+  --bg-gray-200: #e2e8f0;
+  --border-focus: #667eea;
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.12);
+  --shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.15);
+  --shadow-xl: 0 20px 50px rgba(0, 0, 0, 0.25);
+  --info-blue: #4299e1;
+  --accent-purple: #667eea;
+  --accent-indigo: #5a67d8;
 }
 
 @theme inline {
@@ -12,15 +42,27 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: auto;
+  min-height: 100vh;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 body {
-  background: var(--background);
+  background: #f5f7fb;
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+#__next {
+  width: 100%;
+  min-height: 100vh;
 }
