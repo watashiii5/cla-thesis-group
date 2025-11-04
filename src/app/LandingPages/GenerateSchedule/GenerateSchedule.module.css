@@ -684,6 +684,97 @@
   font-weight: 600;
 }
 
+/* ==================== NEW: Capacity Breakdown ==================== */
+.capacityBreakdown {
+  margin-top: 16px;
+  padding: 16px;
+  background: white;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+}
+
+.capacityRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.capacityRow:last-child {
+  border-bottom: none;
+}
+
+.capacityRow.capacityTotal {
+  margin-top: 10px;
+  padding-top: 14px;
+  border-top: 2px solid var(--border-color);
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.capacityLabel {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-medium);
+}
+
+.capacityValue {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-dark);
+}
+
+.capacityValue.success {
+  color: var(--success-green);
+}
+
+.capacityValue.error {
+  color: var(--danger-red);
+}
+
+.capacitySuggestions {
+  margin-top: 16px;
+  padding: 16px;
+  background: #fffbeb;
+  border-left: 4px solid var(--warning-orange);
+  border-radius: 10px;
+}
+
+.capacitySuggestions h4 {
+  font-size: 16px;
+  font-weight: 700;
+  color: #92400e;
+  margin: 0 0 10px 0;
+}
+
+.capacitySuggestions ul {
+  margin: 0;
+  padding-left: 20px;
+  color: #78350f;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.capacitySuggestions li {
+  margin-bottom: 6px;
+}
+
+/* ==================== NEW: Phase styling ==================== */
+.capacityPhase {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 2px dashed var(--border-color);
+  background: #f8fafc;
+  font-weight: 700;
+  color: var(--primary-dark);
+}
+
+.capacityPhase .capacityLabel {
+  font-size: 15px;
+  color: var(--primary-dark);
+}
+
 /* ==================== Responsive Design ==================== */
 @media (max-width: 1024px) {
   .scheduleMain {

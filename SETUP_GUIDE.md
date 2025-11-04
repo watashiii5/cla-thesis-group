@@ -2,9 +2,23 @@
 
 ## 📋 Prerequisites
 
-- **Node.js** (v18 or higher) - Download from https://nodejs.org/
-- **Python** (v3.10 or higher) - Download from https://www.python.org/
-- **Git** - Download from https://git-scm.com/
+Before you begin, ensure you have the following installed:
+
+- **Node.js** (v18.0.0 or higher) - [Download here](https://nodejs.org/)
+- **Python** (v3.10 or higher) - [Download here](https://www.python.org/)
+- **Git** (latest version) - [Download here](https://git-scm.com/)
+- **Text Editor** - VS Code recommended ([Download here](https://code.visualstudio.com/))
+
+### Verify Installation
+
+Open your terminal/command prompt and run:
+
+```bash
+node --version   # Should show v18.0.0 or higher
+python --version # Should show 3.10.0 or higher
+git --version    # Should show git version
+npm --version    # Should show 9.0.0 or higher
+```
 
 ## 🚀 Quick Start (Recommended)
 

@@ -123,7 +123,7 @@ def fetch_all_rows(table_name: str, filters: Dict = {}, order_by: str = "id") ->
 
 @router.post("/generate")
 async def generate_schedule(request: dict):
-    """✅ UPDATED: Generate optimized schedule with multi-day support"""
+    """✅ FIXED: Generate optimized schedule with proper data saving"""
     logger.info("=" * 80)
     logger.info("🚀 SCHEDULE GENERATION REQUEST RECEIVED")
     logger.info("=" * 80)
@@ -151,7 +151,7 @@ async def generate_schedule(request: dict):
         date_diff = (end_date - start_date).days
         logger.info(f"📅 Schedule spans {date_diff + 1} day(s): {start_date} to {end_date}")
         
-        # ✅ FETCH ROOMS
+        # ✅ FETCH ROOMS WITH VALIDATION
         logger.info("\n📊 STEP 1: Fetching ALL rooms from Supabase...")
         rooms = fetch_all_rows(
             "campuses",
@@ -162,6 +162,47 @@ async def generate_schedule(request: dict):
         logger.info(f"✅ Fetched {len(rooms)} rooms")
         if not rooms:
             raise HTTPException(404, "No rooms found for this campus group")
+
+        # ✅ VALIDATE ROOM DATA FOR NULL VALUES
+        logger.info("\n🔍 STEP 1.5: Validating room data...")
+        invalid_rooms = []
+        for room in rooms:
+            campus = room.get("campus")
+            building = room.get("building")
+            room_name = room.get("room")
+            capacity = room.get("capacity")
+            
+            issues = []
+            if not campus or str(campus).strip() == "":
+                issues.append("Campus is blank")
+            if not building or str(building).strip() == "":
+                issues.append("Building is blank")
+            if not room_name or str(room_name).strip() == "":
+                issues.append("Room is blank")
+            if not capacity or capacity <= 0:
+                issues.append(f"Capacity is {capacity}")
+            
+            if issues:
+                invalid_rooms.append({
+                    'id': room['id'],
+                    'campus': campus or 'NULL',
+                    'building': building or 'NULL',
+                    'room': room_name or 'NULL',
+                    'capacity': capacity,
+                    'issues': ', '.join(issues)
+                })
+        
+        if invalid_rooms:
+            error_details = "\n".join([
+                f"❌ Row ID {r['id']}: {r['issues']} (Campus='{r['campus']}', Building='{r['building']}', Room='{r['room']}', Capacity={r['capacity']})"
+                for r in invalid_rooms
+            ])
+            raise HTTPException(
+                status_code=400,
+                detail=f"⚠️ INVALID CAMPUS DATA DETECTED\n\n{error_details}\n\n📝 Action Required:\n1. Open your Excel file\n2. Fix the blank/invalid values\n3. Re-upload to Supabase\n4. Try generating the schedule again"
+            )
+
+        logger.info(f"✅ All {len(rooms)} rooms have valid data")
 
         # ✅ FETCH PARTICIPANTS
         participants = fetch_all_rows(
@@ -178,25 +219,38 @@ async def generate_schedule(request: dict):
         if not participants:
             raise HTTPException(404, "No participants found for this group")
 
-        # ✅ SCHEDULE ALGORITHM (with multi-day support)
+        # ✅ Extract lunch break settings from request
+        exclude_lunch_break = request.get('exclude_lunch_break', True)
+        lunch_break_start = request.get('lunch_break_start', '12:00')
+        lunch_break_end = request.get('lunch_break_end', '13:00')
+        
+        logger.info(f"🍽️  Lunch Break Settings:")
+        logger.info(f"   Exclude: {exclude_lunch_break}")
+        if exclude_lunch_break:
+            logger.info(f"   Time: {lunch_break_start} - {lunch_break_end}")
+
+        # ✅ SCHEDULE ALGORITHM (with lunch break support)
         logger.info("\n🗓️  STEP 3: Running priority scheduler...")
         scheduler = PriorityScheduler()
         result = scheduler.schedule(
             rooms=rooms,
             participants=participants,
-            start_date=request['schedule_date'],  # ✅ NEW
-            end_date=request['end_date'],          # ✅ NEW
+            start_date=request['schedule_date'],
+            end_date=request['end_date'],
             start_time=request['start_time'],
             end_time=request['end_time'],
             duration_per_batch=request['duration_per_batch'],
             prioritize_pwd=request['prioritize_pwd'],
+            exclude_lunch_break=exclude_lunch_break,    # ✅ ADD THIS
+            lunch_break_start=lunch_break_start,        # ✅ ADD THIS
+            lunch_break_end=lunch_break_end             # ✅ ADD THIS
         )
         
         logger.info(f"✅ Scheduling complete")
         logger.info(f"   Total Batches: {result['total_batches']}")
         logger.info(f"   Total Scheduled: {result['scheduled_count']}/{len(participants)}")
 
-        # ✅ SAVE TO SUPABASE
+        # ✅ SAVE TO SUPABASE WITH PROPER DATA
         logger.info("\n💾 STEP 4: Saving to Supabase...")
 
         # Insert schedule_summary with end_date
@@ -225,90 +279,107 @@ async def generate_schedule(request: dict):
             logger.error(f"❌ Failed to insert schedule_summary: {e}")
             raise HTTPException(500, f"Failed to insert schedule_summary: {e}")
 
-        # ✅ Insert schedule_batches with batch_date
+        # ✅ CRITICAL FIX: Insert schedule_batches with ALL required fields
         logger.info(f"   Inserting {len(result['batches'])} schedule_batches...")
         batch_rows = []
+        batch_id_map = {}  # Map batch_number to database ID
+        
         for b in result["batches"]:
-            batch_rows.append({
+            # ✅ REMOVED: batch_number from batch_data (will add after column exists)
+            batch_data = {
                 "schedule_summary_id": schedule_summary_id,
+                "batch_number": b.get("batch_number", 1),  # ✅ UNCOMMENT THIS
                 "batch_name": b["batch_name"],
-                "batch_date": b.get("batch_date"),  # ✅ NEW
-                "room": b["room"],
-                "time_slot": b["time_slot"],
+                "batch_date": b.get("batch_date"),
+                "campus": b.get("campus", "Main Campus"),
+                "building": b.get("building", "Unknown Building"),
+                "room": b.get("room", "Unknown Room"),
+                "is_first_floor": b.get("is_first_floor", False),
+                "start_time": b.get("start_time", "08:00"),
+                "end_time": b.get("end_time", "09:00"),
+                "time_slot": b.get("time_slot", "08:00 - 09:00"),
                 "participant_count": b["participant_count"],
                 "has_pwd": b["has_pwd"],
                 "participant_ids": b["participant_ids"],
-            })
-
-        try:
-            if not batch_rows:
-                logger.warning("⚠️  No batches to insert")
-                batches_data = []
-                batch_id_by_number = {}
-            else:
-                # Insert in chunks
-                BATCH_CHUNK_SIZE = 500
-                batches_data = []
-                
-                for i in range(0, len(batch_rows), BATCH_CHUNK_SIZE):
-                    chunk = batch_rows[i:i + BATCH_CHUNK_SIZE]
-                    chunk_res = sb.table("schedule_batches").insert(chunk).execute()
-                    if chunk_res.data:
-                        batches_data.extend(chunk_res.data)
-                    logger.debug(f"   Inserted batch chunk {i // BATCH_CHUNK_SIZE + 1}")
-                
-                if not batches_data:
-                    logger.error("❌ schedule_batches insert returned no data")
-                    raise HTTPException(500, "Failed to insert schedule_batches")
-                
-                logger.info(f"✅ {len(batches_data)} batches inserted")
-                
-                # Map batch_number to DB IDs
-                batch_id_by_number = {}
-                for i, batch_row in enumerate(batch_rows):
-                    if i < len(batches_data):
-                        batch_id_by_number[result["batches"][i]["batch_number"]] = batches_data[i]["id"]
-        except Exception as e:
-            if batch_rows:
-                logger.error(f"❌ Failed to insert schedule_batches: {e}")
-                raise HTTPException(500, f"Failed to insert schedule_batches: {e}")
-
-        # Insert schedule_assignments
-        logger.info(f"   Inserting {len(result['assignments'])} schedule_assignments...")
-        warnings: List[str] = []
-        
-        if result["assignments"] and batch_id_by_number:
+            }
+            
+            logger.info(f"   📦 Batch {b['batch_name']}: {batch_data['campus']} | {batch_data['building']} | {batch_data['room']} | {batch_data['batch_date']} | {batch_data['start_time']}-{batch_data['end_time']}")
+            
             try:
-                assign_rows = []
-                for a in result["assignments"]:
-                    batch_id = batch_id_by_number.get(a["batch_number"])
-                    if batch_id:
-                        assign_rows.append({
-                            "schedule_summary_id": schedule_summary_id,
-                            "schedule_batch_id": batch_id,
-                            "participant_id": a["participant_id"],
-                            "seat_no": a["seat_no"],
-                            "is_pwd": a["is_pwd"],
-                        })
-
-                if assign_rows:
-                    ASSIGN_CHUNK_SIZE = 1000
-                    total_inserted = 0
-                    
-                    for i in range(0, len(assign_rows), ASSIGN_CHUNK_SIZE):
-                        chunk = assign_rows[i:i + ASSIGN_CHUNK_SIZE]
-                        assigns_res = sb.table("schedule_assignments").insert(chunk).execute()
-                        if assigns_res.data:
-                            total_inserted += len(assigns_res.data)
-                    
-                    logger.info(f"✅ {total_inserted} assignments inserted")
+                batch_res = sb.table("schedule_batches").insert([batch_data]).execute()
+                
+                if not batch_res.data:
+                    raise HTTPException(500, f"Failed to insert batch {b['batch_name']}")
+                
+                batch_db_id = batch_res.data[0]["id"]
+                batch_id_map[b.get("batch_number", len(batch_id_map) + 1)] = batch_db_id
+                
+                logger.info(f"     ✅ Saved with DB ID: {batch_db_id}")
+                
             except Exception as e:
-                logger.warning(f"⚠️  schedule_assignments insert failed: {e}")
-                warnings.append(f"Assignments not saved: {e}")
-        else:
-            logger.warning("⚠️  No assignments to insert")
+                logger.error(f"❌ Failed to insert batch {b['batch_name']}: {e}")
+                logger.error(f"   Batch data: {batch_data}")
+                raise HTTPException(500, f"Failed to insert batch {b['batch_name']}: {e}")
+
+        logger.info(f"✅ All {len(result['batches'])} batches saved successfully")
+        logger.info(f"📊 Batch ID mapping: {batch_id_map}")
+
+        # ✅ CRITICAL FIX: Insert schedule_assignments with ALL required fields
+        logger.info(f"   Inserting {len(result['assignments'])} schedule_assignments...")
+        assignments_saved = 0
+        assignments_failed = 0
+        
+        for assignment in result["assignments"]:
+            batch_number = assignment.get("batch_number", 1)
+            batch_db_id = batch_id_map.get(batch_number)
+            
+            if not batch_db_id:
+                logger.error(f"❌ Could not find batch DB ID for batch_number {batch_number}")
+                assignments_failed += 1
+                continue
+            
+            # ✅ ENSURE ALL ASSIGNMENT FIELDS ARE PRESENT
+            assignment_data = {
+                "schedule_summary_id": schedule_summary_id,
+                "schedule_batch_id": batch_db_id,  # ✅ CORRECT: Use actual batch ID from database
+                "participant_id": assignment["participant_id"],
+                "seat_no": assignment["seat_no"],
+                "is_pwd": assignment["is_pwd"],
+                "campus": assignment.get("campus", "Main Campus"),  # ✅ REQUIRED
+                "building": assignment.get("building", "Unknown Building"),  # ✅ REQUIRED
+                "room": assignment.get("room", "Unknown Room"),  # ✅ REQUIRED
+                "is_first_floor": assignment.get("is_first_floor", False),
+                "start_time": assignment.get("start_time", "08:00"),  # ✅ REQUIRED
+                "end_time": assignment.get("end_time", "09:00"),  # ✅ REQUIRED
+                "batch_date": assignment.get("batch_date", str(start_date)),  # ✅ REQUIRED
+            }
+            
+            # ✅ VALIDATE ASSIGNMENT DATA BEFORE INSERTION
+            required_assignment_fields = ['campus', 'building', 'room', 'start_time', 'end_time', 'batch_date']
+            for field in required_assignment_fields:
+                if not assignment_data[field] or assignment_data[field] in ['N/A', '', None]:
+                    logger.error(f"❌ Assignment for participant {assignment['participant_id']} missing {field}: {assignment_data[field]}")
+                    assignments_failed += 1
+                    continue
+            
+            try:
+                sb.table('schedule_assignments').insert([assignment_data]).execute()
+                assignments_saved += 1
+                
+                if assignments_saved % 50 == 0:  # Log progress every 50 assignments
+                    logger.info(f"   ✅ Saved {assignments_saved}/{len(result['assignments'])} assignments...")
+                    
+            except Exception as e:
+                logger.error(f"❌ Error inserting assignment for participant {assignment['participant_id']}: {e}")
+                logger.error(f"   Assignment data: {assignment_data}")
+                assignments_failed += 1
+
+        logger.info(f"✅ Saved {assignments_saved}/{len(result['assignments'])} assignments")
+        if assignments_failed > 0:
+            logger.warning(f"⚠️ Failed to save {assignments_failed} assignments")
 
         # Add warnings
+        warnings: List[str] = []
         if result.get("warnings"):
             warnings.extend(result["warnings"])
 

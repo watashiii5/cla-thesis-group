@@ -314,8 +314,28 @@ export async function POST(request: NextRequest) {
                         <td style="padding: 12px 0; color: #666; font-weight: 700; font-size: 14px;">⏰ Time:</td>
                         <td style="padding: 12px 0; color: #1f2937; font-weight: 600; font-size: 15px;">${timeSlotFormatted}</td>
                       </tr>
+                      ${b.campus ? `
                       <tr style="border-top: 1px solid #d1d5db;">
-                        <td style="padding: 12px 0; color: #666; font-weight: 700; font-size: 14px;">🏢 Room:</td>
+                        <td style="padding: 12px 0; color: #666; font-weight: 700; font-size: 14px;">🏫 Campus:</td>
+                        <td style="padding: 12px 0; color: #1f2937; font-weight: 600; font-size: 15px;">${b.campus}</td>
+                      </tr>
+                      ` : ''}
+                      ${b.building ? `
+                      <tr style="border-top: 1px solid #d1d5db;">
+                        <td style="padding: 12px 0; color: #666; font-weight: 700; font-size: 14px;">🏢 Building:</td>
+                        <td style="padding: 12px 0; color: #1f2937; font-weight: 600; font-size: 15px;">${b.building}</td>
+                      </tr>
+                      ` : ''}
+                      ${b.is_first_floor !== undefined ? `
+                      <tr style="border-top: 1px solid #d1d5db;">
+                        <td style="padding: 12px 0; color: #666; font-weight: 700; font-size: 14px;">🏗️ Floor:</td>
+                        <td style="padding: 12px 0; color: #1f2937; font-weight: 600; font-size: 15px;">
+                          ${b.is_first_floor ? '1st Floor ♿' : 'Upper Floor'}
+                        </td>
+                      </tr>
+                      ` : ''}
+                      <tr style="border-top: 1px solid #d1d5db;">
+                        <td style="padding: 12px 0; color: #666; font-weight: 700; font-size: 14px;">🚪 Room:</td>
                         <td style="padding: 12px 0; color: #1f2937; font-weight: 600; font-size: 15px;">${b.room}</td>
                       </tr>
                       <tr style="border-top: 1px solid #d1d5db;">
@@ -326,12 +346,6 @@ export async function POST(request: NextRequest) {
                         <td style="padding: 12px 0; color: #666; font-weight: 700; font-size: 14px;">📦 Batch:</td>
                         <td style="padding: 12px 0; color: #1f2937; font-weight: 600; font-size: 15px;">${b.batch_name}</td>
                       </tr>
-                      ${b.campus ? `
-                      <tr style="border-top: 1px solid #d1d5db;">
-                        <td style="padding: 12px 0; color: #666; font-weight: 700; font-size: 14px;">🏫 Campus:</td>
-                        <td style="padding: 12px 0; color: #1f2937; font-weight: 600; font-size: 15px;">${b.campus}</td>
-                      </tr>
-                      ` : ''}
                     </table>
                   </div>
                   
@@ -339,7 +353,7 @@ export async function POST(request: NextRequest) {
                     <div style="background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%); border-left: 5px solid #3b82f6; padding: 18px; margin: 25px 0; border-radius: 8px;">
                       <p style="margin: 0; color: #1e40af; font-weight: 600; font-size: 15px;">
                         <span style="font-size: 24px;">♿</span>
-                        <strong>PWD Accommodation:</strong> Your room is located on the first floor for easy access and comfort.
+                        <strong>PWD Accommodation:</strong> Your room is located on the ${b.is_first_floor ? '1st floor' : 'an accessible floor'} for easy access and comfort.
                       </p>
                     </div>
                   ` : ''}
@@ -349,6 +363,9 @@ export async function POST(request: NextRequest) {
                     <ul style="margin: 0; padding-left: 20px; color: #78350f; line-height: 1.8;">
                       <li style="margin-bottom: 8px;">Please arrive <strong>15 minutes early</strong></li>
                       <li style="margin-bottom: 8px;">Bring a <strong>valid ID</strong> and this email confirmation</li>
+                      ${b.campus ? `<li style="margin-bottom: 8px;">Go to <strong>${b.campus}</strong> campus</li>` : ''}
+                      ${b.building ? `<li style="margin-bottom: 8px;">Proceed to <strong>${b.building}</strong></li>` : ''}
+                      ${b.is_first_floor !== undefined ? `<li style="margin-bottom: 8px;">Room is on the <strong>${b.is_first_floor ? '1st Floor' : 'Upper Floor'}</strong></li>` : ''}
                       <li style="margin-bottom: 8px;">Follow all health and safety protocols</li>
                       <li>For questions, reply to this email or contact support</li>
                     </ul>

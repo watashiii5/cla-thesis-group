@@ -1,4 +1,6 @@
 /** @type {import('next').NextConfig} */
+const path = require('path'); // Add this import
+
 const nextConfig = {
   async headers() {
     return [
@@ -20,7 +22,8 @@ const nextConfig = {
         ]
       }
     ]
-  }
+  },
+  // outputFileTracingRoot: path.join(__dirname, '../../'),  // Comment out or remove
 }
 
 module.exports = nextConfig

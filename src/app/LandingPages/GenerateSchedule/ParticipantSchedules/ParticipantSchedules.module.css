@@ -267,127 +267,266 @@
   overflow: hidden;
 }
 
-.tableContainer {
+.tableScrollWrapper {
+  width: 100%;
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 12px;
+  box-shadow: inset 0 0 0 1px var(--border-color);
+}
+
+.tableContainer {
+  min-width: 100%;
+  position: relative;
 }
 
 .participantsTable {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
+  min-width: 1600px; /* ✅ Minimum width to trigger horizontal scroll */
 }
 
-.participantsTable thead {
+/* ✅ Sticky first two columns */
+.stickyCol {
+  position: sticky;
+  left: 0;
+  z-index: 3 !important;
+  background: var(--bg-gray-50);
+  box-shadow: 2px 0 5px rgba(0, 0, 0, 0.05);
+}
+
+.stickyCol2 {
+  position: sticky;
+  left: 100px; /* Adjust based on first column width */
+  z-index: 3 !important;
+  background: var(--bg-gray-50);
+  box-shadow: 2px 0 5px rgba(0, 0, 0, 0.05);
+}
+
+.participantsTable tbody .stickyCol,
+.participantsTable tbody .stickyCol2 {
+  background: white;
+}
+
+.participantsTable tbody tr:hover .stickyCol,
+.participantsTable tbody tr:hover .stickyCol2 {
   background: var(--bg-gray-50);
 }
 
-.participantsTable th {
-  padding: 18px 20px;
-  text-align: left;
-  font-weight: 700;
-  font-size: 13px;
-  text-transform: uppercase;
-  letter-spacing: 0.6px;
-  color: var(--text-dark);
-  border-bottom: 2px solid var(--border-color);
-}
-
+/* ==================== Table Cells Styling ==================== */
 .participantsTable tbody tr {
-  transition: all 0.2s ease;
-  border-bottom: 1px solid #f0f0f0;
+  background: white;
+  border-bottom: 1px solid var(--border-color);
+  transition: background-color 0.2s ease;
 }
 
 .participantsTable tbody tr:hover {
   background: var(--bg-gray-50);
-  box-shadow: var(--shadow-sm);
 }
 
-.participantsTable td {
-  padding: 18px 20px;
-  color: var(--text-dark);
-  font-size: 15px;
-  font-weight: 500;
-}
-
-.fontSemibold {
-  font-weight: 700;
-  color: var(--text-dark);
-}
-
-.emailCell {
-  color: var(--text-light);
+.participantsTable tbody td {
+  padding: 16px 14px;
+  color: var(--text-dark);  /* ✅ FIXED: Black text instead of white */
   font-size: 14px;
+  font-weight: 500;
+  vertical-align: middle;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.pwdBadge {
-  padding: 6px 14px;
-  border-radius: 20px;
-  font-size: 13px;
+.participantsTable th {
+  padding: 14px;
+  text-align: left;
+  color: var(--text-dark);  /* ✅ FIXED: Black text for headers */
+  background: var(--bg-gray-50);
   font-weight: 700;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 2px solid var(--border-color);
+}
+
+/* ✅ Email cell */
+.emailCell {
+  color: var(--text-medium);
+  word-break: break-all;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+/* ✅ PWD Badge */
+.pwdBadge {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: all 0.2s ease;
 }
 
 .pwdBadge.yes {
-  background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
-  color: #155724;
-  border: 1px solid #b1dfbb;
+  background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+  color: #065f46;
+  border: 1px solid #6ee7b7;
 }
 
-.pwdBadge.yes svg {
-  width: 16px;
-  height: 16px;
+.pwdBadge.yes:hover {
+  box-shadow: 0 2px 8px rgba(6, 95, 70, 0.2);
+  transform: translateY(-1px);
 }
 
 .pwdBadge.no {
   background: var(--bg-gray-100);
-  color: #999;
-  border: 1px solid #e0e0e0;
+  color: #6b7280;
+  border: 1px solid #d1d5db;
 }
 
+.badgeIcon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: currentColor;
+}
+
+/* ✅ Batch Badge */
 .batchBadge {
-  padding: 8px 16px;
-  background: var(--primary-gradient);
-  color: white;
+  display: inline-block;
+  padding: 6px 12px;
+  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+  color: #0c4a6e;
   border-radius: 20px;
   font-size: 13px;
   font-weight: 700;
-  display: inline-block;
-  box-shadow: 0 2px 8px rgba(26, 54, 93, 0.3);
+  border: 1px solid #7dd3fc;
+  white-space: nowrap;
 }
 
-.roomCell {
-  font-weight: 700;
-  color: var(--primary-medium);
-}
-
-.timeCell {
-  font-weight: 600;
-  color: var(--text-light);
-}
-
-.locationCell {
-  font-size: 14px;
-  color: var(--text-dark);
-  font-weight: 600;
-}
-
-.seatCell {
-  font-weight: 700;
-  color: var(--warning-orange);
-}
-
-.dateCell {
-  font-weight: 600;
-  color: var(--text-dark);
-  font-size: 14px;
-}
-
+/* ✅ DateTime Cell */
 .dateTimeCell {
-  font-weight: 600;
   color: var(--text-dark);
   font-size: 13px;
+  white-space: normal;
+  overflow: visible;
+}
+
+/* ✅ Location Cell */
+.locationCell {
+  color: var(--text-dark);
+  font-size: 13px;
+}
+
+/* ✅ Room Cell */
+.roomCell {
+  color: var(--text-dark);
+  font-weight: 600;
+  font-size: 14px;
+}
+
+/* ✅ Seat Cell */
+.seatCell {
+  color: var(--text-dark);
+  font-weight: 600;
+  text-align: center;
+  font-size: 14px;
+}
+
+/* ✅ Font Semibold Helper */
+.fontSemibold {
+  font-weight: 600;
+  color: var(--text-dark);
+}
+
+/* ✅ Updated Floor Badges - Now with floor numbers */
+.floorCell {
+  text-align: center;
+  font-weight: 600;
   white-space: nowrap;
+}
+
+.firstFloorBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+  color: #065f46;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 700;
+  border: 1px solid #6ee7b7;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.firstFloorBadge:hover {
+  box-shadow: 0 2px 8px rgba(6, 95, 70, 0.2);
+  transform: translateY(-1px);
+}
+
+.secondFloorBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: linear-gradient(135deg, #e9d5ff 0%, #d8b4fe 100%);
+  color: #6b21a8;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 700;
+  border: 1px solid #d8b4fe;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.secondFloorBadge:hover {
+  box-shadow: 0 2px 8px rgba(107, 33, 168, 0.2);
+  transform: translateY(-1px);
+}
+
+.thirdFloorBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: linear-gradient(135deg, #fed7aa 0%, #fdba74 100%);
+  color: #92400e;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 700;
+  border: 1px solid #fdba74;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.thirdFloorBadge:hover {
+  box-shadow: 0 2px 8px rgba(146, 64, 14, 0.2);
+  transform: translateY(-1px);
+}
+
+.upperFloorBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: var(--bg-gray-100);
+  color: #6b7280;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 700;
+  border: 1px solid #d1d5db;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.upperFloorBadge:hover {
+  box-shadow: 0 2px 8px rgba(107, 114, 128, 0.15);
+  transform: translateY(-1px);
 }
 
 /* ==================== Loading & Empty States ==================== */
@@ -468,6 +607,14 @@
     width: 100%;
     justify-content: center;
   }
+
+  .tableScrollWrapper {
+    border-radius: 8px;
+  }
+
+  .participantsTable {
+    min-width: 1800px; /* Wider on smaller screens to accommodate new columns */
+  }
 }
 
 @media (max-width: 768px) {
@@ -499,6 +646,28 @@
 
   .participantsTable {
     min-width: 1000px;
+  }
+
+  .stickyCol {
+    left: 0;
+    min-width: 80px;
+  }
+
+  .stickyCol2 {
+    left: 80px;
+    min-width: 120px;
+  }
+
+  .participantsTable th,
+  .participantsTable td {
+    padding: 10px 12px;
+    font-size: 13px;
+  }
+
+  .firstFloorBadge,
+  .upperFloorBadge {
+    font-size: 11px;
+    padding: 4px 10px;
   }
 }
 
