@@ -216,13 +216,11 @@ class PriorityScheduler:
         end_time: str,
         duration_per_batch: int,
         prioritize_pwd: bool = True,
-        exclude_lunch_break: bool = True,   # ✅ ADD THIS PARAM
-        lunch_break_start: str = "12:00",   # ✅ ADD THIS PARAM
-        lunch_break_end: str = "13:00"      # ✅ ADD THIS PARAM
+        exclude_lunch_break: bool = True,
+        lunch_break_start: str = "12:00",
+        lunch_break_end: str = "13:00"
     ) -> Dict:
-        """
-        ✅ UPDATED: Main scheduling algorithm with multi-day support
-        """
+        """Main scheduling algorithm with multi-day support"""
         logger.info(f"\n{'='*100}")
         logger.info(f"🎯 STARTING PRIORITY SCHEDULER (MULTI-DAY)")
         logger.info(f"{'='*100}")
@@ -236,29 +234,29 @@ class PriorityScheduler:
         if exclude_lunch_break:
             logger.info(f"🍽️  Lunch Break: {lunch_break_start} - {lunch_break_end}")
         
-        # ✅ Generate date range
+        # Generate date range
         dates = self._generate_date_range(start_date, end_date)
         if not dates:
             logger.error("❌ No valid dates in range")
             return self._empty_result(len(participants))
         
-        # ✅ Generate time slots with lunch break exclusion
+        # ✅ FIXED: Pass all parameters to _time_slots_for_day
         daily_slots = self._time_slots_for_day(
             start_time, 
             end_time, 
             duration_per_batch,
-            exclude_lunch=exclude_lunch_break,    # ✅ FIXED: Now defined
-            lunch_start=lunch_break_start,         # ✅ FIXED: Now defined
-            lunch_end=lunch_break_end              # ✅ FIXED: Now defined
+            exclude_lunch=exclude_lunch_break,
+            lunch_start=lunch_break_start,
+            lunch_end=lunch_break_end
         )
         logger.info(f"🕐 Generated {len(daily_slots)} time slots per day")
         
         if len(daily_slots) == 0:
-            logger.warning(f"⚠️  No time slots generated - batch duration ({duration_per_batch} min) may exceed daily time window")
+            logger.warning(f"⚠️  No time slots generated")
             return self._empty_result(len(participants))
         
         total_slots = len(dates) * len(daily_slots)
-        logger.info(f"📦 Total available slots: {total_slots} ({len(dates)} days × {len(daily_slots)} slots)")
+        logger.info(f"📦 Total available slots: {total_slots}")
         
         # Separate participants
         pwd_participants, non_pwd_participants = self._sort_priority(participants, prioritize_pwd)
@@ -267,12 +265,12 @@ class PriorityScheduler:
         first_floor_rooms, upper_floor_rooms = self._separate_rooms_by_floor(rooms)
         
         if prioritize_pwd and len(pwd_participants) > 0 and len(first_floor_rooms) == 0:
-            logger.warning(f"⚠️  WARNING: {len(pwd_participants)} PWD participants but NO first floor rooms available!")
-            self.pwd_scheduling_issues.append(f"No first floor rooms available for {len(pwd_participants)} PWD participants")
+            logger.warning(f"⚠️  WARNING: {len(pwd_participants)} PWD but NO 1st floor rooms!")
+            self.pwd_scheduling_issues.append(f"No first floor rooms for {len(pwd_participants)} PWD")
         
-        # ✅ PHASE 1: Schedule PWD participants to 1st floor rooms across all days
+        # PHASE 1: Schedule PWD to 1st floor
         logger.info(f"\n{'='*80}")
-        logger.info(f"📍 PHASE 1: Scheduling {len(pwd_participants)} PWD participants to first floor rooms")
+        logger.info(f"📍 PHASE 1: Scheduling {len(pwd_participants)} PWD to 1st floor")
         logger.info(f"{'='*80}")
         
         pwd_idx = 0
@@ -291,7 +289,7 @@ class PriorityScheduler:
                     if not batch_people:
                         continue
 
-                    self._create_batch(batch_people, room, slot, day_str)  # ✅ Pass date
+                    self._create_batch(batch_people, room, slot, day_str)
                     pwd_idx = end_idx
 
                 if pwd_idx >= len(pwd_participants):
@@ -300,19 +298,19 @@ class PriorityScheduler:
             if pwd_idx >= len(pwd_participants):
                 break
         
-        logger.info(f"✅ Phase 1 Complete: {pwd_idx}/{len(pwd_participants)} PWD participants scheduled")
+        logger.info(f"✅ Phase 1: {pwd_idx}/{len(pwd_participants)} PWD scheduled")
         
         if pwd_idx < len(pwd_participants):
             unscheduled_pwd = len(pwd_participants) - pwd_idx
-            logger.warning(f"⚠️  {unscheduled_pwd} PWD participants could NOT be scheduled")
-            self.pwd_scheduling_issues.append(f"{unscheduled_pwd} PWD participants unscheduled - need more 1st floor rooms or days")
+            logger.warning(f"⚠️  {unscheduled_pwd} PWD unscheduled")
+            self.pwd_scheduling_issues.append(f"{unscheduled_pwd} PWD unscheduled")
         
-        # ✅ PHASE 2: Schedule non-PWD participants to ALL rooms across all days
+        # PHASE 2: Schedule non-PWD to all rooms
         logger.info(f"\n{'='*80}")
-        logger.info(f"📍 PHASE 2: Scheduling {len(non_pwd_participants)} Non-PWD participants to all rooms")
+        logger.info(f"📍 PHASE 2: Scheduling {len(non_pwd_participants)} Non-PWD")
         logger.info(f"{'='*80}")
         
-        all_rooms_for_non_pwd = rooms  # Can use any floor
+        all_rooms_for_non_pwd = rooms
         
         non_pwd_idx = 0
         for day in dates:
@@ -330,7 +328,7 @@ class PriorityScheduler:
                     if not batch_people:
                         continue
 
-                    self._create_batch(batch_people, room, slot, day_str)  # ✅ Pass date
+                    self._create_batch(batch_people, room, slot, day_str)
                     non_pwd_idx = end_idx
 
                 if non_pwd_idx >= len(non_pwd_participants):
@@ -339,22 +337,21 @@ class PriorityScheduler:
             if non_pwd_idx >= len(non_pwd_participants):
                 break
         
-        logger.info(f"✅ Phase 2 Complete: {non_pwd_idx}/{len(non_pwd_participants)} Non-PWD participants scheduled")
+        logger.info(f"✅ Phase 2: {non_pwd_idx}/{len(non_pwd_participants)} Non-PWD scheduled")
         
         # Calculate totals
         total_scheduled = len(self.scheduled_ids)
         total_unscheduled = max(0, len(participants) - total_scheduled)
         
         logger.info(f"\n{'='*100}")
-        logger.info(f"📊 SCHEDULING SUMMARY")
+        logger.info(f"📊 SUMMARY")
         logger.info(f"{'='*100}")
-        logger.info(f"✅ Total Scheduled: {total_scheduled}/{len(participants)}")
-        logger.info(f"❌ Total Unscheduled: {total_unscheduled}")
-        logger.info(f"📦 Total Batches: {len(self.batches)}")
-        logger.info(f"💺 Total Seat Assignments: {len(self.assignments)}")
+        logger.info(f"✅ Scheduled: {total_scheduled}/{len(participants)}")
+        logger.info(f"❌ Unscheduled: {total_unscheduled}")
+        logger.info(f"📦 Batches: {len(self.batches)}")
         
         if self.pwd_scheduling_issues:
-            logger.warning(f"\n⚠️  PWD SCHEDULING ISSUES:")
+            logger.warning(f"\n⚠️  PWD ISSUES:")
             for issue in self.pwd_scheduling_issues:
                 logger.warning(f"   - {issue}")
         
@@ -372,19 +369,18 @@ class PriorityScheduler:
         }
     
     def _create_batch(self, batch_people: List[Dict], room: Dict, slot: Dict, batch_date: str):
-        """
-        ✅ FIXED: Define is_first_floor_room before using it
-        """
+        """Create batch with proper variable order"""
         pwd_in_batch = sum(1 for p in batch_people if bool(p.get("is_pwd", False)))
         
-        # ✅ Extract data from room dict
+        # ✅ Extract data FIRST
         campus = room.get("campus", "N/A")
         building = room.get("building", "N/A") 
         room_name = room.get("room", "N/A")
         
-        # ✅ FIXED: Define is_first_floor_room HERE (before using it)
+        # ✅ DEFINE is_first_floor_room BEFORE using it
         is_first_floor_room = is_first_floor(building, room_name)
 
+        # ✅ NOW it's safe to use
         batch = {
             "batch_number": self.batch_no,
             "batch_name": f"Batch {self.batch_no}",
@@ -392,7 +388,7 @@ class PriorityScheduler:
             "campus": campus,
             "building": building,
             "room": room_name,
-            "is_first_floor": is_first_floor_room,  # ✅ Now defined
+            "is_first_floor": is_first_floor_room,  # ✅ Already defined above
             "start_time": slot['start'],
             "end_time": slot['end'],
             "time_slot": f"{slot['start']} - {slot['end']}",
@@ -412,7 +408,7 @@ class PriorityScheduler:
                 "campus": campus,
                 "building": building,
                 "room": room_name,
-                "is_first_floor": is_first_floor_room,  # ✅ Now defined
+                "is_first_floor": is_first_floor_room,  # ✅ Already defined
                 "start_time": slot['start'],
                 "end_time": slot['end'],
                 "time_slot": f"{slot['start']} - {slot['end']}",
@@ -420,7 +416,7 @@ class PriorityScheduler:
             })
             self.scheduled_ids.add(int(p["id"]))
 
-        # ✅ FIXED: Use the defined variable
+        # ✅ Use defined variable
         floor_info = "1st Floor ♿" if is_first_floor_room else "Upper Floor"
         logger.info(
             f"📦 Batch {self.batch_no}: {len(batch_people)} participants → "
