@@ -16,8 +16,12 @@ interface ScheduleRow {
   room: string
   time_slot: string
   campus: string
+  building: string
+  is_first_floor: boolean
   seat_no: number
   batch_date: string | null
+  start_time: string | null
+  end_time: string | null
 }
 
 // Helper function to fetch ALL rows (bypass 1000 limit)
@@ -73,9 +77,9 @@ async function fetchAllRows(table: string, filters: any = {}) {
   return allData
 }
 
-// ✅ NEW: Format full date & time
+// ✅ Format full date & time
 function formatDateTime(dateString: string | null, timeString: string): string {
-  if (!dateString) return 'N/A'
+  if (!dateString || !timeString) return 'N/A'
   try {
     const date = new Date(dateString)
     const dateFormatted = date.toLocaleDateString('en-US', {
@@ -97,14 +101,136 @@ function formatDateTime(dateString: string | null, timeString: string): string {
   }
 }
 
-// ✅ NEW: Parse time slot into start/end times
-function parseTimeSlot(timeSlot: string): { start: string; end: string } {
+// ✅ Parse time slot with fallback
+function parseTimeSlot(timeSlot: string, startTime?: string | null, endTime?: string | null): { start: string; end: string } {
+  // Prefer individual start/end times from database
+  if (startTime && endTime) {
+    return { start: startTime, end: endTime }
+  }
+  
+  // Fallback to parsing time_slot string
   try {
     const [start, end] = timeSlot.split(' - ').map(t => t.trim())
-    return { start, end }
+    return { start: start || 'N/A', end: end || 'N/A' }
   } catch {
     return { start: timeSlot, end: timeSlot }
   }
+}
+
+// ✅ Helper function to determine floor level from room number
+function getFloorLevel(room: string): { level: number; label: string } {
+  if (!room || room === 'N/A') {
+    return { level: 0, label: 'Unknown' }
+  }
+
+  const roomLower = String(room).toLowerCase().trim()
+  const digits = roomLower.replace(/\D/g, '')
+
+  if (digits.length === 0) {
+    return { level: 0, label: 'Unknown' }
+  }
+
+  const firstDigit = parseInt(digits[0])
+  
+  if (firstDigit === 1) return { level: 1, label: '1st Floor' }
+  if (firstDigit === 2) return { level: 2, label: '2nd Floor' }
+  if (firstDigit === 3) return { level: 3, label: '3rd Floor' }
+  if (firstDigit === 4) return { level: 4, label: '4th Floor' }
+  if (firstDigit === 5) return { level: 5, label: '5th Floor' }
+  if (firstDigit === 6) return { level: 6, label: '6th Floor' }
+  
+  return { level: firstDigit, label: `${firstDigit}${firstDigit === 1 ? 'st' : firstDigit === 2 ? 'nd' : firstDigit === 3 ? 'rd' : 'th'} Floor` }
+}
+
+// ✅ Helper function to get CSS class for floor badge
+function getFloorBadgeClass(styles: any, room: string): string {
+  const { level } = getFloorLevel(room)
+  
+  if (level === 1) return styles.firstFloorBadge
+  if (level === 2) return styles.secondFloorBadge
+  if (level === 3) return styles.thirdFloorBadge
+  
+  return styles.upperFloorBadge
+}
+
+// ✅ NEW: SVG Component for Wheelchair Icon (PWD)
+function WheelchairIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      className={className}
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path d="M10 2C5.58 2 2 5.58 2 10s3.58 8 8 8 8-3.58 8-8-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6-2.69 6-6 6zm3.5-9c.83 0 1.5-.67 1.5-1.5S14.33 4 13.5 4 12 4.67 12 5.5s.67 1.5 1.5 1.5z"/>
+      <path d="M10 18c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm0 6c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z"/>
+    </svg>
+  )
+}
+
+// ✅ NEW: SVG Component for Building Icon (Campus)
+function BuildingIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      className={className}
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path d="M19 13h-6V3h6v10zm-6-10h-6v6H7v4H3v6h18v-6h-4v-4h-6V3z"/>
+    </svg>
+  )
+}
+
+// ✅ NEW: SVG Component for Door/Room Icon
+function DoorIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      className={className}
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14h-4v-2h4v2zm0-4h-4v-2h4v2zm0-4h-4V7h4v2z"/>
+    </svg>
+  )
+}
+
+// ✅ NEW: SVG Component for Floor Icon
+function FloorIcon({ level }: { level: number }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      xmlns="http://www.w3.org/2000/svg"
+      style={{ width: '16px', height: '16px' }}
+    >
+      {level === 1 && (
+        <path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z"/>
+      )}
+      {level === 2 && (
+        <>
+          <path d="M12 4L4 8v6h16V8l-8-4z" opacity="0.3"/>
+          <path d="M12 10L4 14v6h16v-6l-8-4z"/>
+        </>
+      )}
+      {level === 3 && (
+        <>
+          <path d="M12 2L4 5v4h16V5l-8-3z" opacity="0.3"/>
+          <path d="M12 8L4 11v4h16v-4l-8-3z" opacity="0.6"/>
+          <path d="M12 14L4 17v4h16v-4l-8-3z"/>
+        </>
+      )}
+      {level > 3 && (
+        <>
+          <path d="M12 2L4 5v3h16V5l-8-3z" opacity="0.2"/>
+          <path d="M12 7L4 10v3h16v-3l-8-3z" opacity="0.5"/>
+          <path d="M12 12L4 15v3h16v-3l-8-3z" opacity="0.8"/>
+          <path d="M12 17L4 20v2h16v-2l-8-3z"/>
+        </>
+      )}
+    </svg>
+  )
 }
 
 function ParticipantSchedulesContent() {
@@ -175,6 +301,7 @@ function ParticipantSchedulesContent() {
       const participantMap = new Map(participants.map(p => [p.id, p]))
       const batchMap = new Map(batches.map(b => [b.id, b]))
 
+      // ✅ Include new fields from assignments and batches
       const combinedData: ScheduleRow[] = assignments.map((assignment: any) => {
         const participant = participantMap.get(assignment.participant_id)
         const batch = batchMap.get(assignment.schedule_batch_id)
@@ -184,13 +311,17 @@ function ParticipantSchedulesContent() {
           participant_number: participant?.participant_number || 'N/A',
           name: participant?.name || 'N/A',
           email: participant?.email || 'N/A',
-          is_pwd: assignment.is_pwd,
+          is_pwd: assignment.is_pwd || false,
           batch_name: batch?.batch_name || 'N/A',
-          room: batch?.room || 'N/A',
+          room: assignment.room || batch?.room || 'N/A',
           time_slot: batch?.time_slot || 'N/A',
-          campus: batch?.campus || 'Main Campus',
-          seat_no: assignment.seat_no,
-          batch_date: batch?.batch_date || null
+          campus: assignment.campus || batch?.campus || 'Main Campus',
+          building: assignment.building || batch?.building || 'N/A',
+          is_first_floor: assignment.is_first_floor ?? batch?.is_first_floor ?? false,
+          seat_no: assignment.seat_no || 0,
+          batch_date: assignment.batch_date || batch?.batch_date || null,
+          start_time: assignment.start_time || batch?.start_time || null,
+          end_time: assignment.end_time || batch?.end_time || null
         }
       })
 
@@ -248,7 +379,7 @@ function ParticipantSchedulesContent() {
     }
   }
 
-  // ✅ UPDATED: Include start/end date & time in CSV
+  // ✅ Include all new fields in CSV export
   async function handleExportCSV() {
     if (scheduleData.length === 0) {
       alert('No data to export')
@@ -263,13 +394,16 @@ function ParticipantSchedulesContent() {
       'Batch', 
       'Starting Date & Time', 
       'Ending Date & Time',
+      'Campus',
+      'Building',
+      'Floor',
       'Room', 
-      'Campus', 
       'Seat No'
     ]
     
     const rows = scheduleData.map(row => {
-      const { start, end } = parseTimeSlot(row.time_slot)
+      const { start, end } = parseTimeSlot(row.time_slot, row.start_time, row.end_time)
+      const floor = getFloorLevel(row.room)
       return [
         row.participant_number,
         row.name,
@@ -278,8 +412,10 @@ function ParticipantSchedulesContent() {
         row.batch_name,
         formatDateTime(row.batch_date, start),
         formatDateTime(row.batch_date, end),
-        row.room,
         row.campus,
+        row.building,
+        floor.label,
+        row.room,
         row.seat_no.toString()
       ]
     })
@@ -291,7 +427,7 @@ function ParticipantSchedulesContent() {
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
     const link = document.createElement('a')
     link.href = URL.createObjectURL(blob)
-    link.download = `schedule_${scheduleId}.csv`
+    link.download = `schedule_${scheduleId}_detailed.csv`
     link.click()
     URL.revokeObjectURL(link.href)
   }
@@ -351,7 +487,7 @@ function ParticipantSchedulesContent() {
                 className={styles.btnSecondary}
               >
                 <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
-                  <path d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7l-2.08-5.99zM6.5 16c-.83 0-1.5-.67-1.5-1.5S5.67 13 6.5 13s1.5.67 1.5 1.5S7.33 16 6.5 16zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z"/>
+                  <path d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
                 </svg>
                 Export CSV
               </button>
@@ -398,9 +534,7 @@ function ParticipantSchedulesContent() {
                   </div>
                   <div className={`${styles.statCard} ${styles.success}`}>
                     <div className={styles.statIcon}>
-                      <svg viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.5 16c-.83 0-1.5-.67-1.5-1.5S5.67 13 6.5 13s1.5.67 1.5 1.5S7.33 16 6.5 16zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z"/>
-                      </svg>
+                      <WheelchairIcon className={styles.wheelchairIcon} />
                     </div>
                     <div className={styles.statContent}>
                       <p className={styles.statLabel}>PWD Participants</p>
@@ -409,9 +543,7 @@ function ParticipantSchedulesContent() {
                   </div>
                   <div className={`${styles.statCard} ${styles.warning}`}>
                     <div className={styles.statIcon}>
-                      <svg viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10zm-2-8h-2v2h2v-2zm0 4h-2v2h2v-2z"/>
-                      </svg>
+                      <BuildingIcon className={styles.buildingIcon} />
                     </div>
                     <div className={styles.statContent}>
                       <p className={styles.statLabel}>Unique Rooms</p>
@@ -420,61 +552,74 @@ function ParticipantSchedulesContent() {
                   </div>
                 </div>
 
-                <div className={styles.tableContainer}>
-                  <table className={styles.participantsTable}>
-                    <thead>
-                      <tr>
-                        <th>Participant #</th>
-                        <th>Name</th>
-                        <th>Email</th>
-                        <th>PWD</th>
-                        <th>Batch</th>
-                        <th>🗓️ Starting Date & Time</th>
-                        <th>🏁 Ending Date & Time</th>
-                        <th>Room</th>
-                        <th>Campus</th>
-                        <th>Seat</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {scheduleData.map((row, idx) => {
-                        const { start, end } = parseTimeSlot(row.time_slot)
-                        return (
-                          <tr key={row.id || idx}>
-                            <td className={styles.fontSemibold}>{row.participant_number}</td>
-                            <td>{row.name}</td>
-                            <td className={styles.emailCell}>{row.email}</td>
-                            <td>
-                              <span className={`${styles.pwdBadge} ${row.is_pwd ? styles.yes : styles.no}`}>
-                                {row.is_pwd ? (
-                                  <>
-                                    <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
-                                      <path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.5 16c-.83 0-1.5-.67-1.5-1.5S5.67 13 6.5 13s1.5.67 1.5 1.5S7.33 16 6.5 16zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z"/>
-                                    </svg>
-                                    Yes
-                                  </>
-                                ) : (
-                                  'No'
-                                )}
-                              </span>
-                            </td>
-                            <td>
-                              <span className={styles.batchBadge}>{row.batch_name}</span>
-                            </td>
-                            <td className={styles.dateTimeCell}>
-                              {formatDateTime(row.batch_date, start)}
-                            </td>
-                            <td className={styles.dateTimeCell}>
-                              {formatDateTime(row.batch_date, end)}
-                            </td>
-                            <td className={styles.roomCell}>{row.room}</td>
-                            <td className={styles.locationCell}>{row.campus}</td>
-                            <td className={styles.seatCell}>{row.seat_no}</td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
+                {/* ✅ Updated table with SVG icons */}
+                <div className={styles.tableScrollWrapper}>
+                  <div className={styles.tableContainer}>
+                    <table className={styles.participantsTable}>
+                      <thead>
+                        <tr>
+                          <th className={styles.stickyCol}>Participant #</th>
+                          <th className={styles.stickyCol2}>Name</th>
+                          <th>Email</th>
+                          <th>PWD</th>
+                          <th>Batch</th>
+                          <th>Starting Date & Time</th>
+                          <th>Ending Date & Time</th>
+                          <th>Campus</th>
+                          <th>Building</th>
+                          <th>Floor</th>
+                          <th>Room</th>
+                          <th>Seat</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {scheduleData.map((row, idx) => {
+                          const { start, end } = parseTimeSlot(row.time_slot, row.start_time, row.end_time)
+                          const floor = getFloorLevel(row.room)
+                          return (
+                            <tr key={row.id || idx}>
+                              <td className={`${styles.fontSemibold} ${styles.stickyCol}`}>{row.participant_number}</td>
+                              <td className={styles.stickyCol2}>{row.name}</td>
+                              <td className={styles.emailCell}>{row.email}</td>
+                              <td>
+                                <span className={`${styles.pwdBadge} ${row.is_pwd ? styles.yes : styles.no}`}>
+                                  {row.is_pwd && (
+                                    <WheelchairIcon className={styles.badgeIcon} />
+                                  )}
+                                  <span>{row.is_pwd ? 'Yes' : 'No'}</span>
+                                </span>
+                              </td>
+                              <td>
+                                <span className={styles.batchBadge}>{row.batch_name}</span>
+                              </td>
+                              <td className={styles.dateTimeCell}>
+                                {formatDateTime(row.batch_date, start)}
+                              </td>
+                              <td className={styles.dateTimeCell}>
+                                {formatDateTime(row.batch_date, end)}
+                              </td>
+                              <td className={styles.locationCell}>{row.campus}</td>
+                              <td className={styles.locationCell}>{row.building}</td>
+                              <td className={styles.floorCell}>
+                                {(() => {
+                                  const badgeClass = getFloorBadgeClass(styles, row.room)
+                                  
+                                  return (
+                                    <span className={badgeClass}>
+                                      <FloorIcon level={floor.level} />
+                                      {floor.label}
+                                    </span>
+                                  )
+                                })()}
+                              </td>
+                              <td className={styles.roomCell}>{row.room}</td>
+                              <td className={styles.seatCell}>{row.seat_no}</td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </>
             )}

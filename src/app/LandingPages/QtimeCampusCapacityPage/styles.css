@@ -1242,3 +1242,84 @@
     font-size: 36px;
   }
 }
+
+/* ==================== Room Usage Indicators ==================== */
+.room-usage {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--success-green);
+  margin-top: 6px;
+  padding: 4px 8px;
+  background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+  border-radius: 6px;
+  border: 1px solid #6ee7b7;
+}
+
+.room-usage.overbooked {
+  color: var(--danger-red);
+  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+  border-color: #fca5a5;
+  animation: pulse-warning 2s ease-in-out infinite;
+}
+
+@keyframes pulse-warning {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scale(1.02);
+  }
+}
+
+.usage-label {
+  font-weight: 700;
+}
+
+.usage-percent {
+  font-weight: 800;
+  font-size: 11px;
+  opacity: 0.8;
+}
+
+.batch-count {
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.75;
+  margin-left: 4px;
+}
+
+.room-usage.unused {
+  background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+  color: #6b7280;
+  border-color: #d1d5db;
+}
+
+.room-capacity-badge.overbooked-badge {
+  background: linear-gradient(135deg, #fee2e2, #fecaca);
+  color: var(--danger-red);
+  border: 2px solid var(--danger-red);
+  animation: pulse-badge 2s ease-in-out infinite;
+}
+
+@keyframes pulse-badge {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(239, 68, 68, 0);
+  }
+}
+
+.room-card:has(.room-usage.overbooked) {
+  border-color: #fca5a5;
+}
+
+.room-card:has(.room-usage.overbooked):hover {
+  border-color: var(--danger-red);
+  box-shadow: 0 6px 16px rgba(239, 68, 68, 0.3);
+}

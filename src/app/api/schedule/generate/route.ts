@@ -1,80 +1,73 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function POST(request: NextRequest) {
-  console.log('🔵 Next.js API Route: Request received')
-  
   try {
     const body = await request.json()
-    console.log('📤 Request body received:', body)
     
-    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:8000'
-    const endpoint = `${backendUrl}/api/schedule/generate`
-    console.log('🔗 Connecting to backend:', endpoint)
+    const {
+      campusGroupId,
+      participantGroupId,
+      eventName,
+      eventType,
+      scheduleDate,
+      startDate,  // ✅ ADD THIS
+      startTime,
+      endDate,
+      endTime,
+      durationPerBatch,
+      prioritizePWD = true,
+      emailNotification = false
+    } = body
 
-    // ✅ Convert camelCase to snake_case INCLUDING end_date
-    const backendPayload = {
-      campus_group_id: body.campusGroupId,
-      participant_group_id: body.participantGroupId,
-      event_name: body.eventName,
-      event_type: body.eventType,
-      schedule_date: body.scheduleDate,
-      start_time: body.startTime,
-      end_date: body.endDate, // ✅ FIX: Add this line
-      end_time: body.endTime,
-      duration_per_batch: body.durationPerBatch,
-      prioritize_pwd: body.prioritizePWD,
-      email_notification: body.emailNotification,
-    }
+    console.log('📋 Received schedule request:', {
+      campusGroupId,
+      participantGroupId,
+      eventName,
+      eventType,
+      scheduleDate,
+      startDate,  // ✅ LOG THIS
+      endDate,
+      durationPerBatch
+    })
 
-    console.log('🔄 Converted payload for FastAPI:', backendPayload)
-    console.log('⏳ Sending request to FastAPI...')
-
-    const response = await fetch(endpoint, {
+    // ✅ Forward ALL fields to Python backend
+    const response = await fetch('http://127.0.0.1:8000/api/schedule/generate', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(backendPayload),
+      body: JSON.stringify({
+        campus_group_id: campusGroupId,
+        participant_group_id: participantGroupId,
+        event_name: eventName,
+        event_type: eventType,
+        schedule_date: scheduleDate,
+        start_date: startDate,  // ✅ CRITICAL: Pass this
+        start_time: startTime,
+        end_date: endDate,
+        end_time: endTime,
+        duration_per_batch: durationPerBatch,
+        prioritize_pwd: prioritizePWD,
+        email_notification: emailNotification
+      })
     })
 
-    console.log('📡 FastAPI response status:', response.status)
-    console.log('📡 FastAPI response headers:', Object.fromEntries(response.headers.entries()))
-
     if (!response.ok) {
-      console.error('❌ FastAPI returned error status:', response.status)
-      
-      const responseText = await response.text()
-      console.log('📄 Raw response body:', responseText)
-      
-      let errorData
-      try {
-        errorData = JSON.parse(responseText)
-      } catch {
-        errorData = { error: responseText || 'Unknown error' }
-      }
-      
-      console.error('❌ Error data:', errorData)
-      
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: errorData.error || errorData.detail || 'Backend error',
-          status: response.status,
-        },
-        { status: response.status }
-      )
+      const errorText = await response.text()
+      console.error('Backend error:', errorText)
+      throw new Error(`Backend returned ${response.status}: ${errorText}`)
     }
 
-    const data = await response.json()
-    console.log('✅ Success response from FastAPI:', data)
+    const result = await response.json()
     
-    return NextResponse.json(data)
+    return NextResponse.json(result)
+
   } catch (error: any) {
-    console.error('❌ Next.js API Route Error:', error)
+    console.error('❌ Error in generate schedule route:', error)
     return NextResponse.json(
       { 
-        success: false, 
-        error: error.message || 'Internal server error',
+        error: error.message || 'Failed to generate schedule',
+        detail: error.toString()
       },
       { status: 500 }
     )

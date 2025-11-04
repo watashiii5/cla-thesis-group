@@ -60,6 +60,16 @@ interface ParsedRoom {
   displayName: string
 }
 
+// Update the RoomUsage interface
+interface RoomUsage {
+  roomId: string
+  assignedSeats: number
+  capacity: number
+  isOverbooked: boolean
+  utilizationPercent: number
+  batchCount: number
+}
+
 export default function CampusCapacityPage() {
   const router = useRouter()
   
@@ -96,6 +106,9 @@ export default function CampusCapacityPage() {
   const [campusToDelete, setCampusToDelete] = useState<CampusFile | null>(null)
   const [deletingCampus, setDeletingCampus] = useState(false)
   const [successMessage, setSuccessMessage] = useState('')
+
+  // Add state for room usage (add this with other useState declarations)
+  const [roomUsage, setRoomUsage] = useState<Map<string, RoomUsage>>(new Map())
 
   useEffect(() => {
     fetchCampusFiles()
@@ -141,6 +154,7 @@ export default function CampusCapacityPage() {
       setCampusData([])
       setStats(null)
       setExpandedBuildings(new Set())
+      setRoomUsage(new Map()) // ✅ Clear room usage
       return
     }
 
@@ -160,10 +174,84 @@ export default function CampusCapacityPage() {
 
       setCampusData(data || [])
       calculateStats(data || [])
+      
+      // ✅ Fetch room usage data from schedule_batches
+      const usage = await fetchRoomUsage(groupId)
+      setRoomUsage(usage)
     } catch (error) {
       console.error('Error fetching campus data:', error)
     } finally {
       setLoadingData(false)
+    }
+  }
+
+  const fetchRoomUsage = async (campusGroupId: number): Promise<Map<string, RoomUsage>> => {
+    try {
+      // Get all schedule summaries for this campus group
+      const { data: summaries, error: summaryError } = await supabase
+        .from('schedule_summary')
+        .select('id')
+        .eq('campus_group_id', campusGroupId)
+        .eq('status', 'completed')
+
+      if (summaryError) throw summaryError
+      if (!summaries || summaries.length === 0) return new Map()
+
+      const summaryIds = summaries.map(s => s.id)
+
+      // Get all batches from schedule_batches
+      const { data: batches, error: batchError } = await supabase
+        .from('schedule_batches')
+        .select('room, participant_count, schedule_summary_id')
+        .in('schedule_summary_id', summaryIds)
+
+      if (batchError) throw batchError
+
+      // Get room capacities from campuses table
+      const { data: rooms, error: roomError } = await supabase
+        .from('campuses')
+        .select('room, capacity')
+        .eq('upload_group_id', campusGroupId)
+
+      if (roomError) throw roomError
+
+      // Create a map of room capacities
+      const capacityMap = new Map<string, number>()
+      rooms?.forEach(room => {
+        capacityMap.set(room.room, room.capacity)
+      })
+
+      // Calculate usage per room
+      const usageMap = new Map<string, RoomUsage>()
+      
+      batches?.forEach(batch => {
+        const roomKey = batch.room
+        const capacity = capacityMap.get(roomKey) || 0
+        
+        if (!usageMap.has(roomKey)) {
+          usageMap.set(roomKey, {
+            roomId: roomKey,
+            assignedSeats: 0,
+            capacity: capacity,
+            isOverbooked: false,
+            utilizationPercent: 0,
+            batchCount: 0
+          })
+        }
+        
+        const usage = usageMap.get(roomKey)!
+        usage.assignedSeats += batch.participant_count
+        usage.batchCount++
+        usage.utilizationPercent = capacity > 0 
+          ? Math.round((usage.assignedSeats / capacity) * 100) 
+          : 0
+        usage.isOverbooked = usage.assignedSeats > capacity
+      })
+
+      return usageMap
+    } catch (error) {
+      console.error('Error fetching room usage from schedule_batches:', error)
+      return new Map()
     }
   }
 

@@ -29,6 +29,8 @@ interface Room {
   room: string
   capacity: number
   building: string
+  campus: string
+  is_first_floor: boolean // ✅ NEW
   batches: Batch[]
   totalParticipants: number
   utilizationRate: number
@@ -38,8 +40,14 @@ interface Batch {
   id: number
   batch_name: string
   time_slot: string
+  start_time: string // ✅ NEW
+  end_time: string   // ✅ NEW
+  batch_date: string // ✅ NEW
   participant_count: number
   has_pwd: boolean
+  campus: string // ✅ NEW
+  building: string // ✅ NEW
+  is_first_floor: boolean // ✅ NEW
   participants: Participant[]
 }
 
@@ -103,6 +111,28 @@ async function fetchAllRows(table: string, filters: any = {}, orderBy: string = 
   return allData
 }
 
+// ✅ NEW: Format date and time
+function formatDateTime(dateString: string, timeString: string): string {
+  try {
+    const date = new Date(dateString)
+    const dateFormatted = date.toLocaleDateString('en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    })
+    
+    const [hours, minutes] = timeString.split(':').map(Number)
+    const period = hours >= 12 ? 'PM' : 'AM'
+    const hours12 = hours % 12 || 12
+    const timeFormatted = `${hours12}:${minutes.toString().padStart(2, '0')} ${period}`
+    
+    return `${dateFormatted}, ${timeFormatted}`
+  } catch {
+    return `${dateString} ${timeString}`
+  }
+}
+
 function CampusSchedulesContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -125,7 +155,8 @@ function CampusSchedulesContent() {
     totalBatches: 0,
     totalParticipants: 0,
     avgUtilization: 0,
-    pwdCount: 0
+    pwdCount: 0,
+    firstFloorRooms: 0 // ✅ NEW
   })
 
   useEffect(() => {
@@ -145,12 +176,9 @@ function CampusSchedulesContent() {
     try {
       console.log('📥 Fetching all schedules...')
 
-      // Fetch all schedule summaries
       const summaries = await fetchAllRows('schedule_summary', {}, 'created_at')
-
       console.log(`✅ Found ${summaries.length} schedules`)
 
-      // Get campus names for each schedule
       const schedulesWithNames = await Promise.all(
         summaries.map(async (summary) => {
           try {
@@ -174,7 +202,6 @@ function CampusSchedulesContent() {
         })
       )
 
-      // Sort by newest first
       schedulesWithNames.sort((a, b) => 
         new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       )
@@ -201,7 +228,6 @@ function CampusSchedulesContent() {
 
       if (summaryError) throw summaryError
 
-      // Get campus name
       const { data: campusData } = await supabase
         .from('campuses')
         .select('school_name')
@@ -216,21 +242,19 @@ function CampusSchedulesContent() {
 
       setScheduleSummary(summaryWithName)
 
-      // Fetch ALL batches
+      // ✅ UPDATED: Fetch batches with new fields
       const batches = await fetchAllRows('schedule_batches', {
         schedule_summary_id: scheduleId
       }, 'id')
 
       console.log(`✅ Fetched ${batches.length} batches`)
 
-      // Fetch ALL assignments
       const assignments = await fetchAllRows('schedule_assignments', {
         schedule_summary_id: scheduleId
       }, 'id')
 
       console.log(`✅ Fetched ${assignments.length} assignments`)
 
-      // Fetch ALL participants
       const participantIds = [...new Set(assignments.map((a: any) => a.participant_id))]
       let participants: any[] = []
       
@@ -250,25 +274,33 @@ function CampusSchedulesContent() {
 
       console.log(`✅ Fetched ${participants.length} participants`)
 
-      // Fetch campus/room data
       const campusRooms = await fetchAllRows('campuses', {
         upload_group_id: summaryData.campus_group_id
       }, 'building')
 
       console.log(`✅ Fetched ${campusRooms.length} rooms`)
 
-      // Build data structure
       const participantMap = new Map(participants.map(p => [p.id, p]))
       const batchMap = new Map<number, any>()
 
-      // Group assignments by batch
+      // ✅ UPDATED: Include new fields in batch structure
       assignments.forEach((assignment: any) => {
         const batch = batches.find((b: any) => b.id === assignment.schedule_batch_id)
         if (!batch) return
 
         if (!batchMap.has(batch.id)) {
           batchMap.set(batch.id, {
-            ...batch,
+            id: batch.id,
+            batch_name: batch.batch_name,
+            time_slot: batch.time_slot || 'N/A',
+            start_time: batch.start_time || 'N/A', // ✅ NEW
+            end_time: batch.end_time || 'N/A',     // ✅ NEW
+            batch_date: batch.batch_date || null,   // ✅ NEW
+            participant_count: batch.participant_count,
+            campus: batch.campus || 'N/A',          // ✅ NEW
+            building: batch.building || 'N/A',      // ✅ NEW
+            room: batch.room,
+            is_first_floor: batch.is_first_floor || false, // ✅ NEW
             participants: [],
             has_pwd: false
           })
@@ -290,7 +322,7 @@ function CampusSchedulesContent() {
         }
       })
 
-      // Group by building and room using schedules table for building info
+      // ✅ UPDATED: Group by building with new fields
       const buildingMap = new Map<string, Building>()
 
       campusRooms.forEach((room: any) => {
@@ -303,7 +335,6 @@ function CampusSchedulesContent() {
           })
         }
 
-        // Find batches for this room - match by room number only
         const roomBatches = Array.from(batchMap.values()).filter(
           (batch: any) => batch.room === room.room
         )
@@ -318,13 +349,14 @@ function CampusSchedulesContent() {
           ? Math.round((totalParticipants / maxPossibleParticipants) * 100)
           : 0
 
-        // Only add rooms that have batches scheduled
         if (roomBatches.length > 0) {
           buildingMap.get(buildingName)!.rooms.push({
             id: room.id,
             room: room.room,
             capacity: room.capacity,
             building: room.building,
+            campus: room.campus,
+            is_first_floor: roomBatches[0]?.is_first_floor || false, // ✅ NEW
             batches: roomBatches,
             totalParticipants,
             utilizationRate
@@ -335,11 +367,14 @@ function CampusSchedulesContent() {
       const buildingsArray = Array.from(buildingMap.values())
       setBuildings(buildingsArray)
 
-      // Calculate stats
+      // ✅ UPDATED: Calculate stats with first floor count
       const totalRooms = buildingsArray.reduce((sum, b) => sum + b.rooms.length, 0)
       const totalBatches = batches.length
       const totalParticipants = assignments.length
       const pwdCount = assignments.filter((a: any) => a.is_pwd).length
+      const firstFloorRooms = buildingsArray
+        .flatMap(b => b.rooms)
+        .filter(r => r.is_first_floor).length
       const avgUtilization = totalRooms > 0
         ? Math.round(
             buildingsArray.flatMap(b => b.rooms).reduce((sum, r) => sum + r.utilizationRate, 0) / totalRooms
@@ -352,7 +387,8 @@ function CampusSchedulesContent() {
         totalBatches,
         totalParticipants,
         avgUtilization,
-        pwdCount
+        pwdCount,
+        firstFloorRooms // ✅ NEW
       })
 
       setViewMode('campus')
@@ -446,7 +482,6 @@ function CampusSchedulesContent() {
                 </div>
               </div>
 
-              {/* Search Bar */}
               <div className={styles.searchSection}>
                 <div className={styles.searchBox}>
                   <input
@@ -459,7 +494,6 @@ function CampusSchedulesContent() {
                 </div>
               </div>
 
-              {/* Schedules List */}
               <div className={styles.schedulesGrid}>
                 {getFilteredSchedules().map((schedule) => (
                   <div
@@ -544,7 +578,14 @@ function CampusSchedulesContent() {
                   <div className={styles.headerInfo}>
                     <h1 className={styles.campusTitle}>
                       {viewMode === 'campus' && <><FaBuilding /> Campus Layout</>}
-                      {viewMode === 'room' && <><FaDoorOpen /> {selectedRoom?.building} - Room {selectedRoom?.room}</>}
+                      {viewMode === 'room' && (
+                        <>
+                          <FaDoorOpen /> 
+                          {selectedRoom?.building} - Room {selectedRoom?.room}
+                          {/* ✅ NEW: Show first floor indicator */}
+                          {selectedRoom?.is_first_floor && <span style={{marginLeft: '10px', fontSize: '18px'}}>♿ 1st Floor</span>}
+                        </>
+                      )}
                       {viewMode === 'batch' && <><FaBox /> {selectedBatch?.batch_name}</>}
                     </h1>
                     {scheduleSummary && (
@@ -556,7 +597,7 @@ function CampusSchedulesContent() {
                 </div>
               </div>
 
-              {/* Stats Dashboard */}
+              {/* ✅ UPDATED: Stats with first floor count */}
               <div className={styles.statsGrid}>
                 <div className={`${styles.statCard} ${styles.blue}`}>
                   <FaBuilding className={styles.statIcon} />
@@ -593,16 +634,16 @@ function CampusSchedulesContent() {
                     <div className={styles.statValue}>{stats.pwdCount}</div>
                   </div>
                 </div>
-                <div className={`${styles.statCard} ${styles.red}`}>
-                  <FaChartBar className={styles.statIcon} />
+                {/* ✅ NEW: First floor rooms stat */}
+                <div className={`${styles.statCard} ${styles.green}`}>
+                  <span className={styles.statIcon} style={{fontSize: '32px'}}>♿</span>
                   <div className={styles.statContent}>
-                    <div className={styles.statLabel}>Utilization</div>
-                    <div className={styles.statValue}>{stats.avgUtilization}%</div>
+                    <div className={styles.statLabel}>1st Floor Rooms</div>
+                    <div className={styles.statValue}>{stats.firstFloorRooms}</div>
                   </div>
                 </div>
               </div>
 
-              {/* Campus Buildings View */}
               {viewMode === 'campus' && (
                 <div className={styles.campusView}>
                   {buildings.map((building, idx) => (
@@ -621,7 +662,11 @@ function CampusSchedulesContent() {
                             onClick={() => handleRoomClick(room)}
                           >
                             <div className={styles.roomHeader}>
-                              <span className={styles.roomNumber}>Room {room.room}</span>
+                              <span className={styles.roomNumber}>
+                                Room {room.room}
+                                {/* ✅ NEW: Show floor indicator */}
+                                {room.is_first_floor && <span style={{marginLeft: '8px'}}>♿</span>}
+                              </span>
                               <span className={`${styles.utilizationBadge} ${
                                 room.utilizationRate >= 80 ? styles.high : 
                                 room.utilizationRate >= 50 ? styles.medium : styles.low
@@ -638,6 +683,11 @@ function CampusSchedulesContent() {
                                 <FaBox />
                                 <span>{room.batches.length} batches</span>
                               </div>
+                              {/* ✅ UPDATED: Show campus name */}
+                              <div className={styles.roomStat} style={{fontSize: '12px', opacity: 0.8}}>
+                                <FaBuilding />
+                                <span>{room.campus}</span>
+                              </div>
                               {room.batches.some(b => b.has_pwd) && (
                                 <div className={styles.pwdIndicator}>
                                   <FaWheelchair />
@@ -653,21 +703,34 @@ function CampusSchedulesContent() {
                 </div>
               )}
 
-              {/* Room View */}
               {viewMode === 'room' && selectedRoom && (
                 <div className={styles.roomView}>
                   <div className={styles.roomInfoCard}>
                     <div className={styles.infoRow}>
                       <div className={styles.infoItem}>
-                        <span className={styles.infoLabel}>Capacity</span>
-                        <span className={styles.infoValue}>{selectedRoom.capacity} seats</span>
+                        <span className={styles.infoLabel}>Campus</span>
+                        <span className={styles.infoValue} style={{fontSize: '20px'}}>{selectedRoom.campus}</span>
                       </div>
                       <div className={styles.infoItem}>
-                        <span className={styles.infoLabel}>Total Batches</span>
+                        <span className={styles.infoLabel}>Building</span>
+                        <span className={styles.infoValue} style={{fontSize: '20px'}}>{selectedRoom.building}</span>
+                      </div>
+                      <div className={styles.infoItem}>
+                        <span className={styles.infoLabel}>Floor</span>
+                        <span className={styles.infoValue} style={{fontSize: '20px'}}>
+                          {selectedRoom.is_first_floor ? '1st Floor ♿' : 'Upper Floor'}
+                        </span>
+                      </div>
+                      <div className={styles.infoItem}>
+                        <span className={styles.infoLabel}>Capacity</span>
+                        <span className={styles.infoValue}>{selectedRoom.capacity}</span>
+                      </div>
+                      <div className={styles.infoItem}>
+                        <span className={styles.infoLabel}>Batches</span>
                         <span className={styles.infoValue}>{selectedRoom.batches.length}</span>
                       </div>
                       <div className={styles.infoItem}>
-                        <span className={styles.infoLabel}>Total Participants</span>
+                        <span className={styles.infoLabel}>Participants</span>
                         <span className={styles.infoValue}>{selectedRoom.totalParticipants}</span>
                       </div>
                       <div className={styles.infoItem}>
@@ -695,8 +758,13 @@ function CampusSchedulesContent() {
                             </span>
                           )}
                         </div>
+                        {/* ✅ UPDATED: Show full date and time range */}
                         <div className={styles.batchTime}>
-                          <FaClock /> {batch.time_slot}
+                          <FaClock /> 
+                          {batch.batch_date && batch.start_time ? 
+                            `${formatDateTime(batch.batch_date, batch.start_time)} - ${batch.end_time}` :
+                            batch.time_slot
+                          }
                         </div>
                         <div className={styles.batchStats}>
                           <div className={styles.batchStat}>
@@ -725,9 +793,39 @@ function CampusSchedulesContent() {
                 <div className={styles.batchView}>
                   <div className={styles.batchInfoCard}>
                     <div className={styles.infoRow}>
+                      {/* ✅ UPDATED: Show detailed time information */}
                       <div className={styles.infoItem}>
-                        <span className={styles.infoLabel}>Time Slot</span>
-                        <span className={styles.infoValue}>{selectedBatch.time_slot}</span>
+                        <span className={styles.infoLabel}>Date</span>
+                        <span className={styles.infoValue} style={{fontSize: '18px'}}>
+                          {selectedBatch.batch_date ? 
+                            new Date(selectedBatch.batch_date).toLocaleDateString('en-US', {
+                              weekday: 'short',
+                              month: 'short',
+                              day: 'numeric',
+                              year: 'numeric'
+                            }) : 'N/A'
+                          }
+                        </span>
+                      </div>
+                      <div className={styles.infoItem}>
+                        <span className={styles.infoLabel}>Time</span>
+                        <span className={styles.infoValue} style={{fontSize: '18px'}}>
+                          {selectedBatch.start_time} - {selectedBatch.end_time}
+                        </span>
+                      </div>
+                      <div className={styles.infoItem}>
+                        <span className={styles.infoLabel}>Campus</span>
+                        <span className={styles.infoValue} style={{fontSize: '18px'}}>{selectedBatch.campus}</span>
+                      </div>
+                      <div className={styles.infoItem}>
+                        <span className={styles.infoLabel}>Building</span>
+                        <span className={styles.infoValue} style={{fontSize: '18px'}}>{selectedBatch.building}</span>
+                      </div>
+                      <div className={styles.infoItem}>
+                        <span className={styles.infoLabel}>Floor</span>
+                        <span className={styles.infoValue} style={{fontSize: '18px'}}>
+                          {selectedBatch.is_first_floor ? '1st Floor ♿' : 'Upper Floor'}
+                        </span>
                       </div>
                       <div className={styles.infoItem}>
                         <span className={styles.infoLabel}>Participants</span>
