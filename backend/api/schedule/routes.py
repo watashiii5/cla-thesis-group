@@ -115,7 +115,7 @@ def fetch_all_rows(table_name: str, filters: Dict = {}, order_by: str = "id") ->
         from_idx = page * PAGE_SIZE
         to_idx = from_idx + PAGE_SIZE - 1
         
-        query = sb.table(table_name).select("*").range(from_idx, to_idx).order(order_by)
+        query = supabase.table(table_name).select("*").range(from_idx, to_idx).order(order_by)
         
         # Apply filters
         for key, value in filters.items():
@@ -295,7 +295,7 @@ async def generate_schedule(request: dict):
         logger.info(f"   📅 Schedule Date Range: {summary_row['schedule_date']} to {summary_row['end_date']}")
         
         try:
-            summary_res = sb.table("schedule_summary").insert([summary_row]).execute()
+            summary_res = supabase.table("schedule_summary").insert([summary_row]).execute()
             if not summary_res.data:
                 raise HTTPException(500, "Failed to insert schedule_summary")
             schedule_summary_id = summary_res.data[0]["id"]
@@ -331,7 +331,7 @@ async def generate_schedule(request: dict):
             logger.info(f"   📦 Batch {b['batch_name']}: {batch_data['campus']} | {batch_data['building']} | {batch_data['room']} | {batch_data['batch_date']} | {batch_data['start_time']}-{batch_data['end_time']}")
             
             try:
-                batch_res = sb.table("schedule_batches").insert([batch_data]).execute()
+                batch_res = supabase.table("schedule_batches").insert([batch_data]).execute()
                 
                 if not batch_res.data:
                     raise HTTPException(500, f"Failed to insert batch {b['batch_name']}")
@@ -388,7 +388,7 @@ async def generate_schedule(request: dict):
                     continue
             
             try:
-                sb.table('schedule_assignments').insert([assignment_data]).execute()
+                supabase.table('schedule_assignments').insert([assignment_data]).execute()
                 assignments_saved += 1
                 
                 if assignments_saved % 50 == 0:  # Log progress every 50 assignments
@@ -475,7 +475,7 @@ async def export_schedule(schedule_id: int):
             for i in range(0, len(pids), CHUNK_SIZE):
                 chunk = pids[i:i + CHUNK_SIZE]
                 try:
-                    res = sb.table("participants").select("*").in_("id", chunk).execute()
+                    res = supabase.table("participants").select("*").in_("id", chunk).execute()
                     if res.data:
                         participants.extend(res.data)
                 except Exception as e:
@@ -513,7 +513,7 @@ async def export_schedule(schedule_id: int):
                 for i in range(0, len(pids), CHUNK_SIZE):
                     chunk = pids[i:i + CHUNK_SIZE]
                     try:
-                        res = sb.table("participants").select("*").in_("id", chunk).execute()
+                        res = supabase.table("participants").select("*").in_("id", chunk).execute()
                         if res.data:
                             participants.extend(res.data)
                     except Exception as e:

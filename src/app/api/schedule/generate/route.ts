@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-// ✅ Add backend URL configuration
+// ✅ Backend URL from environment variable
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000'
 
 export async function POST(request: NextRequest) {
@@ -13,28 +13,28 @@ export async function POST(request: NextRequest) {
       eventName,
       eventType,
       scheduleDate,
-      startDate,  // ✅ KEEP THIS
+      startDate,
       startTime,
       endDate,
       endTime,
       durationPerBatch,
       prioritizePWD = true,
-      emailNotification = false
+      emailNotification = false,
+      excludeLunchBreak = true,
+      lunchBreakStart = '12:00',
+      lunchBreakEnd = '13:00'
     } = body
 
     console.log('📋 Received schedule request:', {
       campusGroupId,
       participantGroupId,
       eventName,
-      eventType,
-      scheduleDate,
-      startDate,  // ✅ KEEP LOGGING THIS
-      endDate,
       durationPerBatch
     })
 
-    // ✅ Use environment variable for backend URL (for production)
-    // ✅ Keep your exact field mapping - it's correct!
+    // ✅ FIX: Actually call your backend with BACKEND_URL
+    console.log('🌐 Calling backend at:', BACKEND_URL)
+    
     const response = await fetch(`${BACKEND_URL}/api/schedule/generate`, {
       method: 'POST',
       headers: {
@@ -46,23 +46,27 @@ export async function POST(request: NextRequest) {
         event_name: eventName,
         event_type: eventType,
         schedule_date: scheduleDate,
-        start_date: startDate,  // ✅ CRITICAL: Keep this
+        start_date: startDate,
         start_time: startTime,
         end_date: endDate,
         end_time: endTime,
         duration_per_batch: durationPerBatch,
         prioritize_pwd: prioritizePWD,
-        email_notification: emailNotification
+        email_notification: emailNotification,
+        exclude_lunch_break: excludeLunchBreak,
+        lunch_break_start: lunchBreakStart,
+        lunch_break_end: lunchBreakEnd
       })
     })
 
     if (!response.ok) {
       const errorText = await response.text()
-      console.error('Backend error:', errorText)
+      console.error('❌ Backend error:', errorText)
       throw new Error(`Backend returned ${response.status}: ${errorText}`)
     }
 
     const result = await response.json()
+    console.log('✅ Backend response:', result)
     
     return NextResponse.json(result)
 
@@ -72,7 +76,7 @@ export async function POST(request: NextRequest) {
       { 
         error: error.message || 'Failed to generate schedule',
         detail: error.toString(),
-        backend_url: BACKEND_URL  // ✅ Add this for debugging
+        backend_url: BACKEND_URL
       },
       { status: 500 }
     )
