@@ -7,11 +7,14 @@ const supabase = createClient(
 )
 
 export async function GET(
-  _req: NextRequest,
-  { params }: { params: { id: string } }
+  request: NextRequest,
+  context: { params: Promise<{ id: string }> }
 ) {
+  const params = await context.params
+  const { id } = params
+
   try {
-    const scheduleId = Number(params.id)
+    const scheduleId = Number(id)
     console.log(`\n🐛 Debug route: Schedule ID ${scheduleId}`)
 
     // Fetch assignments
