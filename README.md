@@ -10,6 +10,9 @@ A comprehensive scheduling system for CLA thesis management built with **Next.js
 
 ---
 
+## Vercel Main
+Link : cla-thesis-group-git-main-jermainepasamba-4602s-projects.vercel.app
+
 ## 🎯 Features
 
 - **📅 Smart Scheduling** - Automated schedule generation with conflict detection
