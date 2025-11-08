@@ -82,10 +82,6 @@ export async function POST(request: NextRequest) {
       email_notification: body.emailNotification
     }
 
-    // Timeout controller (55s)
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 55000)
-
     let response
     try {
       response = await fetch(`${BACKEND_URL}/api/schedule/generate`, {
@@ -95,21 +91,9 @@ export async function POST(request: NextRequest) {
           'Accept': 'application/json',
         },
         body: JSON.stringify(backendPayload),
-        signal: controller.signal,
       })
-      clearTimeout(timeoutId)
     } catch (error: any) {
-      clearTimeout(timeoutId)
       console.error('❌ Fetch error:', error)
-      if (error.name === 'AbortError') {
-        return NextResponse.json(
-          { 
-            error: 'Request timeout - the schedule generation took too long. Please try with fewer participants or a shorter time range.',
-            success: false 
-          },
-          { status: 504 }
-        )
-      }
       if (error.message?.includes('fetch failed') || error.code === 'ECONNREFUSED') {
         return NextResponse.json(
           { 
@@ -191,15 +175,6 @@ export async function POST(request: NextRequest) {
 
   } catch (error: any) {
     console.error('❌ API Route Error:', error)
-    if (error.name === 'AbortError') {
-      return NextResponse.json(
-        { 
-          error: 'Request timeout - the schedule generation took too long. Please try with fewer participants or a shorter time range.',
-          success: false 
-        },
-        { status: 504 }
-      )
-    }
     if (error.message?.includes('fetch failed') || error.code === 'ECONNREFUSED') {
       return NextResponse.json(
         { 

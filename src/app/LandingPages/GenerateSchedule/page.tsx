@@ -1,7 +1,7 @@
 'use client'
 
 import styles from './GenerateSchedule.module.css'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import MenuBar from '@/app/components/MenuBar'
@@ -124,6 +124,9 @@ export default function GenerateSchedulePage() {
   const [showResults, setShowResults] = useState(false)
   const [pwdCounts, setPwdCounts] = useState<{[key: number]: number}>({})
   const [roomData, setRoomData] = useState<{[key: number]: any[]}>({})
+  const [timer, setTimer] = useState(0)
+  const [timerActive, setTimerActive] = useState(false)
+  const timerRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => { fetchData() }, [])
   useEffect(() => {
@@ -358,22 +361,24 @@ export default function GenerateSchedulePage() {
       return
     }
     const requestBody = {
-      campusGroupId: Number(config.campusGroupId),
-      participantGroupId: Number(config.participantGroupId),
-      eventName: config.eventName.trim(),
-      eventType: config.eventType,
-      scheduleDate: config.scheduleDate,
-      endDate: effectiveEndDate,
-      startTime: config.startTime,
-      endTime: config.endTime,
-      durationPerBatch: getDurationInMinutes(),
-      prioritizePWD: Boolean(config.prioritizePWD),
-      emailNotification: Boolean(config.emailNotification),
-      excludeLunchBreak: Boolean(config.excludeLunchBreak),
-      lunchBreakStart: config.lunchBreakStart,
-      lunchBreakEnd: config.lunchBreakEnd
-    }
+  campusGroupId: Number(config.campusGroupId),
+  participantGroupId: Number(config.participantGroupId),
+  eventName: config.eventName.trim(),
+  eventType: config.eventType,
+  scheduleDate: config.scheduleDate,
+  startDate: config.scheduleDate,  // ✅ ADD THIS LINE
+  endDate: effectiveEndDate,
+  startTime: config.startTime,
+  endTime: config.endTime,
+  durationPerBatch: getDurationInMinutes(),
+  prioritizePWD: Boolean(config.prioritizePWD),
+  emailNotification: Boolean(config.emailNotification),
+  excludeLunchBreak: Boolean(config.excludeLunchBreak),
+  lunchBreakStart: config.lunchBreakStart,
+  lunchBreakEnd: config.lunchBreakEnd
+}
     setScheduling(true)
+    setTimerActive(true)
     setScheduleResult(null)
     try {
       const res = await fetch(`/api/schedule/generate`, {
@@ -404,6 +409,7 @@ export default function GenerateSchedulePage() {
       alert(`Failed to generate schedule: ${error.message || error}`)
     } finally {
       setScheduling(false)
+      setTimerActive(false)
     }
   }
 
@@ -539,6 +545,18 @@ export default function GenerateSchedulePage() {
     }
   }
 
+  useEffect(() => {
+    if (timerActive) {
+      timerRef.current = setInterval(() => setTimer(t => t + 1), 1000)
+    } else {
+      setTimer(0)
+      if (timerRef.current) clearInterval(timerRef.current)
+    }
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current)
+    }
+  }, [timerActive])
+
   return (
     <div className={styles.scheduleLayout}>
       <MenuBar 
@@ -577,6 +595,26 @@ export default function GenerateSchedulePage() {
             <div className={styles.loadingState}>
               <div className={styles.spinner}></div>
               <p>Loading data...</p>
+            </div>
+          ) : scheduling ? (
+            <div className={`${styles.loadingState} ${styles.entertainingLoading}`}>
+              <div className={styles.spinner}></div>
+              <div className={styles.loadingText}>
+                Generating schedule
+                <span className={styles.animatedDots}>...</span>
+              </div>
+              <div className={styles.timerBox}>
+                <span className={styles.timerIcon}>⏳</span>
+                Elapsed time:&nbsp;
+                <strong>
+                  {timer < 60
+                    ? `${timer} seconds`
+                    : `${Math.floor(timer / 60)} min ${timer % 60} sec`}
+                </strong>
+              </div>
+              <div style={{ marginTop: 12, fontSize: 15, color: '#1565c0', fontWeight: 500 }}>
+                Sit back and relax while we optimize your schedule!
+              </div>
             </div>
           ) : showResults && scheduleResult ? (
             <div className={styles.resultsSection}>
@@ -714,7 +752,7 @@ export default function GenerateSchedulePage() {
               <div className={styles.formCard}>
                 <h2 className={styles.formSectionTitle}>
                   <svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24">
-                    <path d="M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10zm-2-8h-2v2h2v-2zm0 4h-2v2h2v-2z"/>
+                    <path d="M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v-2H8V9h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10zm-2-8h-2v2h2v-2zm0 4h-2v2h2v-2z"/>
                   </svg>
                   Select Campus
                 </h2>
@@ -845,7 +883,9 @@ export default function GenerateSchedulePage() {
                     <label className={styles.formLabel}>
                       End Time *
                       <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16" style={{display: 'inline', marginLeft: '6px'}}>
+
                         <path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/>
+
                       </svg>
                     </label>
                     <input
@@ -1070,6 +1110,7 @@ export default function GenerateSchedulePage() {
     </div>
   )
 }
+
 function separateRoomsByFloor(campusGroupId: number, roomData: {[key: number]: any[]}): [number, number, number, number, number] {
   // Use roomData from state
   const rooms = roomData[campusGroupId] || [];
@@ -1095,6 +1136,7 @@ function separateRoomsByFloor(campusGroupId: number, roomData: {[key: number]: a
 
   return [firstFloorCount, upperFloorCount, avgCapacity, firstFloorCapacity, upperFloorCapacity];
 }
+
 function isFirstFloor(building: string, room: string): boolean {
   const roomStr = (room || '').toLowerCase().trim();
   const buildingStr = (building || '').toLowerCase().trim();

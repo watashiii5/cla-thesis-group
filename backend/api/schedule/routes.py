@@ -1,14 +1,12 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Set
 import os
 from pathlib import Path
 from dotenv import load_dotenv
 from supabase import create_client, Client
-from .scheduler import PriorityScheduler
 import logging
-from datetime import datetime
-import json
+from datetime import datetime, timedelta, date
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +16,7 @@ load_dotenv(env_path)
 root_env_path = Path(__file__).parent.parent.parent.parent / ".env.local"
 load_dotenv(root_env_path)
 
-router = APIRouter(prefix="/api/schedule", tags=["schedule"])
+router = APIRouter(tags=["schedule"])
 
 # Read keys from backend .env (server-only)
 SUPABASE_URL = os.getenv("SUPABASE_URL") or os.getenv("NEXT_PUBLIC_SUPABASE_URL")
@@ -39,21 +37,12 @@ sb: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # ==================== Models ====================
 
-class ScheduleBase(BaseModel):
-    name: str
-    description: Optional[str] = None
-
-class ScheduleCreate(ScheduleBase):
-    pass
-
-class Schedule(ScheduleBase):
-    id: int
-    created_at: datetime
-
 class ScheduleRequest(BaseModel):
     event_name: str
     event_type: str
     schedule_date: str
+    start_date: str
+    end_date: str
     start_time: str
     end_time: str
     duration_per_batch: int
@@ -61,6 +50,9 @@ class ScheduleRequest(BaseModel):
     participant_group_id: int
     prioritize_pwd: bool = True
     email_notification: bool = False
+    exclude_lunch_break: bool = True
+    lunch_break_start: str = "12:00"
+    lunch_break_end: str = "13:00"
 
 class ScheduleResponse(BaseModel):
     schedule_summary_id: int
@@ -68,158 +60,278 @@ class ScheduleResponse(BaseModel):
     unscheduled_count: int
     total_batches: int
     warnings: List[str] = []
-    assignments: List[Dict] = {}
     pwd_stats: Dict = {}
-
-class Participant(BaseModel):
-    participant_number: str
-    name: str
-    email: str
-    is_pwd: bool
-    province: str
-    city: str
-
-class BatchEmailRequest(BaseModel):
-    schedule_id: int
+    execution_time: float = 0
 
 # ==================== Helper Functions ====================
 
-def fetch_all_rows(table_name: str, filters: Dict = {}, order_by: str = "id") -> List[Dict]:
-    """
-    Fetch ALL rows from a Supabase table, bypassing the 1000 row limit.
-    Uses pagination with 1000 rows per page.
-    """
-    PAGE_SIZE = 1000
-    all_data = []
-    page = 0
-    has_more = True
+def to_int(value) -> int:
+    """Fast integer conversion"""
+    if value is None or value == "":
+        return 0
+    if isinstance(value, (int, bool)):
+        return int(value)
+    try:
+        return int(str(value).strip())
+    except:
+        return 0
+
+def is_first_floor(building: str, room: str) -> bool:
+    """Fast floor detection"""
+    room_str = str(room).lower().strip()
+    building_str = str(building).lower().strip()
+    combined = f"{building_str} {room_str}"
     
-    logger.info(f"📥 Fetching ALL rows from '{table_name}' (bypassing 1000 limit)...")
+    # Quick checks first
+    digits = ''.join(c for c in room if c.isdigit())
+    if len(digits) >= 3 and digits[0] == '1':
+        return True
     
-    while has_more:
-        from_idx = page * PAGE_SIZE
-        to_idx = from_idx + PAGE_SIZE - 1
+    # Text indicators
+    indicators = ['1f', '1st', 'first', 'ground', 'gf', 'g floor', 'level 1', 'l1']
+    return any(ind in combined for ind in indicators)
+
+class PriorityScheduler:
+    """Ultra-optimized scheduler with pre-allocation"""
+    
+    __slots__ = ('batches', 'scheduled_ids', 'batch_no', 'pwd_issues')
+    
+    def __init__(self):
+        self.batches: List[Dict] = []
+        self.scheduled_ids: Set[int] = set()
+        self.batch_no = 1
+        self.pwd_issues: List[str] = []
+    
+    def schedule(
+        self,
+        rooms: List[Dict],
+        participants: List[Dict],
+        start_date: str,
+        end_date: str,
+        start_time: str,
+        end_time: str,
+        duration_per_batch: int,
+        prioritize_pwd: bool = True,
+        exclude_lunch_break: bool = True,
+        lunch_break_start: str = "12:00",
+        lunch_break_end: str = "13:00"
+    ) -> Dict:
+        """Main scheduling algorithm - OPTIMIZED"""
         
-        query = sb.table(table_name).select("*").range(from_idx, to_idx).order(order_by)
+        logger.info(f"🎯 Scheduling {len(participants)} participants across {len(rooms)} rooms")
         
-        # Apply filters
-        for key, value in filters.items():
-            query = query.eq(key, value)
+        # Generate dates
+        dates = self._generate_dates(start_date, end_date)
+        if not dates:
+            return self._empty_result(len(participants))
         
-        try:
-            res = query.execute()
-            data = res.data or []
+        # Generate time slots
+        slots = self._generate_slots(
+            start_time, end_time, duration_per_batch,
+            exclude_lunch_break, lunch_break_start, lunch_break_end
+        )
+        
+        if not slots:
+            return self._empty_result(len(participants))
+        
+        logger.info(f"📅 {len(dates)} days × {len(slots)} slots = {len(dates) * len(slots)} total slots")
+        
+        # Separate participants and rooms
+        pwd_participants = [p for p in participants if p.get("is_pwd", False)] if prioritize_pwd else []
+        non_pwd_participants = [p for p in participants if not p.get("is_pwd", False)] if prioritize_pwd else participants
+        
+        first_floor_rooms = [r for r in rooms if is_first_floor(r.get("building", ""), r.get("room", ""))]
+        all_rooms = rooms
+        
+        logger.info(f"♿ PWD: {len(pwd_participants)} | 👤 Non-PWD: {len(non_pwd_participants)}")
+        logger.info(f"🏢 1st Floor: {len(first_floor_rooms)} | All: {len(all_rooms)} rooms")
+        
+        # PHASE 1: Schedule PWD to 1st floor
+        pwd_idx = self._schedule_group(pwd_participants, first_floor_rooms, dates, slots)
+        
+        # PHASE 2: Schedule non-PWD to all rooms
+        non_pwd_idx = self._schedule_group(non_pwd_participants, all_rooms, dates, slots)
+        
+        total_scheduled = len(self.scheduled_ids)
+        total_unscheduled = len(participants) - total_scheduled
+        
+        logger.info(f"✅ Scheduled: {total_scheduled}/{len(participants)}")
+        
+        return {
+            "batches": self.batches,
+            "scheduled_count": total_scheduled,
+            "unscheduled_count": total_unscheduled,
+            "total_batches": len(self.batches),
+            "pwd_scheduled": pwd_idx,
+            "pwd_unscheduled": len(pwd_participants) - pwd_idx,
+            "non_pwd_scheduled": non_pwd_idx,
+            "non_pwd_unscheduled": len(non_pwd_participants) - non_pwd_idx,
+            "warnings": self.pwd_issues,
+        }
+    
+    def _generate_dates(self, start: str, end: str) -> List[date]:
+        """Generate date range"""
+        start_dt = datetime.strptime(start, "%Y-%m-%d").date()
+        end_dt = datetime.strptime(end, "%Y-%m-%d").date()
+        if start_dt > end_dt:
+            return []
+        dates = []
+        current = start_dt
+        while current <= end_dt:
+            dates.append(current)
+            current += timedelta(days=1)
+        return dates
+    
+    def _generate_slots(self, start: str, end: str, duration: int, 
+                        exclude_lunch: bool, lunch_start: str, lunch_end: str) -> List[Dict]:
+        """Generate time slots"""
+        start_h, start_m = map(int, start.split(':'))
+        end_h, end_m = map(int, end.split(':'))
+        
+        start_min = start_h * 60 + start_m
+        end_min = end_h * 60 + end_m
+        
+        lunch_start_min = sum(int(x) * 60 ** i for i, x in enumerate(reversed(lunch_start.split(':'))))
+        lunch_end_min = sum(int(x) * 60 ** i for i, x in enumerate(reversed(lunch_end.split(':'))))
+        
+        slots = []
+        curr = start_min
+        
+        while curr + duration <= end_min:
+            slot_end = curr + duration
             
-            if not data:
-                has_more = False
+            # Skip lunch break
+            if exclude_lunch and not (slot_end <= lunch_start_min or curr >= lunch_end_min):
+                if curr < lunch_end_min:
+                    curr = lunch_end_min
+                    continue
+            
+            slots.append({
+                'start': f"{curr // 60:02d}:{curr % 60:02d}",
+                'end': f"{slot_end // 60:02d}:{slot_end % 60:02d}"
+            })
+            curr += duration
+        
+        return slots
+    
+    def _schedule_group(self, participants: List[Dict], rooms: List[Dict], 
+                       dates: List[date], slots: List[Dict]) -> int:
+        """Schedule a group of participants"""
+        idx = 0
+        for day in dates:
+            day_str = day.strftime("%Y-%m-%d")
+            for slot in slots:
+                for room in rooms:
+                    cap = to_int(room.get("capacity"))
+                    if cap <= 0 or idx >= len(participants):
+                        continue
+                    
+                    end_idx = min(idx + cap, len(participants))
+                    batch_people = participants[idx:end_idx]
+                    if not batch_people:
+                        continue
+                    
+                    self._create_batch(batch_people, room, slot, day_str)
+                    idx = end_idx
+                    
+                    if idx >= len(participants):
+                        break
+                if idx >= len(participants):
+                    break
+            if idx >= len(participants):
                 break
-            
-            all_data.extend(data)
-            logger.debug(f"   Page {page + 1}: Fetched {len(data)} rows (total: {len(all_data)})")
-            
-            if len(data) < PAGE_SIZE:
-                has_more = False
-            
-            page += 1
-            
-        except Exception as e:
-            logger.error(f"❌ Error fetching page {page} from {table_name}: {e}")
-            raise
+        return idx
     
-    logger.info(f"✅ Total rows fetched from '{table_name}': {len(all_data)}")
-    return all_data
+    def _create_batch(self, people: List[Dict], room: Dict, slot: Dict, day: str):
+        """Create a batch - OPTIMIZED"""
+        campus = room.get("campus", "N/A")
+        building = room.get("building", "N/A")
+        room_name = room.get("room", "N/A")
+        is_1st_floor = is_first_floor(building, room_name)
+        
+        self.batches.append({
+            "batch_number": self.batch_no,
+            "batch_name": f"Batch {self.batch_no}",
+            "batch_date": day,
+            "campus": campus,
+            "building": building,
+            "room": room_name,
+            "is_first_floor": is_1st_floor,
+            "start_time": slot['start'],
+            "end_time": slot['end'],
+            "time_slot": f"{slot['start']} - {slot['end']}",
+            "participant_count": len(people),
+            "participant_ids": [int(p["id"]) for p in people],
+            "has_pwd": any(p.get("is_pwd", False) for p in people),
+        })
+        
+        for p in people:
+            self.scheduled_ids.add(int(p["id"]))
+        
+        self.batch_no += 1
+    
+    def _empty_result(self, total: int) -> Dict:
+        return {
+            "batches": [],
+            "scheduled_count": 0,
+            "unscheduled_count": total,
+            "total_batches": 0,
+            "pwd_scheduled": 0,
+            "pwd_unscheduled": 0,
+            "non_pwd_scheduled": 0,
+            "non_pwd_unscheduled": total,
+            "warnings": ["No scheduling possible"],
+        }
 
 # ==================== Endpoints ====================
 
-@router.get("/", response_model=List[Schedule])
-async def list_schedules():
-    """Get all schedules"""
-    try:
-        logger.info("📋 Fetching all schedules...")
-        rows = fetch_all_rows("schedule_summary")
-        return rows
-    except Exception as e:
-        logger.error(f"❌ Error fetching schedules: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
 @router.post("/generate", response_model=ScheduleResponse)
 async def generate_schedule(req: ScheduleRequest):
-    logger.info(f"\n{'='*100}")
-    logger.info(f"🚀 SCHEDULE GENERATION REQUEST")
-    logger.info(f"{'='*100}")
-    logger.info(f"Event: {req.event_name}")
-    logger.info(f"Date: {req.schedule_date}")
-    logger.info(f"Time: {req.start_time} - {req.end_time}")
-    logger.info(f"Campus Group ID: {req.campus_group_id}")
-    logger.info(f"Participant Group ID: {req.participant_group_id}")
+    """Generate schedule - OPTIMIZED VERSION"""
+    start_time = datetime.now()
+    
+    logger.info(f"🚀 SCHEDULE REQUEST: {req.event_name}")
     
     try:
-        # ==================== FETCH ROOMS ====================
-        logger.info("\n📊 STEP 1: Fetching rooms from Supabase...")
-        rooms = []
-        try:
-            res = sb.table("campuses") \
-                .select("id, campus, building, room, capacity, upload_group_id") \
-                .eq("upload_group_id", req.campus_group_id) \
-                .execute()
-            rooms = res.data or []
-            logger.info(f"✅ Fetched {len(rooms)} rooms")
-            for r in rooms:
-                logger.debug(f"   Room: {r.get('room')} | Capacity: {r.get('capacity')}")
-        except Exception as e:
-            logger.error(f"❌ Failed to fetch rooms: {e}")
-            raise HTTPException(status_code=500, detail=f"Failed to fetch rooms: {e}")
-
+        # Fetch rooms
+        rooms_res = sb.table("campuses").select("*").eq("upload_group_id", req.campus_group_id).execute()
+        rooms = rooms_res.data or []
+        
         if not rooms:
-            logger.error(f"❌ No rooms found for campus_group_id={req.campus_group_id}")
-            raise HTTPException(404, "No rooms found for this campus group")
-
-        # ==================== FETCH PARTICIPANTS ====================
-        logger.info("\n👥 STEP 2: Fetching participants from Supabase...")
-        participants = []
-        try:
-            res = sb.table("participants") \
-                .select("*") \
-                .eq("upload_group_id", req.participant_group_id) \
-                .order("id") \
-                .execute()
-            participants = res.data or []
-            logger.info(f"✅ Fetched {len(participants)} participants")
-            pwd_count = sum(1 for p in participants if p.get("is_pwd", False))
-            logger.info(f"   ♿ PWD: {pwd_count}")
-            logger.info(f"   👤 Non-PWD: {len(participants) - pwd_count}")
-        except Exception as e:
-            logger.error(f"❌ Failed to fetch participants: {e}")
-            raise HTTPException(status_code=500, detail=f"Failed to fetch participants: {e}")
-
+            raise HTTPException(404, "No rooms found")
+        
+        # Fetch participants
+        parts_res = sb.table("participants").select("*").eq("upload_group_id", req.participant_group_id).execute()
+        participants = parts_res.data or []
+        
         if not participants:
-            logger.error(f"❌ No participants found for participant_group_id={req.participant_group_id}")
-            raise HTTPException(404, "No participants found for this group")
-
-        # ==================== SCHEDULE ALGORITHM ====================
-        logger.info("\n🗓️  STEP 3: Running priority scheduler...")
+            raise HTTPException(404, "No participants found")
+        
+        logger.info(f"📊 {len(rooms)} rooms, {len(participants)} participants")
+        
+        # Run scheduler
         scheduler = PriorityScheduler()
         result = scheduler.schedule(
             rooms=rooms,
             participants=participants,
+            start_date=req.start_date,
+            end_date=req.end_date,
             start_time=req.start_time,
             end_time=req.end_time,
             duration_per_batch=req.duration_per_batch,
             prioritize_pwd=req.prioritize_pwd,
+            exclude_lunch_break=req.exclude_lunch_break,
+            lunch_break_start=req.lunch_break_start,
+            lunch_break_end=req.lunch_break_end
         )
-        logger.info(f"✅ Scheduling complete")
-        logger.info(f"   Batches: {result['total_batches']}")
-        logger.info(f"   Scheduled: {result['scheduled_count']}/{len(participants)}")
-
-        # ==================== SAVE TO SUPABASE ====================
-        logger.info("\n💾 STEP 4: Saving to Supabase...")
-
-        # Insert schedule_summary
-        logger.info("   Inserting schedule_summary...")
-        summary_row = {
+        
+        # Save schedule_summary
+        summary = {
             "event_name": req.event_name,
             "event_type": req.event_type,
             "schedule_date": req.schedule_date,
+            "start_date": req.start_date,
+            "end_date": req.end_date,
             "start_time": req.start_time,
             "end_time": req.end_time,
             "campus_group_id": req.campus_group_id,
@@ -227,203 +339,60 @@ async def generate_schedule(req: ScheduleRequest):
             "scheduled_count": result["scheduled_count"],
             "unscheduled_count": result["unscheduled_count"],
         }
-        try:
-            summary_res = sb.table("schedule_summary").insert([summary_row]).execute()
-            if not summary_res.data:
-                logger.error("❌ schedule_summary insert returned no data")
-                raise HTTPException(500, "Failed to insert schedule_summary")
-            summary_data = summary_res.data
-            schedule_summary_id = summary_data[0]["id"]
-            logger.info(f"✅ schedule_summary created (ID: {schedule_summary_id})")
-        except Exception as e:
-            logger.error(f"❌ Failed to insert schedule_summary: {e}")
-            raise HTTPException(500, f"Failed to insert schedule_summary: {e}")
-
-        # Insert schedule_batches
-        logger.info("   Inserting schedule_batches...")
-        batch_rows = []
-        for b in result["batches"]:
-            batch_rows.append({
-                "schedule_summary_id": schedule_summary_id,
+        
+        summary_res = sb.table("schedule_summary").insert([summary]).execute()
+        summary_id = summary_res.data[0]["id"]
+        
+        logger.info(f"💾 Summary ID: {summary_id}")
+        
+        # Batch insert schedule_batches (FAST)
+        if result["batches"]:
+            batch_rows = [{
+                "schedule_summary_id": summary_id,
+                "batch_number": b["batch_number"],
                 "batch_name": b["batch_name"],
+                "campus": b["campus"],
+                "building": b["building"],
                 "room": b["room"],
+                "is_first_floor": b["is_first_floor"],
+                "start_time": b["start_time"],
+                "end_time": b["end_time"],
                 "time_slot": b["time_slot"],
+                "batch_date": b["batch_date"],
                 "participant_count": b["participant_count"],
                 "has_pwd": b["has_pwd"],
                 "participant_ids": b["participant_ids"],
-            })
-
-        try:
-            batches_res = sb.table("schedule_batches").insert(batch_rows).execute()
-            if not batches_res.data:
-                logger.error("❌ schedule_batches insert returned no data")
-                raise HTTPException(500, "Failed to insert schedule_batches")
-            batches_data = batches_res.data
-            logger.info(f"✅ {len(batches_data)} batches inserted")
+            } for b in result["batches"]]
             
-            # Map batch_number to DB IDs for assignments
-            batch_id_by_number = {}
-            for i, batch_row in enumerate(batch_rows):
-                if i < len(batches_data):
-                    batch_id_by_number[result["batches"][i]["batch_number"]] = batches_data[i]["id"]
-            logger.debug(f"   Batch ID mapping: {batch_id_by_number}")
-        except Exception as e:
-            logger.error(f"❌ Failed to insert schedule_batches: {e}")
-            raise HTTPException(500, f"Failed to insert schedule_batches: {e}")
-
-        # Insert schedule_assignments
-        logger.info("   Inserting schedule_assignments...")
-        warnings: List[str] = []
-        try:
-            if result["assignments"]:
-                assign_rows = []
-                for a in result["assignments"]:
-                    batch_id = batch_id_by_number.get(a["batch_number"])
-                    if batch_id:
-                        assign_rows.append({
-                            "schedule_summary_id": schedule_summary_id,
-                            "schedule_batch_id": batch_id,
-                            "participant_id": a["participant_id"],
-                            "seat_no": a["seat_no"],
-                            "is_pwd": a["is_pwd"],
-                        })
-
-                if assign_rows:
-                    assigns_res = sb.table("schedule_assignments").insert(assign_rows).execute()
-                    if assigns_res.data:
-                        logger.info(f"✅ {len(assigns_res.data)} assignments inserted")
-                    else:
-                        logger.warning("⚠️  schedule_assignments insert returned no data")
-        except Exception as e:
-            logger.warning(f"⚠️  schedule_assignments insert failed (table may not have RLS): {e}")
-            warnings.append(f"Assignments not saved: {e}")
-
-        if result["unscheduled_count"] > 0:
-            warning_msg = f"{result['unscheduled_count']} participants not scheduled"
-            warnings.append(warning_msg)
-            logger.warning(f"⚠️  {warning_msg}")
-
-        logger.info(f"\n{'='*100}")
-        logger.info(f"✅ SCHEDULE GENERATION COMPLETE")
-        logger.info(f"{'='*100}\n")
-
+            sb.table("schedule_batches").insert(batch_rows).execute()
+            logger.info(f"✅ Inserted {len(batch_rows)} batches")
+        
+        execution_time = (datetime.now() - start_time).total_seconds()
+        
+        logger.info(f"⚡ Completed in {execution_time:.2f}s")
+        
         return ScheduleResponse(
-            schedule_summary_id=schedule_summary_id,
+            schedule_summary_id=summary_id,
             scheduled_count=result["scheduled_count"],
             unscheduled_count=result["unscheduled_count"],
             total_batches=result["total_batches"],
-            warnings=warnings,
-            assignments=result["assignments"],
+            warnings=result["warnings"],
+            pwd_stats={
+                "pwd_scheduled": result["pwd_scheduled"],
+                "pwd_unscheduled": result["pwd_unscheduled"],
+                "non_pwd_scheduled": result["non_pwd_scheduled"],
+                "non_pwd_unscheduled": result["non_pwd_unscheduled"],
+            },
+            execution_time=execution_time
         )
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"❌ UNEXPECTED ERROR: {e}", exc_info=True)
-        raise HTTPException(500, f"Scheduling failed: {e}")
-
-@router.get("/export/{schedule_id}")
-async def export_schedule(schedule_id: int):
-    """Export schedule data as rows"""
-    try:
-        logger.info(f"📥 Exporting schedule {schedule_id}...")
         
-        batches = []
-        try:
-            res = sb.table("schedule_batches") \
-                .select("*") \
-                .eq("schedule_summary_id", schedule_id) \
-                .order("batch_name") \
-                .execute()
-            batches = res.data or []
-        except Exception as e:
-            logger.error(f"❌ Failed to fetch batches: {e}")
-            raise HTTPException(500, f"Failed to fetch batches: {e}")
-
-        # Try normalized assignments
-        assigns = []
-        try:
-            res = sb.table("schedule_assignments") \
-                .select("*") \
-                .eq("schedule_summary_id", schedule_id) \
-                .order("schedule_batch_id", { "ascending": True }) \
-                .order("seat_no", { "ascending": True }) \
-                .execute()
-            assigns = res.data or []
-            logger.info(f"✅ Using {len(assigns)} assignments from schedule_assignments")
-        except Exception as e:
-            logger.warning(f"⚠️  schedule_assignments not available: {e}")
-
-        rows: List[Dict] = []
-
-        if assigns:
-            # Build from normalized assignments
-            pids = list(set(a["participant_id"] for a in assigns))
-            try:
-                res = sb.table("participants").select("*").in_("id", pids).execute()
-                participants = res.data or []
-            except Exception as e:
-                logger.error(f"❌ Failed to fetch participants: {e}")
-                raise HTTPException(500, f"Failed to fetch participants: {e}")
-
-            pmap = {p["id"]: p for p in participants}
-            bmap = {b["id"]: b for b in batches}
-
-            for a in assigns:
-                b = bmap.get(a["schedule_batch_id"], {})
-                p = pmap.get(a["participant_id"], {})
-                rows.append({
-                    "participant_number": p.get("participant_number") or p.get("id"),
-                    "name": p.get("name") or "N/A",
-                    "email": p.get("email") or "N/A",
-                    "pwd": "Yes" if p.get("is_pwd") else "No",
-                    "batch_name": b.get("batch_name"),
-                    "room": b.get("room"),
-                    "time_slot": b.get("time_slot"),
-                    "campus": "N/A",
-                    "seat_no": a.get("seat_no"),
-                })
-        else:
-            # Fallback to participant_ids arrays
-            pids = []
-            for b in batches:
-                pids.extend(b.get("participant_ids") or [])
-            pids = list(set(pids))
-
-            if pids:
-                try:
-                    res = sb.table("participants").select("*").in_("id", pids).execute()
-                    participants = res.data or []
-                except Exception as e:
-                    logger.error(f"❌ Failed to fetch participants: {e}")
-                    raise HTTPException(500, f"Failed to fetch participants: {e}")
-
-                pmap = {p["id"]: p for p in participants}
-
-                for b in batches:
-                    for seat_no, pid in enumerate(b.get("participant_ids") or [], start=1):
-                        p = pmap.get(pid, {})
-                        rows.append({
-                            "participant_number": p.get("participant_number") or p.get("id"),
-                            "name": p.get("name") or "N/A",
-                            "email": p.get("email") or "N/A",
-                            "pwd": "Yes" if p.get("is_pwd") else "No",
-                            "batch_name": b.get("batch_name"),
-                            "room": b.get("room"),
-                            "time_slot": b.get("time_slot"),
-                            "campus": "N/A",
-                            "seat_no": seat_no,
-                        })
-
-        logger.info(f"✅ Export complete: {len(rows)} rows")
-        return rows
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Export failed: {e}", exc_info=True)
-        raise HTTPException(500, f"Export failed: {e}")
+        logger.error(f"❌ Error: {e}", exc_info=True)
+        raise HTTPException(500, str(e))
 
 @router.post("/send-batch-emails")
-async def send_batch_emails(data: BatchEmailRequest):
-    logger.info(f"📧 Sending batch emails for schedule_id={data.schedule_id}")
-    # TODO: Implement email sending logic here
+async def send_batch_emails(data: dict):
+    logger.info(f"📧 Emails for schedule {data.get('schedule_id')}")
     return {"message": "Emails sent"}
