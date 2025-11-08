@@ -114,3 +114,38 @@ export async function OPTIONS() {
     }
   })
 }
+
+function generate_schedule(request: any, ScheduleRequest: any) {
+  // Accept either the raw body or an express-like request with .body
+  const payload = request?.body ?? request ?? {}
+
+  const requiredFields = ['campus_group_id', 'participant_group_id', 'event_name', 'schedule_date', 'end_date']
+  const missing = requiredFields.filter(f => payload[f] === undefined || payload[f] === null || payload[f] === '')
+
+  if (missing.length) {
+    throw new Error(`Missing required fields: ${missing.join(', ')}`)
+  }
+
+  const scheduleDate = new Date(payload.schedule_date)
+  const endDate = new Date(payload.end_date)
+  if (isNaN(scheduleDate.getTime()) || isNaN(endDate.getTime())) {
+    throw new Error('Invalid schedule_date or end_date; must be a valid date string')
+  }
+
+  const schedule = {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+    campus_group_id: payload.campus_group_id,
+    participant_group_id: payload.participant_group_id,
+    event_name: payload.event_name,
+    schedule_date: scheduleDate.toISOString(),
+    end_date: endDate.toISOString(),
+    created_at: new Date().toISOString(),
+  }
+
+  return {
+    success: true,
+    message: 'Schedule generated successfully',
+    schedule,
+  }
+}
+

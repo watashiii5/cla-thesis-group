@@ -130,8 +130,8 @@ export default function QtimeHomePage() {
       setParticipantFiles(participantGrouped || [])
       
       console.log('✅ Files grouped successfully')
-      console.log('📊 Campus groups:', campusGrouped)
-      console.log('📊 Participant groups:', participantGrouped)
+      console.log('Campus groups:', campusGrouped)
+      console.log('Participant groups:', participantGrouped)
     } catch (err: any) {
       console.error('❌ Error fetching files:', err)
     } finally {
