@@ -1,4 +1,5 @@
 'use client'
+
 import styles from './GenerateSchedule.module.css'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -6,7 +7,6 @@ import { supabase } from '@/lib/supabaseClient'
 import MenuBar from '@/app/components/MenuBar'
 import Sidebar from '@/app/components/Sidebar'
 
-// ✅ FRONTEND: backend URL (NEXT_PUBLIC_API_URL should point to your Render/FastAPI)
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000'
 
 interface CampusFile {
@@ -14,7 +14,7 @@ interface CampusFile {
   school_name: string
   file_name: string
   row_count: number
-  total_capacity: number // ✅ NEW: Total capacity across all rooms
+  total_capacity: number
 }
 
 interface ParticipantFile {
@@ -22,7 +22,7 @@ interface ParticipantFile {
   batch_name: string
   file_name: string
   row_count: number
-  pwd_count?: number  // ✅ ADD THIS
+  pwd_count?: number
 }
 
 interface ScheduleConfig {
@@ -38,9 +38,9 @@ interface ScheduleConfig {
   durationUnit: 'minutes' | 'hours'
   prioritizePWD: boolean
   emailNotification: boolean
-  excludeLunchBreak: boolean  // ✅ NEW
-  lunchBreakStart: string     // ✅ NEW
-  lunchBreakEnd: string       // ✅ NEW
+  excludeLunchBreak: boolean
+  lunchBreakStart: string
+  lunchBreakEnd: string
 }
 
 interface ScheduleResult {
@@ -66,13 +66,9 @@ async function fetchAllRows(table: string, filters: any = {}) {
   let page = 0
   let hasMore = true
 
-  console.log(`🔄 Starting pagination for table: ${table}, filters:`, filters)
-
   while (hasMore) {
     const from = page * PAGE_SIZE
     const to = from + PAGE_SIZE - 1
-
-    console.log(`   📄 Fetching page ${page + 1}: rows ${from}-${to}`)
 
     let query = supabase
       .from(table)
@@ -86,29 +82,17 @@ async function fetchAllRows(table: string, filters: any = {}) {
 
     const { data, error } = await query
 
-    if (error) {
-      console.error(`❌ Error on page ${page + 1}:`, error)
-      throw error
-    }
-    
+    if (error) throw error
     if (!data || data.length === 0) {
-      console.log(`   ✅ No more data on page ${page + 1}`)
       hasMore = false
       break
     }
 
-    console.log(`   ✅ Fetched ${data.length} rows on page ${page + 1}`)
     allData = [...allData, ...data]
-    
-    if (data.length < PAGE_SIZE) {
-      console.log(`   ✅ Last page reached (${data.length} < ${PAGE_SIZE})`)
-      hasMore = false
-    }
-    
+    if (data.length < PAGE_SIZE) hasMore = false
     page++
   }
 
-  console.log(`✅ Total rows fetched from ${table}: ${allData.length}`)
   return allData
 }
 
@@ -117,10 +101,8 @@ export default function GenerateSchedulePage() {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [loading, setLoading] = useState(true)
   const [scheduling, setScheduling] = useState(false)
-  
   const [campusFiles, setCampusFiles] = useState<CampusFile[]>([])
   const [participantFiles, setParticipantFiles] = useState<ParticipantFile[]>([])
-
   const [config, setConfig] = useState<ScheduleConfig>({
     campusGroupId: null,
     participantGroupId: null,
@@ -134,58 +116,32 @@ export default function GenerateSchedulePage() {
     durationUnit: 'minutes',
     prioritizePWD: true,
     emailNotification: false,
-    excludeLunchBreak: true,    // ✅ NEW: Default enabled
-    lunchBreakStart: '12:00',   // ✅ NEW
-    lunchBreakEnd: '13:00'      // ✅ NEW
+    excludeLunchBreak: true,
+    lunchBreakStart: '12:00',
+    lunchBreakEnd: '13:00'
   })
-
   const [scheduleResult, setScheduleResult] = useState<ScheduleResult | null>(null)
   const [showResults, setShowResults] = useState(false)
-
-  // ✅ FIXED: Fetch actual PWD count from Supabase for selected participant group
   const [pwdCounts, setPwdCounts] = useState<{[key: number]: number}>({})
-
-  // ✅ NEW: Fetch actual room data with capacities and floor detection
   const [roomData, setRoomData] = useState<{[key: number]: any[]}>({})
 
-  useEffect(() => {
-    fetchData()
-  }, [])
-
+  useEffect(() => { fetchData() }, [])
   useEffect(() => {
     if (config.scheduleDate && !config.endDate) {
       setConfig(prev => ({ ...prev, endDate: prev.scheduleDate }))
     }
   }, [config.scheduleDate])
 
-  // ✅ NEW: Fetch PWD count for a specific participant group
   const fetchPwdCount = async (uploadGroupId: number) => {
-    try {
-      console.log(`🔍 Fetching PWD count for upload_group_id: ${uploadGroupId}`)
-      
-      // ✅ FIXED: Changed .eq('pwd', true) to .eq('is_pwd', true)
-      const { data, error, count } = await supabase
-        .from('participants')
-        .select('*', { count: 'exact', head: false })
-        .eq('upload_group_id', uploadGroupId)
-        .eq('is_pwd', true)  // ✅ FIXED: Correct column name
-    
-      if (error) {
-        console.error('Error fetching PWD count:', error)
-        return 0
-      }
-      
-      const pwdCount = count || 0
-      console.log(`✅ PWD count for group ${uploadGroupId}: ${pwdCount}`)
-      
-      return pwdCount
-    } catch (error) {
-      console.error('Error fetching PWD count:', error)
-      return 0
-    }
+    const { count, error } = await supabase
+      .from('participants')
+      .select('*', { count: 'exact', head: false })
+      .eq('upload_group_id', uploadGroupId)
+      .eq('is_pwd', true)
+    if (error) return 0
+    return count || 0
   }
 
-  // ✅ UPDATED: Fetch PWD counts when participant group changes
   useEffect(() => {
     if (config.participantGroupId) {
       fetchPwdCount(config.participantGroupId).then(count => {
@@ -197,187 +153,83 @@ export default function GenerateSchedulePage() {
     }
   }, [config.participantGroupId])
 
-  const getDurationInMinutes = () => {
-    if (config.durationUnit === 'hours') {
-      return config.durationPerBatch * 60
-    }
-    return config.durationPerBatch
-  }
+  const getDurationInMinutes = () => config.durationUnit === 'hours'
+    ? config.durationPerBatch * 60
+    : config.durationPerBatch
 
-  // ✅ FIXED: Validate date/time range properly
   const isValidDateRange = () => {
     if (!config.scheduleDate || !config.endDate) return false
-    
     const startDate = new Date(config.scheduleDate)
     const endDate = new Date(config.endDate)
-    
-    // Multi-day event: Allow same start/end time
-    if (startDate < endDate) {
-      return true // Different days = always valid
-    }
-    
-    // Same-day event: End time must be AFTER start time
+    if (startDate < endDate) return true
     if (config.scheduleDate === config.endDate) {
       const startDateTime = new Date(`${config.scheduleDate}T${config.startTime}`)
       const endDateTime = new Date(`${config.endDate}T${config.endTime}`)
       return endDateTime > startDateTime
     }
-    
     return false
   }
 
-  // ✅ UPDATED: Better error messages
   const getDateRangeError = () => {
     if (!config.scheduleDate || !config.endDate) return ''
-    
     const startDate = new Date(config.scheduleDate)
     const endDate = new Date(config.endDate)
-    
-    if (startDate > endDate) {
-      return 'End date must be on or after start date'
-    }
-    
+    if (startDate > endDate) return 'End date must be on or after start date'
     if (config.scheduleDate === config.endDate) {
       const startDateTime = new Date(`${config.scheduleDate}T${config.startTime}`)
       const endDateTime = new Date(`${config.endDate}T${config.endTime}`)
-      
-      if (endDateTime <= startDateTime) {
-        return 'End time must be after start time on the same day'
-      }
+      if (endDateTime <= startDateTime) return 'End time must be after start time on the same day'
     }
-    
     return ''
   }
 
-  // ✅ UPDATED: Calculate lunch break minutes
   const getLunchBreakMinutes = () => {
     if (!config.excludeLunchBreak) return 0
-    
-    const [lunchStart, lunchEnd] = [config.lunchBreakStart, config.lunchBreakEnd]
-    const [startH, startM] = lunchStart.split(':').map(Number)
-    const [endH, endM] = lunchEnd.split(':').map(Number)
-    
+    const [startH, startM] = config.lunchBreakStart.split(':').map(Number)
+    const [endH, endM] = config.lunchBreakEnd.split(':').map(Number)
     const lunchMinutes = (endH * 60 + endM) - (startH * 60 + startM)
     return lunchMinutes > 0 ? lunchMinutes : 0
   }
 
-  // ✅ UPDATED: Calculate available minutes with lunch break exclusion
   const getTotalAvailableMinutes = () => {
     if (!config.scheduleDate || !config.endDate) return 0
-    
     const startDate = new Date(config.scheduleDate)
     const endDate = new Date(config.endDate)
     const daysDiff = Math.floor((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
-    
     const [startHour, startMin] = config.startTime.split(':').map(Number)
     const [endHour, endMin] = config.endTime.split(':').map(Number)
-    
-    let dailyMinutes: number
-    
-    if (daysDiff === 0) {
-      dailyMinutes = (endHour * 60 + endMin) - (startHour * 60 + startMin)
-    } else {
-      dailyMinutes = (endHour * 60 + endMin) - (startHour * 60 + startMin)
-    }
-    
-    // ✅ Subtract lunch break from daily minutes
-    const lunchBreakMinutes = getLunchBreakMinutes()
-    dailyMinutes -= lunchBreakMinutes
-    
+    let dailyMinutes = (endHour * 60 + endMin) - (startHour * 60 + startMin)
+    dailyMinutes -= getLunchBreakMinutes()
     const totalDays = daysDiff + 1
     return Math.max(0, dailyMinutes * totalDays)
   }
 
-  // ✅ FIXED: Use ACTUAL room data from database
-  const separateRoomsByFloor = (campusGroupId: number) => {
-    const rooms = roomData[campusGroupId] || []
-    
-    if (rooms.length === 0) {
-      // Fallback to estimation if rooms not loaded yet
-      const selectedCampus = campusFiles.find(f => f.upload_group_id === campusGroupId)
-      if (!selectedCampus) return [0, 0, 0, 0, 0]
-      
-      const estimatedFirstFloorCount = Math.max(1, Math.floor(selectedCampus.row_count * 0.05))
-      const avgCapacity = Math.floor(selectedCampus.total_capacity / Math.max(1, selectedCampus.row_count))
-      // Return 5-tuple: [firstFloorCount, upperFloorCount, avgCapacity, firstFloorCapacity, upperFloorCapacity]
-      const firstFloorCapacity = estimatedFirstFloorCount * avgCapacity
-      const upperFloorCapacity = Math.max(0, selectedCampus.total_capacity - firstFloorCapacity)
-      return [estimatedFirstFloorCount, selectedCampus.row_count - estimatedFirstFloorCount, avgCapacity, firstFloorCapacity, upperFloorCapacity]
-    }
-    
-    const firstFloorRooms = rooms.filter(room => isFirstFloor(room.building, room.room))
-    const upperFloorRooms = rooms.filter(room => !isFirstFloor(room.building, room.room))
-    
-    const firstFloorCapacity = firstFloorRooms.reduce((sum, room) => sum + (room.capacity || 0), 0)
-    const upperFloorCapacity = upperFloorRooms.reduce((sum, room) => sum + (room.capacity || 0), 0)
-    const totalCapacity = firstFloorCapacity + upperFloorCapacity
-    
-    const avgCapacity = rooms.length > 0 ? Math.floor(totalCapacity / rooms.length) : 0
-    
-    console.log('🏢 Room Separation:', {
-      totalRooms: rooms.length,
-      firstFloorRooms: firstFloorRooms.length,
-      upperFloorRooms: upperFloorRooms.length,
-      firstFloorCapacity,
-      upperFloorCapacity,
-      avgCapacity
-    })
-    
-    return [firstFloorRooms.length, upperFloorRooms.length, avgCapacity, firstFloorCapacity, upperFloorCapacity]
-  }
-
-  // ✅ NEW: Detect if room is 1st floor (matches backend logic)
   const isFirstFloor = (building: string, room: string): boolean => {
     const roomClean = room.toLowerCase().trim()
     const buildingClean = building.toLowerCase().trim()
     const combined = `${buildingClean} ${roomClean}`
-    
-    // Method 1: Parse numeric room codes
     const digits = room.match(/\d+/g)?.join('') || ''
-    
     if (digits && digits.length >= 3) {
       const floorDigit = digits[0]
       return floorDigit === '1'
     }
-    
-    // Method 2: Text-based indicators
     const firstFloorIndicators = [
       '1f', '1st floor', 'first floor', 'ground floor', 
       'ground', 'g floor', 'gf', 'floor 1', 'level 1', 'l1',
       'first', '1st', 'one'
     ]
-    
     for (const indicator of firstFloorIndicators) {
-      if (combined.includes(indicator)) {
-        return true
-      }
+      if (combined.includes(indicator)) return true
     }
-    
-    // Method 3: Single digit "1" followed by non-digits
-    if (roomClean.startsWith('1') && roomClean.length > 1 && !/\d/.test(roomClean[1])) {
-      return true
-    }
-    
+    if (roomClean.startsWith('1') && roomClean.length > 1 && !/\d/.test(roomClean[1])) return true
     return false
   }
 
-  // ✅ NEW: Fetch rooms for selected campus group
   const fetchRoomsForCampus = async (uploadGroupId: number) => {
-    try {
-      console.log(`🏢 Fetching rooms for upload_group_id: ${uploadGroupId}`)
-      
-      const rooms = await fetchAllRows('campuses', { upload_group_id: uploadGroupId })
-      
-      console.log(`✅ Fetched ${rooms.length} rooms for campus group ${uploadGroupId}`)
-      
-      return rooms
-    } catch (error) {
-      console.error('Error fetching rooms:', error)
-      return []
-    }
+    const rooms = await fetchAllRows('campuses', { upload_group_id: uploadGroupId })
+    return rooms
   }
 
-  // ✅ UPDATED: Fetch rooms when campus is selected
   useEffect(() => {
     if (config.campusGroupId) {
       fetchRoomsForCampus(config.campusGroupId).then(rooms => {
@@ -399,10 +251,7 @@ export default function GenerateSchedulePage() {
   const fetchData = async () => {
     setLoading(true)
     try {
-      console.log('📥 Fetching ALL campus files...')
       const campusData = await fetchAllRows('campuses')
-
-      // ✅ Group by upload_group_id and SUM capacities
       const campusGrouped = campusData.reduce((acc: any[], curr) => {
         const existing = acc.find(item => item.upload_group_id === curr.upload_group_id)
         if (existing) {
@@ -419,11 +268,7 @@ export default function GenerateSchedulePage() {
         }
         return acc
       }, [])
-
-      console.log('📥 Fetching ALL participant files...')
       const participantData = await fetchAllRows('participants')
-
-      // ✅ Just count total participants per group
       const participantGrouped = participantData.reduce((acc: any[], curr) => {
         const existing = acc.find(item => item.upload_group_id === curr.upload_group_id)
         if (existing) {
@@ -438,22 +283,14 @@ export default function GenerateSchedulePage() {
         }
         return acc
       }, [])
-
       setCampusFiles(campusGrouped || [])
       setParticipantFiles(participantGrouped || [])
-      
-      console.log(`✅ Campus groups: ${campusGrouped.length}, Participant groups: ${participantGrouped.length}`)
-      
-      // ✅ Fetch PWD counts for all participant groups
       const pwdCountsMap: {[key: number]: number} = {}
       for (const group of participantGrouped) {
         const count = await fetchPwdCount(group.upload_group_id)
         pwdCountsMap[group.upload_group_id] = count
-        console.log(`📊 Group ${group.upload_group_id} (${group.batch_name}): ${count} PWD out of ${group.row_count} total`)
       }
       setPwdCounts(pwdCountsMap)
-      
-      console.log('✅ All PWD counts:', pwdCountsMap)
     } catch (error) {
       console.error('❌ Error fetching data:', error)
     } finally {
@@ -461,42 +298,26 @@ export default function GenerateSchedulePage() {
     }
   }
 
-  // ✅ NEW: Validate campus data for null values before generating
   const validateCampusData = async () => {
     if (!config.campusGroupId) return { isValid: false, error: 'No campus group selected' }
-    
-    try {
-      // Fetch all campus rows for the selected group
-      const campusData = await fetchAllRows('campuses', { upload_group_id: config.campusGroupId })
-      
-      // Check for null values in required fields
-      const invalidRows = campusData.filter(row => 
-        !row.campus || !row.building || !row.room || row.campus.trim() === '' || row.building.trim() === '' || row.room.trim() === ''
-      )
-      
-      if (invalidRows.length > 0) {
-        const errorDetails = invalidRows.map(row => 
-          `Row ID ${row.id}: Campus="${row.campus || 'null'}", Building="${row.building || 'null'}", Room="${row.room || 'null'}"`
-        ).join('\n')
-        return { 
-          isValid: false, 
-          error: `Incomplete campus data detected in your uploaded sheet. The following rows have blank/null values for campus, building, or room:\n\n${errorDetails}\n\nPlease update your Excel file and re-upload to fix these blanks before generating the schedule.` 
-        }
+    const campusData = await fetchAllRows('campuses', { upload_group_id: config.campusGroupId })
+    const invalidRows = campusData.filter(row => 
+      !row.campus || !row.building || !row.room || row.campus.trim() === '' || row.building.trim() === '' || row.room.trim() === ''
+    )
+    if (invalidRows.length > 0) {
+      const errorDetails = invalidRows.map(row => 
+        `Row ID ${row.id}: Campus="${row.campus || 'null'}", Building="${row.building || 'null'}", Room="${row.room || 'null'}"`
+      ).join('\n')
+      return { 
+        isValid: false, 
+        error: `Incomplete campus data detected in your uploaded sheet. The following rows have blank/null values for campus, building, or room:\n\n${errorDetails}\n\nPlease update your Excel file and re-upload to fix these blanks before generating the schedule.` 
       }
-      
-      return { isValid: true, error: '' }
-    } catch (error) {
-      console.error('Error validating campus data:', error)
-      return { isValid: false, error: 'Failed to validate campus data. Please try again.' }
     }
+    return { isValid: true, error: '' }
   }
 
-  // Replace the handleGenerateSchedule function with the following:
   const handleGenerateSchedule = async () => {
-    // Ensure endDate is set BEFORE validation
     const effectiveEndDate = config.endDate || config.scheduleDate
-
-    // Basic client-side validation
     if (
       !config.campusGroupId ||
       !config.participantGroupId ||
@@ -506,35 +327,24 @@ export default function GenerateSchedulePage() {
       alert('Please fill Campus, Participant Group, Event Name and Schedule Date.')
       return
     }
-
-    // Validate campus data for null values before proceeding
     const validation = await validateCampusData()
     if (!validation.isValid) {
       alert(validation.error)
       return
     }
-
-    // Update config state with endDate if it was empty
     if (!config.endDate) {
       setConfig(prev => ({ ...prev, endDate: effectiveEndDate }))
     }
-
-    // Validate date/time range using the effective end date
     const tempConfig = { ...config, endDate: effectiveEndDate }
-
-    // Check if date range is valid
     const startDate = new Date(tempConfig.scheduleDate)
     const endDate = new Date(tempConfig.endDate)
-
     let isValid = false
     let errorMessage = ''
-
     if (startDate > endDate) {
       errorMessage = 'End date must be on or after start date'
     } else if (tempConfig.scheduleDate === tempConfig.endDate) {
       const startDateTime = new Date(`${tempConfig.scheduleDate}T${tempConfig.startTime}`)
       const endDateTime = new Date(`${tempConfig.endDate}T${tempConfig.endTime}`)
-
       if (endDateTime <= startDateTime) {
         errorMessage = 'End time must be after start time on the same day'
       } else {
@@ -543,36 +353,28 @@ export default function GenerateSchedulePage() {
     } else {
       isValid = true
     }
-
     if (!isValid) {
       alert(errorMessage)
       return
     }
-
-    // Build request body with guaranteed non-null values
     const requestBody = {
-      campus_group_id: Number(config.campusGroupId), // must be a number
-      participant_group_id: Number(config.participantGroupId), // must be a number
-      event_name: config.eventName.trim(), // must not be empty
-      event_type: config.eventType,
-      schedule_date: config.scheduleDate,
-      end_date: effectiveEndDate,
-      start_time: config.startTime,
-      end_time: config.endTime,
-      duration_per_batch: getDurationInMinutes(),
-      prioritize_pwd: Boolean(config.prioritizePWD),
-      email_notification: Boolean(config.emailNotification),
-      exclude_lunch_break: Boolean(config.excludeLunchBreak),
-      lunch_break_start: config.lunchBreakStart,
-      lunch_break_end: config.lunchBreakEnd
+      campusGroupId: Number(config.campusGroupId),
+      participantGroupId: Number(config.participantGroupId),
+      eventName: config.eventName.trim(),
+      eventType: config.eventType,
+      scheduleDate: config.scheduleDate,
+      endDate: effectiveEndDate,
+      startTime: config.startTime,
+      endTime: config.endTime,
+      durationPerBatch: getDurationInMinutes(),
+      prioritizePWD: Boolean(config.prioritizePWD),
+      emailNotification: Boolean(config.emailNotification),
+      excludeLunchBreak: Boolean(config.excludeLunchBreak),
+      lunchBreakStart: config.lunchBreakStart,
+      lunchBreakEnd: config.lunchBreakEnd
     }
-
-    // Log for debugging
-    console.log('📤 Sending request body:', JSON.stringify(requestBody, null, 2))
-
     setScheduling(true)
     setScheduleResult(null)
-
     try {
       const res = await fetch(`/api/schedule/generate`, {
         method: 'POST',
@@ -582,13 +384,10 @@ export default function GenerateSchedulePage() {
         },
         body: JSON.stringify(requestBody)
       })
-      
       if (!res.ok) {
         const text = await res.text()
-        console.error('❌ Backend error response:', text)
         throw new Error(`Server responded ${res.status}: ${text}`)
       }
-
       const data = await res.json()
       setScheduleResult({
         success: true,
@@ -669,7 +468,6 @@ export default function GenerateSchedulePage() {
     }
   }
 
-  // ✅ CORRECTED: Use actual scheduler logic for capacity calculation
   const getCapacityEstimate = () => {
     const totalMinutes = getTotalAvailableMinutes()
     if (totalMinutes === 0) return null
@@ -686,23 +484,15 @@ export default function GenerateSchedulePage() {
     const dailyMinutes = totalMinutes / days
     const slotsPerDay = Math.floor(dailyMinutes / durationInMinutes)
     
-    // ✅ Use REAL room data
-    const [firstFloorCount, upperFloorCount, avgCapacity, firstFloorCapacity, upperFloorCapacity] = separateRoomsByFloor(config.campusGroupId!)
+    const [firstFloorCount, upperFloorCount, avgCapacity, firstFloorCapacity, upperFloorCapacity] = separateRoomsByFloor(config.campusGroupId!, roomData)
     
-    // ✅ PHASE 1: PWD capacity (actual 1st floor capacity)
     const pwdCapacity = firstFloorCapacity * slotsPerDay * days
-    
-    // ✅ PHASE 2: Non-PWD capacity (total capacity - first floor, since PWD uses first floor)
     const nonPwdCapacity = (firstFloorCapacity + upperFloorCapacity) * slotsPerDay * days
-    
-    // ✅ Total capacity
     const totalCapacity = pwdCapacity + nonPwdCapacity
     
-    // ✅ Get actual PWD count
     const pwdCount = pwdCounts[config.participantGroupId!] || 0
     const nonPwdCount = selectedParticipants.row_count - pwdCount
     
-    // ✅ Check if exceeded
     const pwdExceeded = pwdCount > pwdCapacity
     const nonPwdExceeded = nonPwdCount > nonPwdCapacity
     
@@ -1103,7 +893,6 @@ export default function GenerateSchedulePage() {
                   </div>
                 </div>
 
-                {/* ✅ Add this after the duration options */}
                 <div className={styles.formOptions}>
                   <label className={styles.checkboxLabel}>
                     <input
@@ -1190,7 +979,6 @@ export default function GenerateSchedulePage() {
             </div>
           )}
 
-          {/* ✅ UPDATED: Show scheduler-based capacity breakdown */}
           {!showResults && config.campusGroupId && config.participantGroupId && config.scheduleDate && config.endDate && isValidDateRange() && (() => {
             const estimate = getCapacityEstimate()
             if (!estimate) return null
@@ -1231,7 +1019,6 @@ export default function GenerateSchedulePage() {
                     <span className={styles.capacityValue}>{getDays()} days</span>
                   </div>
                   
-                  {/* ✅ PHASE 1: PWD Capacity */}
                   <div className={`${styles.capacityRow} ${styles.capacityPhase}`}>
                     <span className={styles.capacityLabel}>♿ PHASE 1: PWD Capacity (1st Floor Only):</span>
                     <span className={`${styles.capacityValue} ${estimate.pwdExceeded ? styles.error : styles.success}`}>
@@ -1245,7 +1032,6 @@ export default function GenerateSchedulePage() {
                     </span>
                   </div>
                   
-                  {/* ✅ PHASE 2: Non-PWD Capacity */}
                   <div className={`${styles.capacityRow} ${styles.capacityPhase}`}>
                     <span className={styles.capacityLabel}>👥 PHASE 2: Non-PWD Capacity (All Rooms):</span>
                     <span className={`${styles.capacityValue} ${estimate.nonPwdExceeded ? styles.error : styles.success}`}>
@@ -1259,7 +1045,6 @@ export default function GenerateSchedulePage() {
                     </span>
                   </div>
                   
-                  {/* ✅ Total */}
                   <div className={`${styles.capacityRow} ${styles.capacityTotal}`}>
                     <span className={styles.capacityLabel}>🎯 Total Capacity:</span>
                     <span className={`${styles.capacityValue} ${estimate.canAccommodate ? styles.success : styles.error}`}>
@@ -1285,3 +1070,51 @@ export default function GenerateSchedulePage() {
     </div>
   )
 }
+function separateRoomsByFloor(campusGroupId: number, roomData: {[key: number]: any[]}): [number, number, number, number, number] {
+  // Use roomData from state
+  const rooms = roomData[campusGroupId] || [];
+  let firstFloorCount = 0;
+  let upperFloorCount = 0;
+  let firstFloorCapacity = 0;
+  let upperFloorCapacity = 0;
+  let totalCapacity = 0;
+
+  rooms.forEach(room => {
+    const cap = Number(room.capacity) || 0;
+    totalCapacity += cap;
+    if (isFirstFloor(room.building || '', room.room || '')) {
+      firstFloorCount += 1;
+      firstFloorCapacity += cap;
+    } else {
+      upperFloorCount += 1;
+      upperFloorCapacity += cap;
+    }
+  });
+
+  const avgCapacity = rooms.length > 0 ? Math.round(totalCapacity / rooms.length) : 0;
+
+  return [firstFloorCount, upperFloorCount, avgCapacity, firstFloorCapacity, upperFloorCapacity];
+}
+function isFirstFloor(building: string, room: string): boolean {
+  const roomStr = (room || '').toLowerCase().trim();
+  const buildingStr = (building || '').toLowerCase().trim();
+  const combined = `${buildingStr} ${roomStr}`;
+
+  // Check for common first floor indicators
+  const indicators = [
+    '1f', '1st floor', 'first floor', 'ground floor', 'ground', 'g floor', 'gf', 'floor 1', 'level 1', 'l1', 'first', '1st', 'one'
+  ];
+  for (const indicator of indicators) {
+    if (combined.includes(indicator)) return true;
+  }
+
+  // Check if room number starts with 1 (e.g., 101, 102)
+  const digits = roomStr.match(/\d+/g)?.join('') || '';
+  if (digits && digits.length >= 3 && digits[0] === '1') return true;
+
+  // Check if room string starts with '1' and next char is not a digit (e.g., '1A')
+  if (roomStr.startsWith('1') && roomStr.length > 1 && !/\d/.test(roomStr[1])) return true;
+
+  return false;
+}
+

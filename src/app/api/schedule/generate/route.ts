@@ -1,106 +1,155 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-// ✅ Use environment variable with fallback
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:8000'
 
-// ✅ CRITICAL: Force dynamic rendering in Next.js 15
 export const dynamic = 'force-dynamic'
 
 export async function POST(request: NextRequest) {
-  console.log('🔥 API ROUTE HIT!')
+  console.log('🔵 Next.js API Route: Request received')
   
   try {
-    // ✅ Parse the incoming body with error handling
-    let body
+    const body = await request.json()
+    console.log('📤 Request body received:', JSON.stringify(body, null, 2))
+    console.log('🔗 Connecting to backend:', `${BACKEND_URL}/api/schedule/generate`)
+
+    // Validate request body
+    if (!body.campusGroupId || !body.participantGroupId) {
+      console.error('❌ Invalid request body - missing required fields')
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: 'Missing required fields: campusGroupId and participantGroupId',
+        },
+        { status: 400 }
+      )
+    }
+
+    // Convert camelCase to snake_case for FastAPI
+    const backendPayload = {
+      campus_group_id: body.campusGroupId,
+      participant_group_id: body.participantGroupId,
+      event_name: body.eventName,
+      event_type: body.eventType,
+      schedule_date: body.scheduleDate,
+      start_date: body.startDate || body.scheduleDate, // Add start_date
+      end_date: body.endDate || body.scheduleDate,     // Add end_date
+      start_time: body.startTime,
+      end_time: body.endTime,
+      duration_per_batch: body.durationPerBatch,
+      prioritize_pwd: body.prioritizePWD,
+      email_notification: body.emailNotification
+    }
+
+    console.log('🔄 Converted payload for FastAPI:', JSON.stringify(backendPayload, null, 2))
+
+    // Forward the request to FastAPI backend with timeout
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 120000) // 2 minute timeout
+
+    console.log('⏳ Sending request to FastAPI...')
+    
+    let response
     try {
-      body = await request.json()
-    } catch (parseError: any) {
-      console.error('[API ROUTE] ❌ Failed to parse request body:', parseError.message)
+      response = await fetch(`${BACKEND_URL}/api/schedule/generate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(backendPayload),
+        signal: controller.signal,
+      })
+      clearTimeout(timeoutId)
+      
+      console.log('📡 FastAPI response status:', response.status)
+      console.log('📡 FastAPI response headers:', Object.fromEntries(response.headers.entries()))
+      
+    } catch (fetchError: any) {
+      clearTimeout(timeoutId)
+      console.error('❌ Fetch error:', fetchError)
+      
+      if (fetchError.name === 'AbortError') {
+        return NextResponse.json(
+          { 
+            success: false, 
+            error: 'Request timeout - scheduling is taking too long',
+            details: 'The backend is processing but taking more than 2 minutes'
+          },
+          { status: 504 }
+        )
+      }
+      
       return NextResponse.json(
         { 
-          error: 'Invalid JSON in request body',
-          parse_error: parseError.message,
-          success: false
+          success: false, 
+          error: 'Cannot connect to FastAPI backend',
+          details: `Please ensure FastAPI is running on ${BACKEND_URL}`,
+          fetchError: fetchError.message
         },
-        { status: 400 }
-      )
-    }
-    
-    console.log('[API ROUTE] ===== REQUEST START =====')
-    console.log('[API ROUTE] Backend URL:', BACKEND_URL)
-    console.log('[API ROUTE] Received body:', JSON.stringify(body, null, 2))
-    console.log('[API ROUTE] Body type:', typeof body)
-    console.log('[API ROUTE] Body keys:', Object.keys(body))
-    console.log('[API ROUTE] Body values:', {
-      campus_group_id: body.campus_group_id,
-      participant_group_id: body.participant_group_id,
-      event_name: body.event_name,
-      schedule_date: body.schedule_date,
-      end_date: body.end_date
-    })
-
-    // ✅ Validate required fields before forwarding
-    const requiredFields = ['campus_group_id', 'participant_group_id', 'event_name', 'schedule_date', 'end_date']
-    const missingFields = requiredFields.filter(field => !body[field])
-    
-    if (missingFields.length > 0) {
-      console.error('[API ROUTE] ❌ Missing fields in API route:', missingFields)
-      return NextResponse.json(
-        { 
-          error: `API Route detected missing fields: ${missingFields.join(', ')}`,
-          received_body: body,
-          success: false
-        },
-        { status: 400 }
+        { status: 503 }
       )
     }
 
-    console.log('✅ All required fields present!')
-    console.log('📤 Forwarding to backend...')
-    
-    const response = await fetch(`${BACKEND_URL}/api/schedule/generate`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-      body: JSON.stringify(body),
-    })
-    
-    console.log('📡 Backend response status:', response.status)
-    console.log('[API ROUTE] 📡 Backend response headers:', Object.fromEntries(response.headers.entries()))
+    // Read response body
+    const responseText = await response.text()
+    console.log('📄 Raw response body:', responseText.substring(0, 500)) // Log first 500 chars
 
     if (!response.ok) {
-      const errorText = await response.text()
-      console.error('❌ Backend error:', errorText)
+      console.error('❌ FastAPI returned error status:', response.status)
       
+      // Try to parse as JSON, fallback to text
       let errorData
       try {
-        errorData = JSON.parse(errorText)
+        errorData = JSON.parse(responseText)
       } catch {
-        errorData = { error: errorText || 'Backend request failed' }
+        errorData = { detail: responseText || 'Unknown error' }
       }
-
+      
+      console.error('❌ Error data:', errorData)
+      
       return NextResponse.json(
         { 
-          error: errorData.error || errorData.detail || 'Failed to generate schedule',
-          backend_response: errorData,
-          success: false
+          success: false, 
+          error: errorData.detail || errorData.error || errorData.message || 'Backend error',
+          status: response.status,
+          details: errorData
         },
         { status: response.status }
       )
     }
 
-    const data = await response.json()
-    console.log('✅ Backend success!')
-    console.log('[API ROUTE] ===== REQUEST END =====')
+    // Parse successful response
+    let data
+    try {
+      data = JSON.parse(responseText)
+      console.log('✅ Successfully parsed response')
+      console.log('✅ Scheduled:', data.scheduled_count, 'Unscheduled:', data.unscheduled_count)
+    } catch (parseError) {
+      console.error('❌ Failed to parse response as JSON:', parseError)
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: 'Invalid response format from backend',
+          details: responseText.substring(0, 200)
+        },
+        { status: 500 }
+      )
+    }
 
     return NextResponse.json(data)
 
   } catch (error: any) {
-    console.error('❌ API Route Error:', error.message)
-    console.error('Stack:', error.stack)
-    return NextResponse.json({ error: error.message, success: false }, { status: 500 })
+    console.error('❌ Unexpected error in Next.js API route:', error)
+    console.error('Error stack:', error.stack)
+    
+    return NextResponse.json(
+      { 
+        success: false, 
+        error: error.message || 'Failed to connect to scheduling server',
+        details: error.toString(),
+        stack: error.stack
+      },
+      { status: 500 }
+    )
   }
 }
 
@@ -113,39 +162,5 @@ export async function OPTIONS() {
       'Access-Control-Allow-Headers': 'Content-Type',
     }
   })
-}
-
-function generate_schedule(request: any, ScheduleRequest: any) {
-  // Accept either the raw body or an express-like request with .body
-  const payload = request?.body ?? request ?? {}
-
-  const requiredFields = ['campus_group_id', 'participant_group_id', 'event_name', 'schedule_date', 'end_date']
-  const missing = requiredFields.filter(f => payload[f] === undefined || payload[f] === null || payload[f] === '')
-
-  if (missing.length) {
-    throw new Error(`Missing required fields: ${missing.join(', ')}`)
-  }
-
-  const scheduleDate = new Date(payload.schedule_date)
-  const endDate = new Date(payload.end_date)
-  if (isNaN(scheduleDate.getTime()) || isNaN(endDate.getTime())) {
-    throw new Error('Invalid schedule_date or end_date; must be a valid date string')
-  }
-
-  const schedule = {
-    id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
-    campus_group_id: payload.campus_group_id,
-    participant_group_id: payload.participant_group_id,
-    event_name: payload.event_name,
-    schedule_date: scheduleDate.toISOString(),
-    end_date: endDate.toISOString(),
-    created_at: new Date().toISOString(),
-  }
-
-  return {
-    success: true,
-    message: 'Schedule generated successfully',
-    schedule,
-  }
 }
 

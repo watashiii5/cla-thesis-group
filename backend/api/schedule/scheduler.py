@@ -7,7 +7,7 @@ import os  # Add this for environment variables
 
 # ✅ Load environment variables securely (from .env file)
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
-SUPABASE_KEY = os.environ.get("SERVICE_ROLE_KEY")  # Use service role for backend (full access)
+SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
 
 if not SUPABASE_URL or not SUPABASE_KEY:
     raise ValueError("Missing SUPABASE_URL or SERVICE_ROLE_KEY in environment variables. Check your .env file.")
