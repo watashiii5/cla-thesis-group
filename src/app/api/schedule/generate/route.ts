@@ -1,84 +1,101 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-// ✅ Backend URL from environment variable
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000'
+// ✅ FIXED: Use environment variable with fallback
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     
-    const {
-      campusGroupId,
-      participantGroupId,
-      eventName,
-      eventType,
-      scheduleDate,
-      startDate,
-      startTime,
-      endDate,
-      endTime,
-      durationPerBatch,
-      prioritizePWD = true,
-      emailNotification = false,
-      excludeLunchBreak = true,
-      lunchBreakStart = '12:00',
-      lunchBreakEnd = '13:00'
-    } = body
+    console.log('[REQUEST] Forwarding to backend:', BACKEND_URL)
+    console.log('[REQUEST] Body:', JSON.stringify(body, null, 2))
 
-    console.log('📋 Received schedule request:', {
-      campusGroupId,
-      participantGroupId,
-      eventName,
-      durationPerBatch
-    })
+    // ✅ UPDATED: Reduce timeout to 55 seconds (Vercel limit is 60s)
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 55000) // 55 seconds
 
-    // ✅ FIX: Actually call your backend with BACKEND_URL
-    console.log('🌐 Calling backend at:', BACKEND_URL)
-    
     const response = await fetch(`${BACKEND_URL}/api/schedule/generate`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Accept': 'application/json',
       },
-      body: JSON.stringify({
-        campus_group_id: campusGroupId,
-        participant_group_id: participantGroupId,
-        event_name: eventName,
-        event_type: eventType,
-        schedule_date: scheduleDate,
-        start_date: startDate,
-        start_time: startTime,
-        end_date: endDate,
-        end_time: endTime,
-        duration_per_batch: durationPerBatch,
-        prioritize_pwd: prioritizePWD,
-        email_notification: emailNotification,
-        exclude_lunch_break: excludeLunchBreak,
-        lunch_break_start: lunchBreakStart,
-        lunch_break_end: lunchBreakEnd
-      })
+      body: JSON.stringify(body),
+      signal: controller.signal,
     })
+
+    clearTimeout(timeoutId)
+
+    console.log('📡 Backend response status:', response.status)
 
     if (!response.ok) {
       const errorText = await response.text()
       console.error('❌ Backend error:', errorText)
-      throw new Error(`Backend returned ${response.status}: ${errorText}`)
+      
+      let errorData
+      try {
+        errorData = JSON.parse(errorText)
+      } catch {
+        errorData = { error: errorText || 'Backend request failed' }
+      }
+
+      return NextResponse.json(
+        { 
+          error: errorData.error || errorData.detail || 'Failed to generate schedule',
+          success: false
+        },
+        { status: response.status }
+      )
     }
 
-    const result = await response.json()
-    console.log('✅ Backend response:', result)
-    
-    return NextResponse.json(result)
+    const data = await response.json()
+    console.log('✅ Backend response:', data)
+
+    return NextResponse.json(data)
 
   } catch (error: any) {
-    console.error('❌ Error in generate schedule route:', error)
+    console.error('❌ API Route Error:', error)
+
+    // ✅ Better error messages
+    if (error.name === 'AbortError') {
+      return NextResponse.json(
+        { 
+          error: 'Request timeout - the schedule generation took too long. Please try with fewer participants or a shorter time range.',
+          success: false 
+        },
+        { status: 504 }
+      )
+    }
+
+    if (error.message?.includes('fetch failed') || error.code === 'ECONNREFUSED') {
+      return NextResponse.json(
+        { 
+          error: 'Cannot connect to backend server. Please ensure the backend is running at ' + BACKEND_URL,
+          success: false,
+          backend_url: BACKEND_URL
+        },
+        { status: 503 }
+      )
+    }
+
     return NextResponse.json(
       { 
-        error: error.message || 'Failed to generate schedule',
-        detail: error.toString(),
-        backend_url: BACKEND_URL
+        error: error.message || 'Internal server error',
+        success: false
       },
       { status: 500 }
     )
   }
+}
+
+// ✅ Add OPTIONS handler for CORS preflight
+export async function OPTIONS(request: NextRequest) {
+  return new NextResponse(null, {
+    status: 200,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    },
+  })
 }

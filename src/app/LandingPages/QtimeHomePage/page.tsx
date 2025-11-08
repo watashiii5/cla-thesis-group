@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import MenuBar from '@/app/components/MenuBar'
 import Sidebar from '@/app/components/Sidebar'
-import LoadingScreen from '@/app/components/loadingScreen/loading'
 import { 
   Calendar, 
   FileText, 
@@ -172,7 +171,14 @@ export default function QtimeHomePage() {
           </div>
 
           {loading ? (
-            <LoadingScreen message="Loading your data..." />
+            <div
+              className="simple-loading"
+              style={{ padding: 40, textAlign: 'center', fontSize: 18, color: '#444' }}
+              aria-busy="true"
+              aria-live="polite"
+            >
+              Loading...
+            </div>
           ) : (
             <>
               {/* Check if files exist */}

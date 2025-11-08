@@ -6,6 +6,9 @@ import { supabase } from '@/lib/supabaseClient'
 import MenuBar from '@/app/components/MenuBar'
 import Sidebar from '@/app/components/Sidebar'
 
+// ✅ FRONTEND: backend URL (NEXT_PUBLIC_API_URL should point to your Render/FastAPI)
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000'
+
 interface CampusFile {
   upload_group_id: number
   school_name: string
@@ -292,11 +295,14 @@ export default function GenerateSchedulePage() {
     if (rooms.length === 0) {
       // Fallback to estimation if rooms not loaded yet
       const selectedCampus = campusFiles.find(f => f.upload_group_id === campusGroupId)
-      if (!selectedCampus) return [0, 0, 0]
+      if (!selectedCampus) return [0, 0, 0, 0, 0]
       
       const estimatedFirstFloorCount = Math.max(1, Math.floor(selectedCampus.row_count * 0.05))
-      const avgCapacity = Math.floor(selectedCampus.total_capacity / selectedCampus.row_count)
-      return [estimatedFirstFloorCount, selectedCampus.row_count - estimatedFirstFloorCount, avgCapacity]
+      const avgCapacity = Math.floor(selectedCampus.total_capacity / Math.max(1, selectedCampus.row_count))
+      // Return 5-tuple: [firstFloorCount, upperFloorCount, avgCapacity, firstFloorCapacity, upperFloorCapacity]
+      const firstFloorCapacity = estimatedFirstFloorCount * avgCapacity
+      const upperFloorCapacity = Math.max(0, selectedCampus.total_capacity - firstFloorCapacity)
+      return [estimatedFirstFloorCount, selectedCampus.row_count - estimatedFirstFloorCount, avgCapacity, firstFloorCapacity, upperFloorCapacity]
     }
     
     const firstFloorRooms = rooms.filter(room => isFirstFloor(room.building, room.room))
@@ -486,142 +492,72 @@ export default function GenerateSchedulePage() {
   }
 
   const handleGenerateSchedule = async () => {
+    // Basic client-side validation
     if (!config.campusGroupId || !config.participantGroupId || !config.eventName || !config.scheduleDate) {
-      alert('Please fill in all required fields')
+      alert('Please fill Campus, Participant Group, Event Name and Schedule Date.')
       return
     }
 
+    // Ensure endDate is set
     if (!config.endDate) {
-      alert('Please select an end date for the schedule')
-      return
+      setConfig(prev => ({ ...prev, endDate: prev.scheduleDate }))
     }
 
-    // ✅ NEW: Validate campus data for nulls before proceeding
-    const validation = await validateCampusData()
-    if (!validation.isValid) {
-      alert(`⚠️ Validation Error\n\n${validation.error}`)
-      return
-    }
-
-    // ✅ FIXED: Use proper validation
+    // Validate date/time range
     if (!isValidDateRange()) {
-      const errorMsg = getDateRangeError()
-      alert(`⚠️ Invalid Date/Time Range\n\n${errorMsg}\n\nExamples:\n• Same day: Nov 4, 8:00 AM → Nov 4, 8:01 AM ✅\n• Multi-day: Nov 4, 8:00 AM → Nov 5, 8:00 AM ✅\n• Multi-day: Nov 4, 8:00 AM → Nov 21, 8:00 AM ✅`)
+      alert(getDateRangeError() || 'Invalid date/time range')
       return
     }
 
-    // Calculate daily time window
-    const [startHour, startMin] = config.startTime.split(':').map(Number)
-    const [endHour, endMin] = config.endTime.split(':').map(Number)
-    const startMinutes = startHour * 60 + startMin
-    const endMinutes = endHour * 60 + endMin
-    
-    const durationInMinutes = getDurationInMinutes()
-    
-    // ✅ For same-day schedules, validate time window
-    if (config.scheduleDate === config.endDate) {
-      const dailyMinutes = endMinutes - startMinutes
-      
-      if (dailyMinutes <= 0) {
-        alert('⚠️ Invalid time range: End time must be after start time')
-        return
-      }
-      
-      if (durationInMinutes > dailyMinutes) {
-        alert(
-          `⚠️ Batch duration (${config.durationPerBatch} ${config.durationUnit}) exceeds available time window.\n\n` +
-          `Available time: ${Math.floor(dailyMinutes / 60)}h ${dailyMinutes % 60}m\n` +
-          `Batch duration: ${Math.floor(durationInMinutes / 60)}h ${durationInMinutes % 60}m\n\n` +
-          `Please either:\n` +
-          `• Reduce batch duration\n` +
-          `• Extend time window\n` +
-          `• Add more days to schedule`
-        )
-        return
-      }
+    // Build request body with snake_case keys the backend expects
+    const requestBody = {
+      campus_group_id: Number(config.campusGroupId),
+      participant_group_id: Number(config.participantGroupId),
+      event_name: config.eventName,
+      event_type: config.eventType,
+      schedule_date: config.scheduleDate,
+      end_date: config.endDate,
+      start_time: config.startTime,
+      end_time: config.endTime,
+      duration_per_batch: getDurationInMinutes(),
+      prioritize_pwd: Boolean(config.prioritizePWD),
+      email_notification: Boolean(config.emailNotification),
+      exclude_lunch_break: Boolean(config.excludeLunchBreak),
+      lunch_break_start: config.lunchBreakStart,
+      lunch_break_end: config.lunchBreakEnd
     }
 
     setScheduling(true)
     setScheduleResult(null)
 
     try {
-      const startTime = performance.now()
-
-      const requestBody = {
-        campusGroupId: config.campusGroupId,
-        participantGroupId: config.participantGroupId,
-        eventName: config.eventName,
-        eventType: config.eventType,
-        scheduleDate: config.scheduleDate,
-        startDate: config.scheduleDate,  // ✅ CRITICAL: Add this
-        startTime: config.startTime,
-        endDate: config.endDate,
-        endTime: config.endTime,
-        durationPerBatch: getDurationInMinutes(),
-        prioritizePWD: config.prioritizePWD,
-        emailNotification: config.emailNotification,
-        excludeLunchBreak: config.excludeLunchBreak,      // ✅ camelCase
-        lunchBreakStart: config.lunchBreakStart,          // ✅ camelCase
-        lunchBreakEnd: config.lunchBreakEnd               // ✅ camelCase
-      }
-
-      console.log('🚀 Sending schedule request:', requestBody)
-      console.log(`📊 Duration: ${config.durationPerBatch} ${config.durationUnit} = ${getDurationInMinutes()} minutes`)
-
-      const response = await fetch('/api/schedule/generate', {
+      const res = await fetch(`${BACKEND_URL}/api/schedule/generate`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestBody)
       })
 
-      const endTime = performance.now()
-      const executionTime = ((endTime - startTime) / 1000).toFixed(2)
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }))
-        console.error('API Error:', errorData)
-        throw new Error(errorData.error || errorData.detail || `Server error: ${response.status}`)
+      if (!res.ok) {
+        const text = await res.text()
+        throw new Error(`Server responded ${res.status}: ${text}`)
       }
 
-      const result = await response.json()
-      console.log('✅ API Response:', result)
-      
+      const data = await res.json()
+      // Expect ScheduleResponse shape from backend
       setScheduleResult({
         success: true,
-        message: 'Schedule generated successfully',
-        scheduled_count: result.scheduled_count,
-        unscheduled_count: result.unscheduled_count,
-        execution_time: parseFloat(executionTime),
-        schedule_data: result.assignments || [],
-        schedule_summary_id: result.schedule_summary_id,
-        pwd_stats: result.pwd_stats
+        message: 'Schedule generated',
+        scheduled_count: data.scheduled_count ?? data.scheduled_count,
+        unscheduled_count: data.unscheduled_count ?? data.unscheduled_count,
+        execution_time: data.execution_time ?? 0,
+        schedule_data: data.assignments ?? [],
+        schedule_summary_id: data.schedule_summary_id,
+        pwd_stats: data.pwd_stats ?? undefined
       })
-
       setShowResults(true)
     } catch (error: any) {
-      console.error('Error generating schedule:', error)
-      
-      let errorMessage = 'Failed to generate schedule'
-      
-      if (error.message.includes('Failed to fetch') || error.message.includes('Backend returned 500')) {
-        errorMessage = '⚠️ Cannot connect to scheduling server. Please ensure the backend is running.'
-      } else {
-        errorMessage = error.message || errorMessage
-      }
-      
-      alert(errorMessage)
-      
-      setScheduleResult({
-        success: false,
-        message: errorMessage,
-        scheduled_count: 0,
-        unscheduled_count: 0,
-        execution_time: 0,
-        schedule_data: []
-      })
-      setShowResults(true)
+      console.error('Generate schedule failed:', error)
+      alert(`Failed to generate schedule: ${error.message || error}`)
     } finally {
       setScheduling(false)
     }
@@ -935,7 +871,7 @@ export default function GenerateSchedulePage() {
                     <option value="Admission_Test">Admission Test</option>
                     <option value="Enrollment">Enrollment</option>
                     <option value="Orientation">Orientation</option>
-                    <option value="Custom_Event">Custom Event</option>
+                    <option value="Custom">Custom Event</option>
                   </select>
                 </div>
               </div>
