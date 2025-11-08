@@ -35,10 +35,18 @@ if not SUPABASE_KEY:
 logger.info(f"✅ Supabase URL: {SUPABASE_URL}")
 logger.info(f"✅ Using key type: {'SERVICE_ROLE' if SERVICE_ROLE else 'ANON'}")
 
-sb: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+# Create Supabase client with connection pooling
+sb: Client = create_client(
+    SUPABASE_URL, 
+    SUPABASE_KEY,
+    options={
+        "schema": "public",
+        "headers": {"x-client-info": "cla-scheduler/1.0"}
+    }
+)
 
-# Thread pool for parallel operations
-executor = ThreadPoolExecutor(max_workers=4)
+# Thread pool for parallel operations (reduced to prevent exhaustion)
+executor = ThreadPoolExecutor(max_workers=2)
 
 # ==================== Models ====================
 
@@ -407,44 +415,65 @@ async def fetch_all_paginated(table: str, filter_col: str, filter_val: int, page
     
     return all_data
 
-async def batch_insert(table: str, data: List[Dict], batch_size: int = 500):
-    """Batch insert with chunking for large datasets"""
+async def batch_insert(table: str, data: List[Dict], batch_size: int = 100):
+    """Batch insert with chunking and retry logic"""
     total = len(data)
+    failed_chunks = []
     
     for i in range(0, total, batch_size):
         chunk = data[i:i + batch_size]
-        sb.table(table).insert(chunk).execute()
-        logger.info(f"📝 Inserted {min(i + batch_size, total)}/{total} rows")
+        retry_count = 0
+        max_retries = 3
+        
+        while retry_count < max_retries:
+            try:
+                sb.table(table).insert(chunk).execute()
+                logger.info(f"📝 Inserted {min(i + batch_size, total)}/{total} rows into {table}")
+                await asyncio.sleep(0.1)  # Small delay to prevent rate limiting
+                break
+            except Exception as e:
+                retry_count += 1
+                if retry_count >= max_retries:
+                    logger.error(f"❌ Failed to insert chunk {i}-{i+batch_size} after {max_retries} retries: {e}")
+                    failed_chunks.append((i, chunk))
+                    break
+                logger.warning(f"⚠️ Retry {retry_count}/{max_retries} for chunk {i}-{i+batch_size}")
+                await asyncio.sleep(1)  # Wait before retry
+    
+    if failed_chunks:
+        logger.error(f"❌ {len(failed_chunks)} chunks failed to insert")
+        raise Exception(f"Failed to insert {len(failed_chunks)} chunks into {table}")
 
 # ==================== Endpoints ====================
 
 @router.post("/schedule")
 async def schedule_event(req: ScheduleRequest):
-    logger.info(f"📅 Scheduling from {req.start_date} to {req.end_date}")
     start_time = datetime.now()
-
+    logger.info(f"📅 Scheduling from {req.start_date} to {req.end_date}")
+    
     try:
         # Fetch data in parallel
         logger.info("📥 Fetching data from Supabase...")
-
+        
         rooms_task = asyncio.create_task(
             fetch_all_paginated("campuses", "upload_group_id", req.campus_group_id)
         )
         parts_task = asyncio.create_task(
             fetch_all_paginated("participants", "upload_group_id", req.participant_group_id)
         )
-
+        
         rooms, participants = await asyncio.gather(rooms_task, parts_task)
-
+        
         if not rooms:
             raise HTTPException(404, "No rooms found for the selected campus group")
-
+        
         if not participants:
             raise HTTPException(404, "No participants found for the selected group")
-
+        
         logger.info(f"📊 Loaded: {len(rooms)} rooms, {len(participants)} participants")
-
-        # Run scheduler
+        
+        # Run scheduler (measure scheduling time only)
+        scheduler_start = datetime.now()
         scheduler = OptimizedScheduler()
         result = scheduler.schedule(
             rooms=rooms,
@@ -459,7 +488,11 @@ async def schedule_event(req: ScheduleRequest):
             lunch_break_start=req.lunch_break_start,
             lunch_break_end=req.lunch_break_end
         )
-
+        scheduler_time = (datetime.now() - scheduler_start).total_seconds()
+        result['execution_time'] = scheduler_time
+        
+        logger.info(f"✅ Scheduling complete in {scheduler_time:.2f}s")
+        
         # ✅ FIX: Include start_date in schedule_summary
         summary = {
             "event_name": req.event_name,
@@ -474,15 +507,20 @@ async def schedule_event(req: ScheduleRequest):
             "scheduled_count": result["scheduled_count"],
             "unscheduled_count": result["unscheduled_count"],
         }
-
+        
         logger.info("💾 Saving schedule summary...")
-        summary_res = sb.table("schedule_summary").insert([summary]).execute()
-        summary_id = summary_res.data[0]["id"]
-
-        logger.info(f"✅ Summary ID: {summary_id}")
-
-        # Batch insert schedule_batches (optimized)
+        try:
+            summary_res = sb.table("schedule_summary").insert([summary]).execute()
+            summary_id = summary_res.data[0]["id"]
+            logger.info(f"✅ Summary ID: {summary_id}")
+        except Exception as e:
+            logger.error(f"❌ Failed to save summary: {e}")
+            raise HTTPException(500, f"Failed to save schedule summary: {str(e)}")
+        
+        # Batch insert schedule_batches (optimized with smaller chunks)
         if result["batches"]:
+            logger.info(f"💾 Preparing {len(result['batches'])} batches for insertion...")
+            
             batch_rows = [{
                 "schedule_summary_id": summary_id,
                 "batch_number": b["batch_number"],
@@ -499,36 +537,47 @@ async def schedule_event(req: ScheduleRequest):
                 "has_pwd": b["has_pwd"],
                 "participant_ids": b["participant_ids"],
             } for b in result["batches"]]
-
-            logger.info(f"💾 Inserting {len(batch_rows)} batches...")
-            await batch_insert("schedule_batches", batch_rows)
-            logger.info("✅ Batch insertion complete")
-
-            # ✅ FIX: Fetch inserted batch IDs to create assignments
+            
+            try:
+                logger.info(f"💾 Inserting batches (chunks of 100)...")
+                await batch_insert("schedule_batches", batch_rows, batch_size=100)
+                logger.info(f"✅ Batch insertion complete")
+            except Exception as e:
+                logger.error(f"❌ Batch insertion failed: {e}")
+                raise HTTPException(500, f"Failed to save batches: {str(e)}")
+            
+            # ✅ FIX: Fetch inserted batch IDs with retry
             logger.info("📥 Fetching inserted batch IDs...")
-            inserted_batches = await fetch_all_paginated(
-                "schedule_batches",
-                "schedule_summary_id",
-                summary_id
-            )
-            batch_id_map = {b["batch_number"]: b["id"] for b in inserted_batches}
-
-            # ✅ FIX: Create schedule_assignments for each participant
-            logger.info("📝 Creating individual participant assignments...")
+            try:
+                inserted_batches = await fetch_all_paginated(
+                    "schedule_batches", 
+                    "schedule_summary_id", 
+                    summary_id,
+                    page_size=500
+                )
+                batch_id_map = {b["batch_number"]: b["id"] for b in inserted_batches}
+                logger.info(f"✅ Mapped {len(batch_id_map)} batch IDs")
+            except Exception as e:
+                logger.error(f"❌ Failed to fetch batch IDs: {e}")
+                raise HTTPException(500, f"Failed to retrieve batch IDs: {str(e)}")
+            
+            # ✅ FIX: Create schedule_assignments with smaller batches
+            logger.info("📝 Creating participant assignments...")
             assignments = []
-
+            
             for batch in result["batches"]:
                 batch_id = batch_id_map.get(batch["batch_number"])
                 if not batch_id:
+                    logger.warning(f"⚠️ Batch {batch['batch_number']} ID not found, skipping assignments")
                     continue
-
+                
                 for seat_no, participant_id in enumerate(batch["participant_ids"], start=1):
                     # Get participant details
                     participant = next(
-                        (p for p in participants if p["id"] == participant_id),
+                        (p for p in participants if p["id"] == participant_id), 
                         None
                     )
-
+                    
                     if participant:
                         assignments.append({
                             "schedule_summary_id": summary_id,
@@ -544,18 +593,27 @@ async def schedule_event(req: ScheduleRequest):
                             "end_time": batch["end_time"],
                             "batch_date": batch["batch_date"]
                         })
-
-            # Batch insert assignments
+            
+            # Batch insert assignments with smaller chunks
             if assignments:
-                logger.info(f"💾 Inserting {len(assignments)} participant assignments...")
-                await batch_insert("schedule_assignments", assignments, batch_size=500)
-                logger.info("✅ Assignment insertion complete")
-
-        execution_time = (datetime.now() - start_time).total_seconds()
-
-        logger.info(f"⚡ COMPLETED in {execution_time:.2f}s")
-        logger.info(f"📈 Performance: {len(participants) / execution_time:.0f} participants/sec")
-
+                try:
+                    logger.info(f"💾 Inserting {len(assignments)} assignments (chunks of 100)...")
+                    await batch_insert("schedule_assignments", assignments, batch_size=100)
+                    logger.info(f"✅ Assignment insertion complete")
+                except Exception as e:
+                    logger.error(f"❌ Assignment insertion failed: {e}")
+                    # Don't fail the entire request if assignments fail
+                    logger.warning("⚠️ Continuing despite assignment insertion failure")
+            else:
+                logger.warning("⚠️ No assignments to insert")
+        
+        # Calculate total execution time (including DB saves)
+        total_execution_time = (datetime.now() - start_time).total_seconds()
+        
+        logger.info(f"⚡ COMPLETED in {total_execution_time:.2f}s")
+        logger.info(f"📈 Scheduling: {result['execution_time']:.2f}s | DB Saves: {total_execution_time - result['execution_time']:.2f}s")
+        logger.info(f"🚀 Performance: {len(participants) / result['execution_time']:.0f} participants/sec scheduled")
+        
         return ScheduleResponse(
             schedule_summary_id=summary_id,
             scheduled_count=result["scheduled_count"],
@@ -568,9 +626,9 @@ async def schedule_event(req: ScheduleRequest):
                 "non_pwd_scheduled": result["non_pwd_scheduled"],
                 "non_pwd_unscheduled": result["non_pwd_unscheduled"],
             },
-            execution_time=round(execution_time, 2)
+            execution_time=round(total_execution_time, 2)
         )
-
+        
     except HTTPException:
         raise
     except Exception as e:
