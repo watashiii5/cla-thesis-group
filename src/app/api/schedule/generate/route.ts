@@ -1,16 +1,58 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'|| process.env.BACKEND_PUBLIC_URL 
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
+const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
 export const dynamic = 'force-dynamic'
 
+// Helper to fetch schedule_batches from Supabase, selecting all columns as per SQL schema
+async function fetchScheduleBatches(scheduleSummaryId: number) {
+  if (!SUPABASE_URL || !SUPABASE_KEY) {
+    throw new Error('Supabase environment variables not set')
+  }
+  // Select all columns explicitly for clarity and future-proofing
+  const columns = [
+    'id',
+    'schedule_summary_id',
+    'batch_name',
+    'room',
+    'time_slot',
+    'participant_count',
+    'has_pwd',
+    'created_at',
+    'participant_ids',
+    'batch_date',
+    'campus',
+    'building',
+    'is_first_floor',
+    'start_time',
+    'end_time',
+    'batch_number'
+  ].join(',')
+
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/schedule_batches?select=${columns}&schedule_summary_id=eq.${scheduleSummaryId}&order=batch_number.asc`,
+    {
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      }
+    }
+  )
+  if (!res.ok) {
+    throw new Error(`Failed to fetch schedule_batches: ${await res.text()}`)
+  }
+  return await res.json()
+}
+
 export async function POST(request: NextRequest) {
-  console.log('🔵 Next.js API Route: Request received')
-  
   try {
     const body = await request.json()
-    console.log('📤 Request body received:', JSON.stringify(body, null, 2))
-    console.log('🔗 Connecting to backend:', `${BACKEND_URL}/api/schedule/generate`)
+    console.log('[REQUEST] Forwarding to backend:', BACKEND_URL)
+    console.log('[REQUEST] Body:', JSON.stringify(body, null, 2))
 
     // Validate request body
     if (!body.campusGroupId || !body.participantGroupId) {
@@ -31,8 +73,8 @@ export async function POST(request: NextRequest) {
       event_name: body.eventName,
       event_type: body.eventType,
       schedule_date: body.scheduleDate,
-      start_date: body.startDate || body.scheduleDate, // Add start_date
-      end_date: body.endDate || body.scheduleDate,     // Add end_date
+      start_date: body.startDate || body.scheduleDate,
+      end_date: body.endDate || body.scheduleDate,
       start_time: body.startTime,
       end_time: body.endTime,
       duration_per_batch: body.durationPerBatch,
@@ -40,127 +82,153 @@ export async function POST(request: NextRequest) {
       email_notification: body.emailNotification
     }
 
-    console.log('🔄 Converted payload for FastAPI:', JSON.stringify(backendPayload, null, 2))
-
-    // Forward the request to FastAPI backend with timeout
+    // Timeout controller (55s)
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 120000) // 2 minute timeout
+    const timeoutId = setTimeout(() => controller.abort(), 55000)
 
-    console.log('⏳ Sending request to FastAPI...')
-    
     let response
     try {
       response = await fetch(`${BACKEND_URL}/api/schedule/generate`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
         },
         body: JSON.stringify(backendPayload),
         signal: controller.signal,
       })
       clearTimeout(timeoutId)
-      
-      console.log('📡 FastAPI response status:', response.status)
-      console.log('📡 FastAPI response headers:', Object.fromEntries(response.headers.entries()))
-      
-    } catch (fetchError: any) {
+    } catch (error: any) {
       clearTimeout(timeoutId)
-      console.error('❌ Fetch error:', fetchError)
-      
-      if (fetchError.name === 'AbortError') {
+      console.error('❌ Fetch error:', error)
+      if (error.name === 'AbortError') {
         return NextResponse.json(
           { 
-            success: false, 
-            error: 'Request timeout - scheduling is taking too long',
-            details: 'The backend is processing but taking more than 2 minutes'
+            error: 'Request timeout - the schedule generation took too long. Please try with fewer participants or a shorter time range.',
+            success: false 
           },
           { status: 504 }
         )
       }
-      
+      if (error.message?.includes('fetch failed') || error.code === 'ECONNREFUSED') {
+        return NextResponse.json(
+          { 
+            error: 'Cannot connect to backend server. Please ensure the backend is running at ' + BACKEND_URL,
+            success: false,
+            backend_url: BACKEND_URL
+          },
+          { status: 503 }
+        )
+      }
       return NextResponse.json(
         { 
-          success: false, 
-          error: 'Cannot connect to FastAPI backend',
-          details: `Please ensure FastAPI is running on ${BACKEND_URL}`,
-          fetchError: fetchError.message
+          error: error.message || 'Internal server error',
+          success: false
         },
-        { status: 503 }
+        { status: 500 }
       )
     }
 
-    // Read response body
-    const responseText = await response.text()
-    console.log('📄 Raw response body:', responseText.substring(0, 500)) // Log first 500 chars
+    console.log('📡 Backend response status:', response.status)
 
+    const responseText = await response.text()
     if (!response.ok) {
-      console.error('❌ FastAPI returned error status:', response.status)
-      
-      // Try to parse as JSON, fallback to text
+      console.error('❌ Backend error:', responseText)
       let errorData
       try {
         errorData = JSON.parse(responseText)
       } catch {
-        errorData = { detail: responseText || 'Unknown error' }
+        errorData = { error: responseText || 'Backend request failed' }
       }
-      
-      console.error('❌ Error data:', errorData)
-      
       return NextResponse.json(
         { 
-          success: false, 
-          error: errorData.detail || errorData.error || errorData.message || 'Backend error',
-          status: response.status,
-          details: errorData
+          error: errorData.error || errorData.detail || 'Failed to generate schedule',
+          success: false
         },
         { status: response.status }
       )
     }
 
-    // Parse successful response
     let data
     try {
       data = JSON.parse(responseText)
-      console.log('✅ Successfully parsed response')
-      console.log('✅ Scheduled:', data.scheduled_count, 'Unscheduled:', data.unscheduled_count)
+      console.log('✅ Backend response:', data)
     } catch (parseError) {
       console.error('❌ Failed to parse response as JSON:', parseError)
       return NextResponse.json(
         { 
-          success: false, 
           error: 'Invalid response format from backend',
+          success: false,
           details: responseText.substring(0, 200)
         },
         { status: 500 }
       )
     }
 
-    return NextResponse.json(data)
+    // Fetch schedule_batches from Supabase using schedule_summary_id
+    let batches = []
+    if (data.schedule_summary_id) {
+      try {
+        batches = await fetchScheduleBatches(data.schedule_summary_id)
+        console.log('✅ Fetched schedule_batches:', batches.length)
+      } catch (err) {
+        console.error('❌ Error fetching schedule_batches:', err)
+        // Still return the original data, but include error info
+        return NextResponse.json({
+          ...data,
+          batches: [],
+          fetch_batches_error: err instanceof Error ? err.message : String(err),
+        })
+      }
+    }
+
+    // Return the schedule result and batches
+    return NextResponse.json({
+      ...data,
+      batches,
+      success: true,
+    })
 
   } catch (error: any) {
-    console.error('❌ Unexpected error in Next.js API route:', error)
-    console.error('Error stack:', error.stack)
-    
+    console.error('❌ API Route Error:', error)
+    if (error.name === 'AbortError') {
+      return NextResponse.json(
+        { 
+          error: 'Request timeout - the schedule generation took too long. Please try with fewer participants or a shorter time range.',
+          success: false 
+        },
+        { status: 504 }
+      )
+    }
+    if (error.message?.includes('fetch failed') || error.code === 'ECONNREFUSED') {
+      return NextResponse.json(
+        { 
+          error: 'Cannot connect to backend server. Please ensure the backend is running at ' + BACKEND_URL,
+          success: false,
+          backend_url: BACKEND_URL
+        },
+        { status: 503 }
+      )
+    }
     return NextResponse.json(
       { 
-        success: false, 
-        error: error.message || 'Failed to connect to scheduling server',
-        details: error.toString(),
-        stack: error.stack
+        error: error.message || 'Internal server error',
+        success: false
       },
       { status: 500 }
     )
   }
 }
 
-export async function OPTIONS() {
-  return new Response(null, {
+// CORS preflight handler
+export async function OPTIONS(request: NextRequest) {
+  return new NextResponse(null, {
     status: 200,
     headers: {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
-    }
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    },
   })
 }
 
