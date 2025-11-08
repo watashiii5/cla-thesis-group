@@ -1,18 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-// ✅ FIXED: Use environment variable with fallback
+// ✅ Use environment variable with fallback
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     
-    console.log('[REQUEST] Forwarding to backend:', BACKEND_URL)
-    console.log('[REQUEST] Body:', JSON.stringify(body, null, 2))
+    console.log('[API ROUTE] Forwarding to backend:', BACKEND_URL)
+    console.log('[API ROUTE] Body:', JSON.stringify(body, null, 2))
 
-    // ✅ UPDATED: Reduce timeout to 55 seconds (Vercel limit is 60s)
+    // ✅ Timeout for backend request (55 seconds)
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 55000) // 55 seconds
+    const timeoutId = setTimeout(() => controller.abort(), 55000)
 
     const response = await fetch(`${BACKEND_URL}/api/schedule/generate`, {
       method: 'POST',
@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     console.error('❌ API Route Error:', error)
 
-    // ✅ Better error messages
+    // Better error messages
     if (error.name === 'AbortError') {
       return NextResponse.json(
         { 
@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// ✅ Add OPTIONS handler for CORS preflight
+// Add OPTIONS handler for CORS preflight
 export async function OPTIONS(request: NextRequest) {
   return new NextResponse(null, {
     status: 200,

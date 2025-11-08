@@ -1,14 +1,13 @@
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Optional, Dict
 from pathlib import Path
 from dotenv import load_dotenv
 from supabase import create_client, Client
 from .scheduler import PriorityScheduler
 from datetime import datetime
-import os
 import logging
-import json
+import os
 
 # Load .env only if it exists (for local development)
 env_path = Path(__file__).parent.parent.parent / '.env'
@@ -78,15 +77,39 @@ class Schedule(ScheduleBase):
 class ScheduleRequest(BaseModel):
     event_name: str
     event_type: str
-    schedule_date: str  # Start date "YYYY-MM-DD"
+    schedule_date: str
     start_time: str
-    end_date: str  # End date "YYYY-MM-DD"
+    end_date: str
     end_time: str
     duration_per_batch: int
     campus_group_id: int
     participant_group_id: int
     prioritize_pwd: bool = True
     email_notification: bool = False
+    exclude_lunch_break: bool = True
+    lunch_break_start: str = "12:00"
+    lunch_break_end: str = "13:00"
+    
+    # ✅ Allow camelCase aliases
+    class Config:
+        populate_by_name = True
+        
+    # ✅ Alternative field names
+    campusGroupId: Optional[int] = Field(None, alias="campus_group_id")
+    participantGroupId: Optional[int] = Field(None, alias="participant_group_id")
+    eventName: Optional[str] = Field(None, alias="event_name")
+    eventType: Optional[str] = Field(None, alias="event_type")
+    scheduleDate: Optional[str] = Field(None, alias="schedule_date")
+    startDate: Optional[str] = Field(None, alias="start_date")
+    startTime: Optional[str] = Field(None, alias="start_time")
+    endDate: Optional[str] = Field(None, alias="end_date")
+    endTime: Optional[str] = Field(None, alias="end_time")
+    durationPerBatch: Optional[int] = Field(None, alias="duration_per_batch")
+    prioritizePWD: Optional[bool] = Field(None, alias="prioritize_pwd")
+    emailNotification: Optional[bool] = Field(None, alias="email_notification")
+    excludeLunchBreak: Optional[bool] = Field(None, alias="exclude_lunch_break")
+    lunchBreakStart: Optional[str] = Field(None, alias="lunch_break_start")
+    lunchBreakEnd: Optional[str] = Field(None, alias="lunch_break_end")
 
 class ScheduleResponse(BaseModel):
     schedule_summary_id: int
@@ -147,12 +170,12 @@ def fetch_all_rows(table_name: str, filters: Dict = {}, order_by: str = "id") ->
 # ==================== Endpoints ====================
 
 @router.post("/generate")
-async def generate_schedule(request: dict):
+async def generate_schedule(request: ScheduleRequest):
     """Generate optimized schedule with proper data saving"""
     logger.info("=" * 80)
     logger.info("SCHEDULE GENERATION REQUEST RECEIVED")
     logger.info("=" * 80)
-    logger.info(f"Request data: {json.dumps(request, indent=2)}")
+    logger.info(f"Request data: {request}")
     
     try:
         # Validate required fields including end_date
@@ -167,8 +190,8 @@ async def generate_schedule(request: dict):
             )
         
         # Validate date range
-        start_date = datetime.strptime(request['schedule_date'], "%Y-%m-%d").date()
-        end_date = datetime.strptime(request['end_date'], "%Y-%m-%d").date()
+        start_date = datetime.strptime(request.schedule_date, "%Y-%m-%d").date()
+        end_date = datetime.strptime(request.end_date, "%Y-%m-%d").date()
         
         if end_date < start_date:
             raise HTTPException(400, "end_date must be >= schedule_date")
@@ -180,7 +203,7 @@ async def generate_schedule(request: dict):
         logger.info("\nSTEP 1: Fetching ALL rooms from Supabase...")
         rooms = fetch_all_rows(
             "campuses",
-            filters={"upload_group_id": request['campus_group_id']},
+            filters={"upload_group_id": request.campus_group_id},
             order_by="id"
         )
         
@@ -232,7 +255,7 @@ async def generate_schedule(request: dict):
         # FETCH PARTICIPANTS
         participants = fetch_all_rows(
             "participants",
-            filters={"upload_group_id": request['participant_group_id']},
+            filters={"upload_group_id": request.participant_group_id},
             order_by="id"
         )
         
@@ -260,12 +283,12 @@ async def generate_schedule(request: dict):
         result = scheduler.schedule(
             rooms=rooms,
             participants=participants,
-            start_date=request['schedule_date'],
-            end_date=request['end_date'],
-            start_time=request['start_time'],
-            end_time=request['end_time'],
-            duration_per_batch=request['duration_per_batch'],
-            prioritize_pwd=request['prioritize_pwd'],
+            start_date=request.schedule_date,
+            end_date=request.end_date,
+            start_time=request.start_time,
+            end_time=request.end_time,
+            duration_per_batch=request.duration_per_batch,
+            prioritize_pwd=request.prioritize_pwd,
             exclude_lunch_break=exclude_lunch_break,
             lunch_break_start=lunch_break_start,
             lunch_break_end=lunch_break_end
@@ -280,14 +303,14 @@ async def generate_schedule(request: dict):
 
         # Insert schedule_summary with end_date
         summary_row = {
-            "event_name": request['event_name'],
-            "event_type": request['event_type'],
-            "schedule_date": request['schedule_date'],
-            "start_time": request['start_time'],
-            "end_date": request['end_date'],
-            "end_time": request['end_time'],
-            "campus_group_id": request['campus_group_id'],
-            "participant_group_id": request['participant_group_id'],
+            "event_name": request.event_name,
+            "event_type": request.event_type,
+            "schedule_date": request.schedule_date,
+            "start_time": request.start_time,
+            "end_date": request.end_date,
+            "end_time": request.end_time,
+            "campus_group_id": request.campus_group_id,
+            "participant_group_id": request.participant_group_id,
             "scheduled_count": result["scheduled_count"],
             "unscheduled_count": result["unscheduled_count"],
         }
