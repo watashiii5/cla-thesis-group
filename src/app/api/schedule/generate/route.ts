@@ -3,17 +3,61 @@ import { NextRequest, NextResponse } from 'next/server'
 // ✅ Use environment variable with fallback
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
+// ✅ CRITICAL: Force dynamic rendering in Next.js 15
+export const dynamic = 'force-dynamic'
+
 export async function POST(request: NextRequest) {
+  console.log('🔥 API ROUTE HIT!')
+  
   try {
-    const body = await request.json()
+    // ✅ Parse the incoming body with error handling
+    let body
+    try {
+      body = await request.json()
+    } catch (parseError: any) {
+      console.error('[API ROUTE] ❌ Failed to parse request body:', parseError.message)
+      return NextResponse.json(
+        { 
+          error: 'Invalid JSON in request body',
+          parse_error: parseError.message,
+          success: false
+        },
+        { status: 400 }
+      )
+    }
     
-    console.log('[API ROUTE] Forwarding to backend:', BACKEND_URL)
-    console.log('[API ROUTE] Body:', JSON.stringify(body, null, 2))
+    console.log('[API ROUTE] ===== REQUEST START =====')
+    console.log('[API ROUTE] Backend URL:', BACKEND_URL)
+    console.log('[API ROUTE] Received body:', JSON.stringify(body, null, 2))
+    console.log('[API ROUTE] Body type:', typeof body)
+    console.log('[API ROUTE] Body keys:', Object.keys(body))
+    console.log('[API ROUTE] Body values:', {
+      campus_group_id: body.campus_group_id,
+      participant_group_id: body.participant_group_id,
+      event_name: body.event_name,
+      schedule_date: body.schedule_date,
+      end_date: body.end_date
+    })
 
-    // ✅ Timeout for backend request (55 seconds)
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 55000)
+    // ✅ Validate required fields before forwarding
+    const requiredFields = ['campus_group_id', 'participant_group_id', 'event_name', 'schedule_date', 'end_date']
+    const missingFields = requiredFields.filter(field => !body[field])
+    
+    if (missingFields.length > 0) {
+      console.error('[API ROUTE] ❌ Missing fields in API route:', missingFields)
+      return NextResponse.json(
+        { 
+          error: `API Route detected missing fields: ${missingFields.join(', ')}`,
+          received_body: body,
+          success: false
+        },
+        { status: 400 }
+      )
+    }
 
+    console.log('✅ All required fields present!')
+    console.log('📤 Forwarding to backend...')
+    
     const response = await fetch(`${BACKEND_URL}/api/schedule/generate`, {
       method: 'POST',
       headers: {
@@ -21,12 +65,10 @@ export async function POST(request: NextRequest) {
         'Accept': 'application/json',
       },
       body: JSON.stringify(body),
-      signal: controller.signal,
     })
-
-    clearTimeout(timeoutId)
-
+    
     console.log('📡 Backend response status:', response.status)
+    console.log('[API ROUTE] 📡 Backend response headers:', Object.fromEntries(response.headers.entries()))
 
     if (!response.ok) {
       const errorText = await response.text()
@@ -42,6 +84,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { 
           error: errorData.error || errorData.detail || 'Failed to generate schedule',
+          backend_response: errorData,
           success: false
         },
         { status: response.status }
@@ -49,53 +92,25 @@ export async function POST(request: NextRequest) {
     }
 
     const data = await response.json()
-    console.log('✅ Backend response:', data)
+    console.log('✅ Backend success!')
+    console.log('[API ROUTE] ===== REQUEST END =====')
 
     return NextResponse.json(data)
 
   } catch (error: any) {
-    console.error('❌ API Route Error:', error)
-
-    // Better error messages
-    if (error.name === 'AbortError') {
-      return NextResponse.json(
-        { 
-          error: 'Request timeout - the schedule generation took too long. Please try with fewer participants or a shorter time range.',
-          success: false 
-        },
-        { status: 504 }
-      )
-    }
-
-    if (error.message?.includes('fetch failed') || error.code === 'ECONNREFUSED') {
-      return NextResponse.json(
-        { 
-          error: 'Cannot connect to backend server. Please ensure the backend is running at ' + BACKEND_URL,
-          success: false,
-          backend_url: BACKEND_URL
-        },
-        { status: 503 }
-      )
-    }
-
-    return NextResponse.json(
-      { 
-        error: error.message || 'Internal server error',
-        success: false
-      },
-      { status: 500 }
-    )
+    console.error('❌ API Route Error:', error.message)
+    console.error('Stack:', error.stack)
+    return NextResponse.json({ error: error.message, success: false }, { status: 500 })
   }
 }
 
-// Add OPTIONS handler for CORS preflight
-export async function OPTIONS(request: NextRequest) {
-  return new NextResponse(null, {
+export async function OPTIONS() {
+  return new Response(null, {
     status: 200,
     headers: {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    },
+      'Access-Control-Allow-Headers': 'Content-Type',
+    }
   })
 }

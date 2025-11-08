@@ -1,18 +1,20 @@
 'use client'
-
-import { useRouter } from 'next/navigation'
-import { useState, useEffect } from 'react'
-import Sidebar from '@/app/components/Sidebar'
-import MenuBar from '@/app/components/MenuBar'
 import styles from './GenerateSchedule.module.css'
-import { supabase } from '@/lib/supabase'
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { supabase } from '@/lib/supabaseClient'
+import MenuBar from '@/app/components/MenuBar'
+import Sidebar from '@/app/components/Sidebar'
+
+// ✅ FRONTEND: backend URL (NEXT_PUBLIC_API_URL should point to your Render/FastAPI)
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000'
 
 interface CampusFile {
   upload_group_id: number
   school_name: string
   file_name: string
   row_count: number
-  total_capacity: number
+  total_capacity: number // ✅ NEW: Total capacity across all rooms
 }
 
 interface ParticipantFile {
@@ -20,7 +22,7 @@ interface ParticipantFile {
   batch_name: string
   file_name: string
   row_count: number
-  pwd_count?: number
+  pwd_count?: number  // ✅ ADD THIS
 }
 
 interface ScheduleConfig {
@@ -36,9 +38,9 @@ interface ScheduleConfig {
   durationUnit: 'minutes' | 'hours'
   prioritizePWD: boolean
   emailNotification: boolean
-  excludeLunchBreak: boolean
-  lunchBreakStart: string
-  lunchBreakEnd: string
+  excludeLunchBreak: boolean  // ✅ NEW
+  lunchBreakStart: string     // ✅ NEW
+  lunchBreakEnd: string       // ✅ NEW
 }
 
 interface ScheduleResult {
@@ -85,12 +87,13 @@ async function fetchAllRows(table: string, filters: any = {}) {
     const { data, error } = await query
 
     if (error) {
-      console.error(`❌ Error fetching ${table}:`, error)
+      console.error(`❌ Error on page ${page + 1}:`, error)
       throw error
     }
     
     if (!data || data.length === 0) {
-      console.log(`   ℹ️ No more data on page ${page + 1}`)
+      console.log(`   ✅ No more data on page ${page + 1}`)
+      hasMore = false
       break
     }
 
@@ -98,7 +101,7 @@ async function fetchAllRows(table: string, filters: any = {}) {
     allData = [...allData, ...data]
     
     if (data.length < PAGE_SIZE) {
-      console.log(`   ✅ Reached end of data (got ${data.length} < ${PAGE_SIZE})`)
+      console.log(`   ✅ Last page reached (${data.length} < ${PAGE_SIZE})`)
       hasMore = false
     }
     
@@ -117,9 +120,6 @@ export default function GenerateSchedulePage() {
   
   const [campusFiles, setCampusFiles] = useState<CampusFile[]>([])
   const [participantFiles, setParticipantFiles] = useState<ParticipantFile[]>([])
-  
-  // ✅ ADD THIS: Store room data for each campus group
-  const [roomData, setRoomData] = useState<{[key: number]: any[]}>({})
 
   const [config, setConfig] = useState<ScheduleConfig>({
     campusGroupId: null,
@@ -134,14 +134,19 @@ export default function GenerateSchedulePage() {
     durationUnit: 'minutes',
     prioritizePWD: true,
     emailNotification: false,
-    excludeLunchBreak: true,
-    lunchBreakStart: '12:00',
-    lunchBreakEnd: '13:00'
+    excludeLunchBreak: true,    // ✅ NEW: Default enabled
+    lunchBreakStart: '12:00',   // ✅ NEW
+    lunchBreakEnd: '13:00'      // ✅ NEW
   })
 
   const [scheduleResult, setScheduleResult] = useState<ScheduleResult | null>(null)
   const [showResults, setShowResults] = useState(false)
+
+  // ✅ FIXED: Fetch actual PWD count from Supabase for selected participant group
   const [pwdCounts, setPwdCounts] = useState<{[key: number]: number}>({})
+
+  // ✅ NEW: Fetch actual room data with capacities and floor detection
+  const [roomData, setRoomData] = useState<{[key: number]: any[]}>({})
 
   useEffect(() => {
     fetchData()
@@ -153,15 +158,17 @@ export default function GenerateSchedulePage() {
     }
   }, [config.scheduleDate])
 
+  // ✅ NEW: Fetch PWD count for a specific participant group
   const fetchPwdCount = async (uploadGroupId: number) => {
     try {
       console.log(`🔍 Fetching PWD count for upload_group_id: ${uploadGroupId}`)
       
+      // ✅ FIXED: Changed .eq('pwd', true) to .eq('is_pwd', true)
       const { data, error, count } = await supabase
         .from('participants')
         .select('*', { count: 'exact', head: false })
         .eq('upload_group_id', uploadGroupId)
-        .eq('is_pwd', true)
+        .eq('is_pwd', true)  // ✅ FIXED: Correct column name
     
       if (error) {
         console.error('Error fetching PWD count:', error)
@@ -178,6 +185,7 @@ export default function GenerateSchedulePage() {
     }
   }
 
+  // ✅ UPDATED: Fetch PWD counts when participant group changes
   useEffect(() => {
     if (config.participantGroupId) {
       fetchPwdCount(config.participantGroupId).then(count => {
@@ -196,6 +204,7 @@ export default function GenerateSchedulePage() {
     return config.durationPerBatch
   }
 
+  // ✅ FIXED: Validate date/time range properly
   const isValidDateRange = () => {
     if (!config.scheduleDate || !config.endDate) return false
     
@@ -217,6 +226,7 @@ export default function GenerateSchedulePage() {
     return false
   }
 
+  // ✅ UPDATED: Better error messages
   const getDateRangeError = () => {
     if (!config.scheduleDate || !config.endDate) return ''
     
@@ -239,6 +249,7 @@ export default function GenerateSchedulePage() {
     return ''
   }
 
+  // ✅ UPDATED: Calculate lunch break minutes
   const getLunchBreakMinutes = () => {
     if (!config.excludeLunchBreak) return 0
     
@@ -250,6 +261,7 @@ export default function GenerateSchedulePage() {
     return lunchMinutes > 0 ? lunchMinutes : 0
   }
 
+  // ✅ UPDATED: Calculate available minutes with lunch break exclusion
   const getTotalAvailableMinutes = () => {
     if (!config.scheduleDate || !config.endDate) return 0
     
@@ -276,6 +288,7 @@ export default function GenerateSchedulePage() {
     return Math.max(0, dailyMinutes * totalDays)
   }
 
+  // ✅ FIXED: Use ACTUAL room data from database
   const separateRoomsByFloor = (campusGroupId: number) => {
     const rooms = roomData[campusGroupId] || []
     
@@ -313,6 +326,7 @@ export default function GenerateSchedulePage() {
     return [firstFloorRooms.length, upperFloorRooms.length, avgCapacity, firstFloorCapacity, upperFloorCapacity]
   }
 
+  // ✅ NEW: Detect if room is 1st floor (matches backend logic)
   const isFirstFloor = (building: string, room: string): boolean => {
     const roomClean = room.toLowerCase().trim()
     const buildingClean = building.toLowerCase().trim()
@@ -347,6 +361,7 @@ export default function GenerateSchedulePage() {
     return false
   }
 
+  // ✅ NEW: Fetch rooms for selected campus group
   const fetchRoomsForCampus = async (uploadGroupId: number) => {
     try {
       console.log(`🏢 Fetching rooms for upload_group_id: ${uploadGroupId}`)
@@ -362,7 +377,7 @@ export default function GenerateSchedulePage() {
     }
   }
 
-  // ✅ FIXED: Fetch rooms when campus is selected
+  // ✅ UPDATED: Fetch rooms when campus is selected
   useEffect(() => {
     if (config.campusGroupId) {
       fetchRoomsForCampus(config.campusGroupId).then(rooms => {
@@ -446,6 +461,7 @@ export default function GenerateSchedulePage() {
     }
   }
 
+  // ✅ NEW: Validate campus data for null values before generating
   const validateCampusData = async () => {
     if (!config.campusGroupId) return { isValid: false, error: 'No campus group selected' }
     
@@ -475,72 +491,118 @@ export default function GenerateSchedulePage() {
     }
   }
 
+  // Replace the handleGenerateSchedule function with the following:
   const handleGenerateSchedule = async () => {
-    if (!config.campusGroupId || !config.participantGroupId) {
-      alert('Please select both campus and participant groups')
+    // Ensure endDate is set BEFORE validation
+    const effectiveEndDate = config.endDate || config.scheduleDate
+
+    // Basic client-side validation
+    if (
+      !config.campusGroupId ||
+      !config.participantGroupId ||
+      !config.eventName ||
+      !config.scheduleDate
+    ) {
+      alert('Please fill Campus, Participant Group, Event Name and Schedule Date.')
       return
     }
 
-    if (!config.eventName || !config.scheduleDate || !config.endDate) {
-      alert('Please fill in all required fields')
+    // Validate campus data for null values before proceeding
+    const validation = await validateCampusData()
+    if (!validation.isValid) {
+      alert(validation.error)
       return
     }
 
-    setScheduling(true)
-    setScheduleResult(null)
+    // Update config state with endDate if it was empty
+    if (!config.endDate) {
+      setConfig(prev => ({ ...prev, endDate: effectiveEndDate }))
+    }
 
-    // ✅ FIXED: Use snake_case to match backend expectations
+    // Validate date/time range using the effective end date
+    const tempConfig = { ...config, endDate: effectiveEndDate }
+
+    // Check if date range is valid
+    const startDate = new Date(tempConfig.scheduleDate)
+    const endDate = new Date(tempConfig.endDate)
+
+    let isValid = false
+    let errorMessage = ''
+
+    if (startDate > endDate) {
+      errorMessage = 'End date must be on or after start date'
+    } else if (tempConfig.scheduleDate === tempConfig.endDate) {
+      const startDateTime = new Date(`${tempConfig.scheduleDate}T${tempConfig.startTime}`)
+      const endDateTime = new Date(`${tempConfig.endDate}T${tempConfig.endTime}`)
+
+      if (endDateTime <= startDateTime) {
+        errorMessage = 'End time must be after start time on the same day'
+      } else {
+        isValid = true
+      }
+    } else {
+      isValid = true
+    }
+
+    if (!isValid) {
+      alert(errorMessage)
+      return
+    }
+
+    // Build request body with guaranteed non-null values
     const requestBody = {
-      campus_group_id: config.campusGroupId,
-      participant_group_id: config.participantGroupId,
-      event_name: config.eventName,
+      campus_group_id: Number(config.campusGroupId), // must be a number
+      participant_group_id: Number(config.participantGroupId), // must be a number
+      event_name: config.eventName.trim(), // must not be empty
       event_type: config.eventType,
       schedule_date: config.scheduleDate,
-      start_date: config.scheduleDate,
-      end_date: config.endDate,
+      end_date: effectiveEndDate,
       start_time: config.startTime,
       end_time: config.endTime,
-      duration_per_batch: config.durationUnit === 'hours' 
-        ? config.durationPerBatch * 60 
-        : config.durationPerBatch,
-      prioritize_pwd: config.prioritizePWD,
-      email_notification: config.emailNotification,
-      exclude_lunch_break: config.excludeLunchBreak,
+      duration_per_batch: getDurationInMinutes(),
+      prioritize_pwd: Boolean(config.prioritizePWD),
+      email_notification: Boolean(config.emailNotification),
+      exclude_lunch_break: Boolean(config.excludeLunchBreak),
       lunch_break_start: config.lunchBreakStart,
       lunch_break_end: config.lunchBreakEnd
     }
 
-    console.log('📤 Sending request:', requestBody)
+    // Log for debugging
+    console.log('📤 Sending request body:', JSON.stringify(requestBody, null, 2))
+
+    setScheduling(true)
+    setScheduleResult(null)
 
     try {
-      // ✅ Use Next.js API route
-      const res = await fetch('/api/schedule/generate', {
+      const res = await fetch(`/api/schedule/generate`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
         body: JSON.stringify(requestBody)
       })
-
-      console.log('📡 Response status:', res.status)
-
+      
       if (!res.ok) {
-        const errorData = await res.json()
-        console.error('❌ API Error:', errorData)
-        throw new Error(errorData.error || errorData.detail || 'Failed to generate schedule')
+        const text = await res.text()
+        console.error('❌ Backend error response:', text)
+        throw new Error(`Server responded ${res.status}: ${text}`)
       }
 
-      const result = await res.json()
-      console.log('✅ Schedule generated:', result)
-
-      setScheduleResult(result)
+      const data = await res.json()
+      setScheduleResult({
+        success: true,
+        message: 'Schedule generated',
+        scheduled_count: data.scheduled_count ?? 0,
+        unscheduled_count: data.unscheduled_count ?? 0,
+        execution_time: data.execution_time ?? 0,
+        schedule_data: data.assignments ?? [],
+        schedule_summary_id: data.schedule_summary_id,
+        pwd_stats: data.pwd_stats ?? undefined
+      })
       setShowResults(true)
-
-      if (result.success && result.schedule_summary_id) {
-        alert(`✅ Schedule generated successfully!\n\nScheduled: ${result.scheduled_count}\nUnscheduled: ${result.unscheduled_count}`)
-      }
-
     } catch (error: any) {
-      console.error('❌ Error generating schedule:', error)
-      alert(`❌ Error: ${error.message}`)
+      alert(`Failed to generate schedule: ${error.message || error}`)
     } finally {
       setScheduling(false)
     }
@@ -607,6 +669,7 @@ export default function GenerateSchedulePage() {
     }
   }
 
+  // ✅ CORRECTED: Use actual scheduler logic for capacity calculation
   const getCapacityEstimate = () => {
     const totalMinutes = getTotalAvailableMinutes()
     if (totalMinutes === 0) return null
@@ -687,14 +750,16 @@ export default function GenerateSchedulePage() {
   }
 
   return (
-    <div className={styles.container}>
+    <div className={styles.scheduleLayout}>
+      <MenuBar 
+        onToggleSidebar={() => setSidebarOpen(!sidebarOpen)} 
+        showSidebarToggle={true}
+        showAccountIcon={true}
+      />
       <Sidebar isOpen={sidebarOpen} />
       
-      <div className={`${styles.mainContent} ${!sidebarOpen ? styles.sidebarClosed : ''}`}>
-        <MenuBar onToggleSidebar={() => setSidebarOpen(prev => !prev)} showSidebarToggle={true} />
-        
-        <div className={styles.content}>
-          <div className={styles.scheduleContainer}>
+      <main className={`${styles.scheduleMain} ${!sidebarOpen ? styles.fullWidth : ''}`}>
+        <div className={styles.scheduleContainer}>
           <div className={styles.scheduleHeader}>
             <button className={styles.backButton}
               onClick={() => router.push('/LandingPages/QtimeHomePage')}
@@ -872,7 +937,7 @@ export default function GenerateSchedulePage() {
                     >
                       <span className={styles.selectionIcon}>
                         <svg viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10zm-2-8h-2v2h2v-2zm0 4h-2v2h2v-2z"/>
+                          <path d="M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v-2H8V9h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10zm-2-8h-2v2h2v-2zm0 4h-2v2h2v-2z"/>
                         </svg>
                       </span>
                       <h3>{file.school_name}</h3>
@@ -1038,6 +1103,7 @@ export default function GenerateSchedulePage() {
                   </div>
                 </div>
 
+                {/* ✅ Add this after the duration options */}
                 <div className={styles.formOptions}>
                   <label className={styles.checkboxLabel}>
                     <input
@@ -1215,8 +1281,7 @@ export default function GenerateSchedulePage() {
             )
           })()}
         </div>
-      </div>
-      </div>
+      </main>
     </div>
   )
 }

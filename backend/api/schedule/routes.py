@@ -171,17 +171,16 @@ def fetch_all_rows(table_name: str, filters: Dict = {}, order_by: str = "id") ->
 
 @router.post("/generate")
 async def generate_schedule(request: ScheduleRequest):
-    """Generate optimized schedule with proper data saving"""
     logger.info("=" * 80)
     logger.info("SCHEDULE GENERATION REQUEST RECEIVED")
     logger.info("=" * 80)
     logger.info(f"Request data: {request}")
-    
+
     try:
         # Validate required fields including end_date
         required_fields = ['campus_group_id', 'participant_group_id', 'event_name', 'schedule_date', 'end_date']
-        missing_fields = [field for field in required_fields if field not in request]
-        
+        missing_fields = [field for field in required_fields if getattr(request, field, None) in [None, '', []]]
+
         if missing_fields:
             logger.error(f"Missing required fields: {missing_fields}")
             raise HTTPException(
