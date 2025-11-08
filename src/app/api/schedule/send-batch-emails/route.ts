@@ -289,7 +289,14 @@ export async function POST(request: NextRequest) {
             html: `
               <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
                 <div style="background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); color: white; padding: 30px; border-radius: 16px 16px 0 0; text-align: center;">
-                  <h1 style="margin: 0; font-size: 28px; font-weight: 800;">🎓 ${eventName}</h1>
+                  <h1 style="margin: 0; font-size: 28px; font-weight: 800;">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="vertical-align: middle; margin-right: 8px;">
+                      <path d="M12 14l9-5-9-5-9 5 9 5z" stroke="currentColor" stroke-width="2"/>
+                      <path d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z" stroke="currentColor" stroke-width="2"/>
+                      <path d="M12 14v6" stroke="currentColor" stroke-width="2"/>
+                    </svg>
+                    ${eventName}
+                  </h1>
                   <p style="margin: 10px 0 0 0; font-size: 16px; opacity: 0.9;">${eventType}</p>
                 </div>
                 
@@ -303,47 +310,93 @@ export async function POST(request: NextRequest) {
                   <div style="background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%); padding: 25px; border-radius: 12px; margin: 25px 0; border-left: 4px solid #4f46e5;">
                     <table style="width: 100%; border-collapse: collapse;">
                       <tr>
-                        <td style="padding: 12px 0; color: #666; font-weight: 700; font-size: 14px; width: 40%;">📋 Participant #:</td>
+                        <td style="padding: 12px 0; color: #666; font-weight: 700; font-size: 14px; width: 40%;">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="vertical-align: middle; margin-right: 4px;">
+                            <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                          </svg>
+                          Participant #:
+                        </td>
                         <td style="padding: 12px 0; color: #1f2937; font-weight: 600; font-size: 15px;">${p.participant_number}</td>
                       </tr>
                       <tr style="border-top: 1px solid #d1d5db;">
-                        <td style="padding: 12px 0; color: #666; font-weight: 700; font-size: 14px;">📅 Date:</td>
+                        <td style="padding: 12px 0; color: #666; font-weight: 700; font-size: 14px;">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="vertical-align: middle; margin-right: 4px;">
+                            <path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                          </svg>
+                          Date:
+                        </td>
                         <td style="padding: 12px 0; color: #1f2937; font-weight: 600; font-size: 15px;">${dateRangeFormatted}</td>
                       </tr>
                       <tr style="border-top: 1px solid #d1d5db;">
-                        <td style="padding: 12px 0; color: #666; font-weight: 700; font-size: 14px;">⏰ Time:</td>
+                        <td style="padding: 12px 0; color: #666; font-weight: 700; font-size: 14px;">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="vertical-align: middle; margin-right: 4px;">
+                            <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                          </svg>
+                          Time:
+                        </td>
                         <td style="padding: 12px 0; color: #1f2937; font-weight: 600; font-size: 15px;">${timeSlotFormatted}</td>
                       </tr>
                       ${b.campus ? `
                       <tr style="border-top: 1px solid #d1d5db;">
-                        <td style="padding: 12px 0; color: #666; font-weight: 700; font-size: 14px;">🏫 Campus:</td>
+                        <td style="padding: 12px 0; color: #666; font-weight: 700; font-size: 14px;">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="vertical-align: middle; margin-right: 4px;">
+                            <path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                          </svg>
+                          Campus:
+                        </td>
                         <td style="padding: 12px 0; color: #1f2937; font-weight: 600; font-size: 15px;">${b.campus}</td>
                       </tr>
                       ` : ''}
                       ${b.building ? `
                       <tr style="border-top: 1px solid #d1d5db;">
-                        <td style="padding: 12px 0; color: #666; font-weight: 700; font-size: 14px;">🏢 Building:</td>
+                        <td style="padding: 12px 0; color: #666; font-weight: 700; font-size: 14px;">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="vertical-align: middle; margin-right: 4px;">
+                            <path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                          </svg>
+                          Building:
+                        </td>
                         <td style="padding: 12px 0; color: #1f2937; font-weight: 600; font-size: 15px;">${b.building}</td>
                       </tr>
                       ` : ''}
                       ${b.is_first_floor !== undefined ? `
                       <tr style="border-top: 1px solid #d1d5db;">
-                        <td style="padding: 12px 0; color: #666; font-weight: 700; font-size: 14px;">🏗️ Floor:</td>
+                        <td style="padding: 12px 0; color: #666; font-weight: 700; font-size: 14px;">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="vertical-align: middle; margin-right: 4px;">
+                            <path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                          </svg>
+                          Floor:
+                        </td>
                         <td style="padding: 12px 0; color: #1f2937; font-weight: 600; font-size: 15px;">
-                          ${b.is_first_floor ? '1st Floor ♿' : 'Upper Floor'}
+                          ${b.is_first_floor ? '1st Floor <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="vertical-align: middle;"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>' : 'Upper Floor'}
                         </td>
                       </tr>
                       ` : ''}
                       <tr style="border-top: 1px solid #d1d5db;">
-                        <td style="padding: 12px 0; color: #666; font-weight: 700; font-size: 14px;">🚪 Room:</td>
+                        <td style="padding: 12px 0; color: #666; font-weight: 700; font-size: 14px;">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="vertical-align: middle; margin-right: 4px;">
+                            <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M8 5a2 2 0 012-2h4a2 2 0 012 2v2H8V5z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                          </svg>
+                          Room:
+                        </td>
                         <td style="padding: 12px 0; color: #1f2937; font-weight: 600; font-size: 15px;">${b.room}</td>
                       </tr>
                       <tr style="border-top: 1px solid #d1d5db;">
-                        <td style="padding: 12px 0; color: #666; font-weight: 700; font-size: 14px;">💺 Seat #:</td>
+                        <td style="padding: 12px 0; color: #666; font-weight: 700; font-size: 14px;">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="vertical-align: middle; margin-right: 4px;">
+                            <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                          </svg>
+                          Seat #:
+                        </td>
                         <td style="padding: 12px 0; color: #1f2937; font-weight: 600; font-size: 15px;">${a.seat_no}</td>
                       </tr>
                       <tr style="border-top: 1px solid #d1d5db;">
-                        <td style="padding: 12px 0; color: #666; font-weight: 700; font-size: 14px;">📦 Batch:</td>
+                        <td style="padding: 12px 0; color: #666; font-weight: 700; font-size: 14px;">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="vertical-align: middle; margin-right: 4px;">
+                            <path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                          </svg>
+                          Batch:
+                        </td>
                         <td style="padding: 12px 0; color: #1f2937; font-weight: 600; font-size: 15px;">${b.batch_name}</td>
                       </tr>
                     </table>
@@ -352,14 +405,21 @@ export async function POST(request: NextRequest) {
                   ${p.is_pwd ? `
                     <div style="background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%); border-left: 5px solid #3b82f6; padding: 18px; margin: 25px 0; border-radius: 8px;">
                       <p style="margin: 0; color: #1e40af; font-weight: 600; font-size: 15px;">
-                        <span style="font-size: 24px;">♿</span>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="vertical-align: middle; margin-right: 8px;">
+                          <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
                         <strong>PWD Accommodation:</strong> Your room is located on the ${b.is_first_floor ? '1st floor' : 'an accessible floor'} for easy access and comfort.
                       </p>
                     </div>
                   ` : ''}
                   
                   <div style="margin-top: 30px; padding: 25px; background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border-radius: 10px; border-left: 5px solid #f59e0b;">
-                    <h3 style="margin: 0 0 15px 0; color: #92400e; font-size: 16px; font-weight: 700;">⚠️ Important Reminders:</h3>
+                    <h3 style="margin: 0 0 15px 0; color: #92400e; font-size: 16px; font-weight: 700;">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="vertical-align: middle; margin-right: 6px;">
+                        <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                      </svg>
+                      Important Reminders:
+                    </h3>
                     <ul style="margin: 0; padding-left: 20px; color: #78350f; line-height: 1.8;">
                       <li style="margin-bottom: 8px;">Please arrive <strong>15 minutes early</strong></li>
                       <li style="margin-bottom: 8px;">Bring a <strong>valid ID</strong> and this email confirmation</li>

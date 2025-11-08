@@ -26,6 +26,7 @@ import {
   AlertTriangle
 } from 'lucide-react'
 import './styles.css'
+import LoadingScreen from '@/app/components/loadingScreen/loading'
 
 interface CampusFile {
   upload_group_id: number
@@ -540,10 +541,7 @@ export default function CampusCapacityPage() {
           </div>
 
           {loading ? (
-            <div className="loading-state">
-              <div className="spinner"></div>
-              <p>Loading school data...</p>
-            </div>
+                        <LoadingScreen message="Loading your data..." />
           ) : (
             <>
               <div className="selection-section">
