@@ -35,14 +35,10 @@ if not SUPABASE_KEY:
 logger.info(f"✅ Supabase URL: {SUPABASE_URL}")
 logger.info(f"✅ Using key type: {'SERVICE_ROLE' if SERVICE_ROLE else 'ANON'}")
 
-# Create Supabase client with connection pooling
+# Create Supabase client (remove options dict)
 sb: Client = create_client(
     SUPABASE_URL, 
-    SUPABASE_KEY,
-    options={
-        "schema": "public",
-        "headers": {"x-client-info": "cla-scheduler/1.0"}
-    }
+    SUPABASE_KEY
 )
 
 # Thread pool for parallel operations (reduced to prevent exhaustion)
