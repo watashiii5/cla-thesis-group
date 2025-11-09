@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useEffect, useState } from 'react'
+import { Suspense, useEffect, useState, useRef } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import MenuBar from '@/app/components/MenuBar'
 import Sidebar from '@/app/components/Sidebar'
@@ -154,7 +154,7 @@ function getFloorBadgeClass(styles: any, room: string): string {
   return styles.upperFloorBadge
 }
 
-// ✅ NEW: SVG Component for Wheelchair Icon (PWD)
+// ✅ SVG Component for Wheelchair Icon (PWD)
 function WheelchairIcon({ className }: { className?: string }) {
   return (
     <svg
@@ -169,7 +169,7 @@ function WheelchairIcon({ className }: { className?: string }) {
   )
 }
 
-// ✅ NEW: SVG Component for Building Icon (Campus)
+// ✅ SVG Component for Building Icon (Campus)
 function BuildingIcon({ className }: { className?: string }) {
   return (
     <svg
@@ -183,21 +183,7 @@ function BuildingIcon({ className }: { className?: string }) {
   )
 }
 
-// ✅ NEW: SVG Component for Door/Room Icon
-function DoorIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="currentColor"
-      className={className}
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14h-4v-2h4v2zm0-4h-4v-2h4v2zm0-4h-4V7h4v2z"/>
-    </svg>
-  )
-}
-
-// ✅ NEW: SVG Component for Floor Icon
+// ✅ SVG Component for Floor Icon
 function FloorIcon({ level }: { level: number }) {
   return (
     <svg
@@ -242,9 +228,18 @@ function ParticipantSchedulesContent() {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [scheduleData, setScheduleData] = useState<ScheduleRow[]>([])
   const [filteredData, setFilteredData] = useState<ScheduleRow[]>([])
+  const [searchTerm, setSearchTerm] = useState('')
   const [loading, setLoading] = useState(true)
   const [sendingEmails, setSendingEmails] = useState(false)
   const [emailMessage, setEmailMessage] = useState('')
+  const [scheduleSummary, setScheduleSummary] = useState<any>(null)
+  const [scheduleSummaries, setScheduleSummaries] = useState<any[]>([]);
+  const [selectedSummaryId, setSelectedSummaryId] = useState<string | null>(scheduleId);
+  const [currentPage, setCurrentPage] = useState(1)
+  const PAGE_SIZE = 100
+
+  const topScrollRef = useRef<HTMLDivElement>(null)
+  const bottomScrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!scheduleId) {
@@ -253,6 +248,55 @@ function ParticipantSchedulesContent() {
     }
     fetchScheduleData()
   }, [scheduleId])
+
+  useEffect(() => {
+    // Filter participants by name, participant number, email, batch, room, campus, building
+    if (!searchTerm) {
+      setFilteredData(scheduleData)
+    } else {
+      const term = searchTerm.toLowerCase()
+      setFilteredData(
+        scheduleData.filter(row =>
+          row.name.toLowerCase().includes(term) ||
+          row.participant_number.toLowerCase().includes(term) ||
+          row.email.toLowerCase().includes(term) ||
+          row.batch_name.toLowerCase().includes(term) ||
+          row.room.toLowerCase().includes(term) ||
+          row.campus.toLowerCase().includes(term) ||
+          row.building.toLowerCase().includes(term)
+        )
+      )
+    }
+  }, [searchTerm, scheduleData])
+
+  useEffect(() => {
+    async function fetchSummary() {
+      if (!scheduleId) return;
+      const { data, error } = await supabase
+        .from('schedule_summary')
+        .select('*')
+        .eq('id', scheduleId)
+        .single();
+      if (!error && data) {
+        console.log('✅ Schedule Summary fetched:', data);
+        setScheduleSummary(data);
+      } else {
+        console.error('❌ Error fetching schedule summary:', error);
+      }
+    }
+    fetchSummary();
+  }, [scheduleId])
+
+  useEffect(() => {
+    async function fetchSummaries() {
+      const { data, error } = await supabase
+        .from('schedule_summary')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (!error && data) setScheduleSummaries(data);
+    }
+    fetchSummaries();
+  }, []);
 
   const fetchScheduleData = async () => {
     if (!scheduleId) return
@@ -302,7 +346,6 @@ function ParticipantSchedulesContent() {
       const participantMap = new Map(participants.map(p => [p.id, p]))
       const batchMap = new Map(batches.map(b => [b.id, b]))
 
-      // ✅ Include new fields from assignments and batches
       const combinedData: ScheduleRow[] = assignments.map((assignment: any) => {
         const participant = participantMap.get(assignment.participant_id)
         const batch = batchMap.get(assignment.schedule_batch_id)
@@ -380,7 +423,6 @@ function ParticipantSchedulesContent() {
     }
   }
 
-  // ✅ Include all new fields in CSV export
   async function handleExportCSV() {
     if (scheduleData.length === 0) {
       alert('No data to export')
@@ -433,6 +475,10 @@ function ParticipantSchedulesContent() {
     URL.revokeObjectURL(link.href)
   }
 
+  // Pagination logic
+  const totalPages = Math.ceil(filteredData.length / PAGE_SIZE)
+  const paginatedData = filteredData.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
+
   if (loading) {
     return (
       <div className={styles.scheduleLayout}>
@@ -455,23 +501,14 @@ function ParticipantSchedulesContent() {
       
       <main className={`${styles.scheduleMain} ${!sidebarOpen ? styles.fullWidth : ''}`}>
         <div className={styles.scheduleContainer}>
-          <div className={styles.scheduleHeader}>
-            <button className={styles.backButton} onClick={() => router.back()}>
-              <span className={styles.iconBack}>←</span>
-              Back
-            </button>
-            <div className={styles.headerTitleSection}>
-              <div className={styles.headerIconWrapper}>
-                <svg className={styles.headerLargeIcon} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" fill="currentColor"/>
-                </svg>
-              </div>
-              <div className={styles.headerText}>
-                <h1 className={styles.scheduleTitle}>Participant Schedules</h1>
-                <p className={styles.scheduleSubtitle}>{scheduleData.length} participants scheduled</p>
-              </div>
+          <div className={styles.scheduleHeaderRow}>
+            <div className={styles.headerLeft}>
+              <button className={styles.backButton} onClick={() => router.back()}>
+                <span className={styles.iconBack}>←</span>
+                Back
+              </button>
             </div>
-            <div className={styles.headerActions}>
+            <div className={styles.headerRight}>
               <button
                 onClick={handleSendEmails}
                 disabled={sendingEmails || scheduleData.length === 0}
@@ -494,6 +531,88 @@ function ParticipantSchedulesContent() {
               </button>
             </div>
           </div>
+          <div className={styles.scheduleHeader}>
+            <div className={styles.headerTitleSection}>
+              <div className={styles.headerIconWrapper}>
+                <svg className={styles.headerLargeIcon} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" fill="currentColor"/>
+                </svg>
+              </div>
+              <div className={styles.headerText}>
+                <h1 className={styles.scheduleTitle}>Participant Schedules</h1>
+                <p className={styles.scheduleSubtitle}>{filteredData.length} participants scheduled</p>
+              </div>
+            </div>
+            
+          </div>
+          <div className={styles.selectionPanel}>
+  <h2 className={styles.selectionTitle}>
+    <svg className={styles.selectionTitleIcon} viewBox="0 0 24 24" fill="none">
+      <rect x="3" y="5" width="18" height="14" rx="4" fill="#2563eb"/>
+      <path d="M7 9h10M7 13h6" stroke="#fff" strokeWidth="2" strokeLinecap="round"/>
+    </svg>
+    Select a Schedule
+  </h2>
+  <div className={styles.selectionList}>
+    {scheduleSummaries.length === 0 ? (
+      <div className={styles.selectionEmpty}>No schedules found.</div>
+    ) : (
+      scheduleSummaries.map(summary => (
+        <button
+          key={summary.id}
+          className={`${styles.selectionItem} ${String(summary.id) === String(scheduleId) ? styles.selected : ''}`}
+          onClick={() => {
+            setSelectedSummaryId(String(summary.id));
+            router.replace(`?scheduleId=${summary.id}`);
+          }}
+        >
+          <div className={styles.selectionCardIcon}>
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
+              <rect x="4" y="6" width="16" height="12" rx="3" fill="#2563eb"/>
+              <path d="M8 10h8M8 14h5" stroke="#fff" strokeWidth="2" strokeLinecap="round"/>
+            </svg>
+          </div>
+          <div className={styles.selectionCardContent}>
+            <div className={styles.selectionCardHeader}>
+              <span className={styles.selectionName}>ID: {summary.id}</span>
+              <span className={styles.selectionStatus + ' ' + (summary.status === 'completed' ? styles.statusCompleted : styles.statusPending)}>
+                {summary.status === 'completed' ? 'Completed' : 'Pending'}
+              </span>
+            </div>
+            <div className={styles.selectionCardTitle}>{summary.event_name}</div>
+            <div className={styles.selectionCardDetails}>
+              <span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style={{verticalAlign: 'middle', marginRight: 4}}>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4" stroke="#2563eb" strokeWidth="2" strokeLinecap="round"/>
+                  <rect x="3" y="11" width="18" height="8" rx="4" fill="#e0e7ff"/>
+                </svg>
+                {summary.schedule_date} {summary.start_time} - {summary.end_time}
+              </span>
+              <span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style={{verticalAlign: 'middle', marginRight: 4}}>
+                  <circle cx="12" cy="12" r="10" fill="#e0e7ff"/>
+                  <path d="M12 8v4l3 3" stroke="#2563eb" strokeWidth="2" strokeLinecap="round"/>
+                </svg>
+                {summary.scheduled_count} scheduled
+              </span>
+            </div>
+          </div>
+        </button>
+      ))
+    )}
+  </div>
+</div>
+          <div className={styles.searchSection}>
+            <div className={styles.searchBox}>
+              <input
+                type="text"
+                placeholder="Search by name, participant #, email, batch, room, campus, building..."
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                className={styles.searchInput}
+              />
+            </div>
+          </div>
 
           {emailMessage && (
             <div className={`${styles.message} ${emailMessage.includes('✅') ? styles.success : styles.error}`}>
@@ -502,128 +621,167 @@ function ParticipantSchedulesContent() {
           )}
 
           <div className={styles.tableSection}>
-            {scheduleData.length === 0 ? (
-              <div className={styles.emptyState}>
-                <div className={styles.emptyIcon}>
-                  <svg viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M19 3H4.99C3.88 3 3 3.9 3 5L2.99 19c0 1.1.88 2 1.99 2H19c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 12h-4c0 1.66-1.35 3-3 3s-3-1.34-3-3H4.99V5H19v10z"/>
-                  </svg>
-                </div>
-                <h2>No schedule data found</h2>
-                <p>The schedule hasn't been generated yet or no participants were scheduled.</p>
-                <button className={styles.btnPrimary} onClick={() => router.push('/LandingPages/GenerateSchedule')}>
-                  <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
-                    <path d="M19 4H5C3.89543 4 3 4.89543 3 6V20C3 21.1046 3.89543 22 5 22H19C20.1046 22 21 21.1046 21 20V6C21 4.89543 20.1046 4 19 4Z" stroke="currentColor" strokeWidth="2"/>
-                    <path d="M16 2V6M8 2V6M3 10H21" stroke="currentColor" strokeWidth="2"/>
-                  </svg>
-                  Generate Schedule
-                </button>
-              </div>
-            ) : (
-              <>
-                <div className={styles.statsGrid}>
-                  <div className={`${styles.statCard} ${styles.info}`}>
-                    <div className={styles.statIcon}>
-                      <svg viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
-                      </svg>
-                    </div>
-                    <div className={styles.statContent}>
-                      <p className={styles.statLabel}>Total Participants</p>
-                      <h3 className={styles.statValue}>{scheduleData.length}</h3>
-                    </div>
-                  </div>
-                  <div className={`${styles.statCard} ${styles.success}`}>
-                    <div className={styles.statIcon}>
-                      <WheelchairIcon className={styles.wheelchairIcon} />
-                    </div>
-                    <div className={styles.statContent}>
-                      <p className={styles.statLabel}>PWD Participants</p>
-                      <h3 className={styles.statValue}>{scheduleData.filter(r => r.is_pwd).length}</h3>
-                    </div>
-                  </div>
-                  <div className={`${styles.statCard} ${styles.warning}`}>
-                    <div className={styles.statIcon}>
-                      <BuildingIcon className={styles.buildingIcon} />
-                    </div>
-                    <div className={styles.statContent}>
-                      <p className={styles.statLabel}>Unique Rooms</p>
-                      <h3 className={styles.statValue}>{new Set(scheduleData.map(r => r.room)).size}</h3>
-                    </div>
-                  </div>
-                </div>
-
-                {/* ✅ Updated table with SVG icons */}
-                <div className={styles.tableScrollWrapper}>
-                  <div className={styles.tableContainer}>
-                    <table className={styles.participantsTable}>
-                      <thead>
-                        <tr>
-                          <th className={styles.stickyCol}>Participant #</th>
-                          <th className={styles.stickyCol2}>Name</th>
-                          <th>Email</th>
-                          <th>PWD</th>
-                          <th>Batch</th>
-                          <th>Starting Date & Time</th>
-                          <th>Ending Date & Time</th>
-                          <th>Campus</th>
-                          <th>Building</th>
-                          <th>Floor</th>
-                          <th>Room</th>
-                          <th>Seat</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {scheduleData.map((row, idx) => {
-                          const { start, end } = parseTimeSlot(row.time_slot, row.start_time, row.end_time)
-                          const floor = getFloorLevel(row.room)
-                          return (
-                            <tr key={row.id || idx}>
-                              <td className={`${styles.fontSemibold} ${styles.stickyCol}`}>{row.participant_number}</td>
-                              <td className={styles.stickyCol2}>{row.name}</td>
-                              <td className={styles.emailCell}>{row.email}</td>
-                              <td>
-                                <span className={`${styles.pwdBadge} ${row.is_pwd ? styles.yes : styles.no}`}>
-                                  {row.is_pwd && (
-                                    <WheelchairIcon className={styles.badgeIcon} />
-                                  )}
-                                  <span>{row.is_pwd ? 'Yes' : 'No'}</span>
-                                </span>
-                              </td>
-                              <td>
-                                <span className={styles.batchBadge}>{row.batch_name}</span>
-                              </td>
-                              <td className={styles.dateTimeCell}>
-                                {formatDateTime(row.batch_date, start)}
-                              </td>
-                              <td className={styles.dateTimeCell}>
-                                {formatDateTime(row.batch_date, end)}
-                              </td>
-                              <td className={styles.locationCell}>{row.campus}</td>
-                              <td className={styles.locationCell}>{row.building}</td>
-                              <td className={styles.floorCell}>
-                                {(() => {
-                                  const badgeClass = getFloorBadgeClass(styles, row.room)
-                                  
-                                  return (
-                                    <span className={badgeClass}>
-                                      <FloorIcon level={floor.level} />
-                                      {floor.label}
-                                    </span>
-                                  )
-                                })()}
-                              </td>
-                              <td className={styles.roomCell}>{row.room}</td>
-                              <td className={styles.seatCell}>{row.seat_no}</td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </>
-            )}
+            {/* Top scrollbar (syncs with bottom) */}
+<div
+  className={styles.tableScrollTopBar}
+  style={{ width: '100%', overflowX: 'auto' }}
+  ref={topScrollRef}
+  onScroll={e => {
+    if (bottomScrollRef.current) {
+      bottomScrollRef.current.scrollLeft = e.currentTarget.scrollLeft
+    }
+  }}
+>
+  <div style={{ width: '1600px', height: '8px' }}></div>
+</div>
+<div
+  className={styles.tableScrollWrapper}
+  ref={bottomScrollRef}
+  onScroll={e => {
+    if (topScrollRef.current) {
+      topScrollRef.current.scrollLeft = e.currentTarget.scrollLeft
+    }
+  }}
+>
+  <div className={styles.tableContainer}>
+    <table className={styles.participantsTable}>
+      <thead>
+        <tr>
+          <th className={styles.stickyCol}>Participant #</th>
+          <th className={styles.stickyCol2}>Name</th>
+          <th>Email</th>
+          <th>PWD</th>
+          <th>Batch</th>
+          <th>Starting Date & Time</th>
+          <th>Ending Date & Time</th>
+          <th>Campus</th>
+          <th>Building</th>
+          <th>Floor</th>
+          <th>Room</th>
+          <th>Seat</th>
+        </tr>
+      </thead>
+      <tbody>
+        {paginatedData.map((row, idx) => {
+          const { start, end } = parseTimeSlot(row.time_slot, row.start_time, row.end_time)
+          const floor = getFloorLevel(row.room)
+          return (
+            <tr key={row.id || idx} id={`participant-row-${row.id}`}>
+              <td className={`${styles.fontSemibold} ${styles.stickyCol}`}>{row.participant_number}</td>
+              <td className={styles.stickyCol2}>{row.name}</td>
+              <td className={styles.emailCell}>{row.email}</td>
+              <td>
+                <span className={`${styles.pwdBadge} ${row.is_pwd ? styles.yes : styles.no}`}>
+                  {row.is_pwd && (
+                    <WheelchairIcon className={styles.badgeIcon} />
+                  )}
+                  <span>{row.is_pwd ? 'Yes' : 'No'}</span>
+                </span>
+              </td>
+              <td>
+                <span className={styles.batchBadge}>{row.batch_name}</span>
+              </td>
+              <td className={styles.dateTimeCell}>
+                {formatDateTime(row.batch_date, start)}
+              </td>
+              <td className={styles.dateTimeCell}>
+                {formatDateTime(row.batch_date, end)}
+              </td>
+              <td className={styles.locationCell}>{row.campus}</td>
+              <td className={styles.locationCell}>{row.building}</td>
+              <td className={styles.floorCell}>
+                {(() => {
+                  const badgeClass = getFloorBadgeClass(styles, row.room)
+                  
+                  return (
+                    <span className={badgeClass}>
+                      <FloorIcon level={floor.level} />
+                      {floor.label}
+                    </span>
+                  )
+                })()}
+              </td>
+              <td className={styles.roomCell}>{row.room}</td>
+              <td className={styles.seatCell}>{row.seat_no}</td>
+            </tr>
+          )
+        })}
+      </tbody>
+    </table>
+  </div>
+</div>
+{/* Pagination Controls */}
+<div className={styles.paginationWrapper}>
+  <button
+    className={styles.paginationBtn}
+    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+    disabled={currentPage === 1}
+  >
+    &lt; Prev
+  </button>
+  {/* Smart pagination: show first, last, current, +/-2, with ellipsis */}
+  {totalPages <= 10
+    ? Array.from({ length: totalPages }, (_, i) => (
+        <button
+          key={i + 1}
+          className={`${styles.paginationBtn} ${currentPage === i + 1 ? styles.activePage : ''}`}
+          onClick={() => setCurrentPage(i + 1)}
+        >
+          {i + 1}
+        </button>
+      ))
+    : (() => {
+        const pages = []
+        if (currentPage > 3) {
+          pages.push(
+            <button
+              key={1}
+              className={`${styles.paginationBtn} ${currentPage === 1 ? styles.activePage : ''}`}
+              onClick={() => setCurrentPage(1)}
+            >
+              1
+            </button>
+          )
+          if (currentPage > 4) {
+            pages.push(<span key="start-ellipsis" className={styles.paginationEllipsis}>...</span>)
+          }
+        }
+        for (let i = Math.max(1, currentPage - 2); i <= Math.min(totalPages, currentPage + 2); i++) {
+          pages.push(
+            <button
+              key={i}
+              className={`${styles.paginationBtn} ${currentPage === i ? styles.activePage : ''}`}
+              onClick={() => setCurrentPage(i)}
+            >
+              {i}
+            </button>
+          )
+        }
+        if (currentPage < totalPages - 2) {
+          if (currentPage < totalPages - 3) {
+            pages.push(<span key="end-ellipsis" className={styles.paginationEllipsis}>...</span>)
+          }
+          pages.push(
+            <button
+              key={totalPages}
+              className={`${styles.paginationBtn} ${currentPage === totalPages ? styles.activePage : ''}`}
+              onClick={() => setCurrentPage(totalPages)}
+            >
+              {totalPages}
+            </button>
+          )
+        }
+        return pages
+      })()
+  }
+  <button
+    className={styles.paginationBtn}
+    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+    disabled={currentPage === totalPages}
+  >
+    Next &gt;
+  </button>
+</div>
           </div>
         </div>
       </main>

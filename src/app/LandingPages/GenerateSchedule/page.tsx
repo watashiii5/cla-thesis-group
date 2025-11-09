@@ -321,6 +321,17 @@ export default function GenerateSchedulePage() {
 
   const handleGenerateSchedule = async () => {
     const effectiveEndDate = config.endDate || config.scheduleDate
+
+    // Capacity check
+    const estimate = getCapacityEstimate()
+    if (estimate && !estimate.canAccommodate) {
+      alert(
+        `❌ Cannot generate schedule: Participant count (${estimate.participants}) exceeds total capacity (${estimate.totalCapacity}).\n\n` +
+        `Add more rooms or extend the schedule duration.`
+      )
+      return
+    }
+
     if (
       !config.campusGroupId ||
       !config.participantGroupId ||
@@ -475,74 +486,49 @@ export default function GenerateSchedulePage() {
   }
 
   const getCapacityEstimate = () => {
-    const totalMinutes = getTotalAvailableMinutes()
-    if (totalMinutes === 0) return null
-    
-    const durationInMinutes = getDurationInMinutes()
-    if (durationInMinutes === 0) return null
-    
-    const selectedCampus = campusFiles.find(f => f.upload_group_id === config.campusGroupId)
-    const selectedParticipants = participantFiles.find(f => f.upload_group_id === config.participantGroupId)
-    
-    if (!selectedCampus || !selectedParticipants) return null
-    
-    const days = getDays()
-    const dailyMinutes = totalMinutes / days
-    const slotsPerDay = Math.floor(dailyMinutes / durationInMinutes)
-    
-    const [firstFloorCount, upperFloorCount, avgCapacity, firstFloorCapacity, upperFloorCapacity] = separateRoomsByFloor(config.campusGroupId!, roomData)
-    
-    const pwdCapacity = firstFloorCapacity * slotsPerDay * days
-    const nonPwdCapacity = (firstFloorCapacity + upperFloorCapacity) * slotsPerDay * days
-    const totalCapacity = pwdCapacity + nonPwdCapacity
-    
-    const pwdCount = pwdCounts[config.participantGroupId!] || 0
-    const nonPwdCount = selectedParticipants.row_count - pwdCount
-    
-    const pwdExceeded = pwdCount > pwdCapacity
-    const nonPwdExceeded = nonPwdCount > nonPwdCapacity
-    
-    const lunchBreakMinutes = getLunchBreakMinutes()
-    
-    console.log('📊 Capacity Calculation (Real Data):', {
-      days,
-      dailyMinutes,
-      durationInMinutes,
-      slotsPerDay,
-      lunchBreakMinutes,
-      firstFloorCount,
-      firstFloorCapacity,
-      upperFloorCount,
-      upperFloorCapacity,
-      avgCapacity,
-      pwdCapacity,
-      nonPwdCapacity,
-      totalCapacity,
-      pwdCount,
-      nonPwdCount,
-      pwdExceeded,
-      nonPwdExceeded
-    })
-    
+    const [firstFloorCount, upperFloorCount, avgCapacity, firstFloorCapacity, upperFloorCapacity] =
+      separateRoomsByFloor(config.campusGroupId!, roomData);
+
+    const durationInMinutes = getDurationInMinutes();
+    const totalMinutes = getTotalAvailableMinutes();
+    const slotsPerDay = Math.floor(totalMinutes / durationInMinutes);
+    const days = getDays();
+
+    // PWD phase: only first floor rooms
+    const pwdCapacity = firstFloorCapacity * slotsPerDay * days;
+    // Non-PWD phase: all rooms
+    const nonPwdCapacity = (firstFloorCapacity + upperFloorCapacity) * slotsPerDay * days;
+    const totalCapacity = nonPwdCapacity; // If all rooms used after PWD phase
+
+    // Get participant counts
+    const participantGroup = participantFiles.find(p => p.upload_group_id === config.participantGroupId);
+    const pwdCount = participantGroup ? pwdCounts[participantGroup.upload_group_id] || 0 : 0;
+    const nonPwdCount = participantGroup ? (participantGroup.row_count - pwdCount) : 0;
+    const participants = participantGroup ? participantGroup.row_count : 0;
+
+    // Exceeded flags
+    const pwdExceeded = pwdCount > pwdCapacity;
+    const nonPwdExceeded = nonPwdCount > nonPwdCapacity;
+    const canAccommodate = totalCapacity >= participants;
+
+    // Room count
+    const roomCount = firstFloorCount + upperFloorCount;
+
     return {
-      slotsPerDay,
-      totalCapacity,
       pwdCapacity,
       nonPwdCapacity,
-      participants: selectedParticipants.row_count,
-      pwdCount,
-      nonPwdCount,
-      canAccommodate: !pwdExceeded && !nonPwdExceeded,
-      pwdExceeded,
-      nonPwdExceeded,
-      roomCount: selectedCampus.row_count,
+      totalCapacity,
+      participants,
+      roomCount,
       firstFloorCount,
       upperFloorCount,
-      avgCapacity,
-      firstFloorCapacity,
-      upperFloorCapacity,
-      lunchBreakMinutes
-    }
+      slotsPerDay,
+      pwdExceeded,
+      pwdCount,
+      nonPwdExceeded,
+      nonPwdCount,
+      canAccommodate
+    };
   }
 
   useEffect(() => {
@@ -687,7 +673,7 @@ export default function GenerateSchedulePage() {
                 </button>
                 <button 
                   className={styles.btnView}
-                  onClick={() => router.push(`/LandingPages/GenerateSchedule/ParticipantSchedules?scheduleId=${scheduleResult.schedule_summary_id}`)}
+                  onClick={() => router.push(`/LandingPages/GenerateSchedule/ViewSchedule?scheduleId=${scheduleResult.schedule_summary_id}`)}
                 >
                   <svg viewBox="0 0 24 24" fill="currentColor">
                     <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8h-2v6l5.25 3.15.75-1.23-4.5-2.67z"/>
@@ -999,7 +985,19 @@ export default function GenerateSchedulePage() {
                 <button 
                   className={styles.btnGenerate}
                   onClick={handleGenerateSchedule}
-                  disabled={scheduling || !config.campusGroupId || !config.participantGroupId || !config.eventName || !config.scheduleDate || !config.endDate || !isValidDateRange()}
+                  disabled={
+                    scheduling ||
+                    !config.campusGroupId ||
+                    !config.participantGroupId ||
+                    !config.eventName ||
+                    !config.scheduleDate ||
+                    !config.endDate ||
+                    !isValidDateRange() ||
+                    (() => {
+                      const estimate = getCapacityEstimate();
+                      return estimate && !estimate.canAccommodate;
+                    })()
+                  }
                 >
                   {scheduling ? (
                     <>
@@ -1123,11 +1121,11 @@ function separateRoomsByFloor(campusGroupId: number, roomData: {[key: number]: a
   rooms.forEach(room => {
     const cap = Number(room.capacity) || 0;
     totalCapacity += cap;
-    if (isFirstFloor(room.building || '', room.room || '')) {
-      firstFloorCount += 1;
+    if (isFirstFloor(room.building, room.room)) {
+      firstFloorCount++;
       firstFloorCapacity += cap;
     } else {
-      upperFloorCount += 1;
+      upperFloorCount++;
       upperFloorCapacity += cap;
     }
   });

@@ -16,7 +16,7 @@ export const metadata = {
   title: 'QTIME', 
   description: 'The scheduling system for CLA Thesis Group.',
   icons: {
-    icon: '/qtime.png',
+    icon: '/public/qtime.png',
   },
 };
 

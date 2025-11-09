@@ -512,6 +512,12 @@ function QtimeParticipantsPageContent() {
     }
   }
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 50;
+
+  const totalPages = Math.ceil(filteredData.length / PAGE_SIZE);
+  const paginatedData = filteredData.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
   return (
     <div className="participants-layout">
       <MenuBar 
@@ -522,7 +528,7 @@ function QtimeParticipantsPageContent() {
       <Sidebar isOpen={sidebarOpen} />
       
       <main className={`participants-main ${sidebarOpen ? 'with-sidebar' : 'full-width'}`}>
-        <div className="participants-container">
+        <div className="data-section">
           {/* Success Message */}
           {successMessage && (
             <div className={`success-message ${successMessage.includes('❌') || successMessage.includes('⚠️') ? 'error' : 'success'}`}>
@@ -534,7 +540,7 @@ function QtimeParticipantsPageContent() {
             <button 
               className="back-button"
               onClick={() => router.push('/LandingPages/QtimeHomePage')}
-            >
+              >
               <ArrowLeft size={18} />
               Back to Home
             </button>
@@ -700,7 +706,7 @@ function QtimeParticipantsPageContent() {
                               </tr>
                             </thead>
                             <tbody>
-                              {filteredData.map((participant) => {
+                              {paginatedData.map((participant) => {
                                 const isEditing = editingParticipant === participant.id
                                 const showActions = showActionsFor === participant.id
                                 
@@ -947,13 +953,58 @@ function QtimeParticipantsPageContent() {
                               })}
                             </tbody>
                           </table>
-                          
-                          {filteredData.length === 0 && (
-                            <div className="empty-table">
-                              <p>No participants found</p>
-                            </div>
-                          )}
                         </div>
+                        {/* Pagination Controls should be here */}
+                        {totalPages > 1 && (
+                          <div className="pagination-wrapper">
+                            <button
+                              className="pagination-btn"
+                              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                              disabled={currentPage === 1}
+                            >
+                              &lt; Prev
+                            </button>
+                            {totalPages <= 10
+                              ? Array.from({ length: totalPages }, (_, i) => (
+                                  <button
+                                    key={i + 1}
+                                    className={`pagination-btn${currentPage === i + 1 ? ' active-page' : ''}`}
+                                    onClick={() => setCurrentPage(i + 1)}
+                                  >
+                                    {i + 1}
+                                  </button>
+                                ))
+                              : (() => {
+                                  const pages = [];
+                                  if (currentPage > 3) {
+                                    pages.push(
+                                      <button key={1} className={`pagination-btn${currentPage === 1 ? ' active-page' : ''}`} onClick={() => setCurrentPage(1)}>1</button>
+                                    );
+                                    if (currentPage > 4) pages.push(<span key="start-ellipsis" className="pagination-ellipsis">...</span>);
+                                  }
+                                  for (let i = Math.max(1, currentPage - 2); i <= Math.min(totalPages, currentPage + 2); i++) {
+                                    pages.push(
+                                      <button key={i} className={`pagination-btn${currentPage === i ? ' active-page' : ''}`} onClick={() => setCurrentPage(i)}>{i}</button>
+                                    );
+                                  }
+                                  if (currentPage < totalPages - 2) {
+                                    if (currentPage < totalPages - 3) pages.push(<span key="end-ellipsis" className="pagination-ellipsis">...</span>);
+                                    pages.push(
+                                      <button key={totalPages} className={`pagination-btn${currentPage === totalPages ? ' active-page' : ''}`} onClick={() => setCurrentPage(totalPages)}>{totalPages}</button>
+                                    );
+                                  }
+                                  return pages;
+                                })()
+                            }
+                            <button
+                              className="pagination-btn"
+                              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                              disabled={currentPage === totalPages}
+                            >
+                              Next &gt;
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </>
                   )}

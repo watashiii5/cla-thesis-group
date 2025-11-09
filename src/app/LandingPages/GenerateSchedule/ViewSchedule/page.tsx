@@ -7,6 +7,7 @@ import Sidebar from '@/app/components/Sidebar'
 import styles from './ViewSchedule.module.css'
 import { supabase } from '@/lib/supabaseClient'
 import { FaTrash, FaEye, FaBuilding, FaCheckCircle, FaExclamationTriangle, FaCalendarAlt } from 'react-icons/fa'
+import { Mailbox, RefreshCcw } from 'lucide-react'
 
 interface Schedule {
   id: number
@@ -114,7 +115,7 @@ export default function ViewSchedulePage() {
               ← Back
             </button>
             <button onClick={fetchSchedules} className={styles.refreshButton}>
-              🔄 Refresh
+              <RefreshCcw /> Refresh
             </button>
           </div>
 
@@ -135,7 +136,7 @@ export default function ViewSchedulePage() {
           {/* Empty State */}
           {!loading && schedules.length === 0 && (
             <div className={styles.emptyState}>
-              <div className={styles.emptyIcon}>📭</div>
+              <div className={styles.emptyIcon}><Mailbox /></div>
               <h2>No Schedules Yet</h2>
               <p>Create your first schedule to get started!</p>
               <button 
@@ -181,7 +182,7 @@ export default function ViewSchedulePage() {
                       {/* ✅ NEW: Show date range */}
                       <div className={styles.infoItem}>
                         <span className={styles.infoLabel}>
-                          {isMultiDay ? '📅 DATE RANGE' : '📅 DATE'}
+                          {isMultiDay ? 'DATE RANGE' : 'DATE'}
                         </span>
                         <span className={styles.infoValue}>
                           {formatDateRange(schedule.schedule_date, schedule.end_date)}
@@ -232,13 +233,13 @@ export default function ViewSchedulePage() {
                     {/* Actions */}
                     <div className={styles.scheduleActions}>
                       <button
-                        onClick={() => router.push(`/LandingPages/GenerateSchedule/ParticipantSchedules?scheduleId=${schedule.id}`)}
+                        onClick={() => router.push(`/LandingPages/ParticipantSchedules?scheduleId=${schedule.id}`)}
                         className={styles.viewButton}
-                      >
+                      >   
                         <FaEye /> View Participants
                       </button>
                       <button
-                        onClick={() => router.push(`/LandingPages/GenerateSchedule/CampusSchedules?scheduleId=${schedule.id}`)}
+                        onClick={() => router.push(`/LandingPages/SchoolSchedules?scheduleId=${schedule.id}`)}
                         className={`${styles.viewButton} ${styles.campusView}`}
                       >
                         <FaBuilding /> Campus Layout

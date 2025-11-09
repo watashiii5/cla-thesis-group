@@ -18,7 +18,7 @@ import {
   FaCalendar,
   FaCheck
 } from 'react-icons/fa'
-import { ChevronDown, ChevronRight } from 'lucide-react'
+import { Accessibility, ChevronDown, ChevronRight } from 'lucide-react'
 
 interface Building {
   name: string
@@ -639,7 +639,7 @@ function SchoolSchedulesContent() {
                           <FaDoorOpen /> 
                           {selectedRoom?.building} - Room {selectedRoom?.room}
                           {/* ✅ NEW: Show first floor indicator */}
-                          {selectedRoom?.is_first_floor && <span style={{marginLeft: '10px', fontSize: '18px'}}>♿ 1st Floor</span>}
+                          {selectedRoom?.is_first_floor && <span style={{marginLeft: '10px', fontSize: '18px'}}><Accessibility /> 1st Floor</span>}
                         </>
                       )}
                       {viewMode === 'batch' && <><FaBox /> {selectedBatch?.batch_name}</>}
@@ -692,8 +692,8 @@ function SchoolSchedulesContent() {
                 </div>
                 {/* ✅ NEW: First floor rooms stat */}
                 <div className={`${styles.statCard} ${styles.green}`}>
-                  <span className={styles.statIcon} style={{fontSize: '32px'}}>♿</span>
-                  <div className={styles.statContent}>
+                    <Accessibility width={50} height={40}  className={styles.statIcon} />
+                    <div className={styles.statContent}>
                     <div className={styles.statLabel}>1st Floor Rooms</div>
                     <div className={styles.statValue}>{stats.firstFloorRooms}</div>
                   </div>
@@ -736,7 +736,7 @@ function SchoolSchedulesContent() {
                               <span className={styles.roomNumber}>
                                 Room {room.room}
                                 {/* ✅ NEW: Show floor indicator */}
-                                {room.is_first_floor && <span style={{marginLeft: '8px'}}>♿</span>}
+                                {room.is_first_floor && <span style={{marginLeft: '8px'}}><Accessibility /></span>}
                               </span>
                               <span className={`${styles.utilizationBadge} ${
                                 room.utilizationRate >= 80 ? styles.high : 
@@ -789,7 +789,7 @@ function SchoolSchedulesContent() {
                       <div className={styles.infoItem}>
                         <span className={styles.infoLabel}>Floor</span>
                         <span className={styles.infoValue} style={{fontSize: '20px'}}>
-                          {selectedRoom.is_first_floor ? '1st Floor ♿' : 'Upper Floor'}
+                          {selectedRoom.is_first_floor ? <>1st Floor <Accessibility size={20} /></> : 'Upper Floor'}
                         </span>
                       </div>
                       <div className={styles.infoItem}>
@@ -819,7 +819,7 @@ function SchoolSchedulesContent() {
                       <div
                         key={batch.id}
                         className={styles.batchCard}
-                        onClick={() => handleBatchClick(batch)}
+                        onClick={() => handleBatchClick(batch)} // <-- This makes the batch clickable
                       >
                         <div className={styles.batchHeader}>
                           <span className={styles.batchName}>{batch.batch_name}</span>
@@ -829,13 +829,11 @@ function SchoolSchedulesContent() {
                             </span>
                           )}
                         </div>
-                        {/* ✅ UPDATED: Show full date and time range */}
                         <div className={styles.batchTime}>
-                          <FaClock /> 
-                          {batch.batch_date && batch.start_time ? 
-                            `${formatDateTime(batch.batch_date, batch.start_time)} - ${batch.end_time}` :
-                            batch.time_slot
-                          }
+                          <FaClock />
+                          {batch.batch_date && batch.start_time
+                            ? `${formatDateTime(batch.batch_date, batch.start_time)} - ${batch.end_time}`
+                            : batch.time_slot}
                         </div>
                         <div className={styles.batchStats}>
                           <div className={styles.batchStat}>
@@ -901,7 +899,7 @@ function SchoolSchedulesContent() {
         <div className={styles.infoItem}>
           <span className={styles.infoLabel}>Floor</span>
           <span className={styles.infoValue} style={{fontSize: '18px'}}>
-            {selectedBatch.is_first_floor ? '1st Floor ♿' : 'Upper Floor'}
+            {selectedBatch.is_first_floor ? <>1st Floor <Accessibility /></> : 'Upper Floor'}
           </span>
         </div>
         <div className={styles.infoItem}>

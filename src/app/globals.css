@@ -3,9 +3,7 @@
    =================================== */
 
 /* Reset */
-*,
-*::before,
-*::after {
+::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
@@ -134,4 +132,19 @@ body {
   min-height: 100vh;
 }
 
-/* Add your custom global styles below */
+/* ==================== Custom Scrollbars ==================== */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-gray-100);
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--primary-medium);
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--primary-dark);
+}
