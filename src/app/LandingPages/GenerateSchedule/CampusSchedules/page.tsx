@@ -473,10 +473,10 @@ function CampusSchedulesContent() {
                 <div className={styles.headerLeft}>
                   <div className={styles.headerInfo}>
                     <h1 className={styles.campusTitle}>
-                      <FaCalendar /> Select Campus Schedule
+                      <FaCalendar /> Select Campuses Scheduled
                     </h1>
                     <p className={styles.campusSubtitle}>
-                      Choose a schedule to view campus layout and seating arrangements
+                      Choose a scheduled campus to view campus layout and seating arrangements
                     </p>
                   </div>
                 </div>

@@ -35,7 +35,7 @@ export default function Sidebar({ isOpen }: SidebarProps) {
   const menuItems = [
     { icon: Home, label: 'Home', path: '/LandingPages/QtimeHomePage' },
     { icon: Upload, label: 'Upload CSV', path: '/LandingPages/BeforeQtimeHomePage' },
-    { icon: Building2, label: 'Campus Capacity', path: '/LandingPages/QtimeCampusCapacityPage' },
+    { icon: Building2, label: 'School Capacity', path: '/LandingPages/QtimeSchoolCapacityPage' },
     { icon: Users, label: 'Participants', path: '/LandingPages/QtimeParticipantsPage' },
     { 
       icon: Calendar, 

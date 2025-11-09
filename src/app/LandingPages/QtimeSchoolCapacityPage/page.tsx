@@ -533,7 +533,7 @@ export default function CampusCapacityPage() {
                 <Building2 className="header-large-icon" size={48} />
               </div>
               <div className="header-text">
-                <h1 className="campus-title">Campus Capacity Overview</h1>
+                <h1 className="campus-title">School Capacity Overview</h1>
                 <p className="campus-subtitle">Select a school to view and manage room information</p>
               </div>
             </div>
@@ -550,7 +550,7 @@ export default function CampusCapacityPage() {
                 <div className="search-header">
                   <h2>
                     <Building2 size={24} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '8px' }} />
-                    Select School
+                    Select Campus
                   </h2>
                   <div className="search-box">
                     <Search className="search-icon" size={18} />
