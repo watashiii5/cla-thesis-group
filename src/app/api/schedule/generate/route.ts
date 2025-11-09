@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
 
     let response
     try {
-      response = await fetch(`${BACKEND_URL}/api/schedule/generate`, {
+      response = await fetch(`${BACKEND_URL}/api/schedule/schedule`, { // <-- FIXED ENDPOINT
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
