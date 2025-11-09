@@ -23,9 +23,15 @@ import {
   ChevronRight,
   MapPin,
   Hash,
-  AlertTriangle
+  AlertTriangle,
+  School,
+  Home,
+  Landmark,
+  Hotel,
+  University
 } from 'lucide-react'
 import './styles.css'
+import { RiBuilding3Fill } from 'react-icons/ri'
 
 interface CampusFile {
   upload_group_id: number
@@ -70,7 +76,7 @@ interface RoomUsage {
   batchCount: number
 }
 
-export default function CampusCapacityPage() {
+export default function SchoolCapacityPage() {
   const router = useRouter()
   
   const [sidebarOpen, setSidebarOpen] = useState(true)
@@ -110,6 +116,14 @@ export default function CampusCapacityPage() {
   // Add state for room usage (add this with other useState declarations)
   const [roomUsage, setRoomUsage] = useState<Map<string, RoomUsage>>(new Map())
 
+  // NEW: Track selected campus name (not just groupId)
+  const [selectedCampusName, setSelectedCampusName] = useState<string | null>(null)
+  const [campusGroups, setCampusGroups] = useState<Map<string, CampusRoom[]>>(new Map())
+  const [selectedBuilding, setSelectedBuilding] = useState<string | null>(null)
+  const [campusesExpanded, setCampusesExpanded] = useState(true)
+  // NEW: Track expanded state for each campus
+  const [expandedCampuses, setExpandedCampuses] = useState<Map<string, boolean>>(new Map())
+
   useEffect(() => {
     fetchCampusFiles()
   }, [])
@@ -148,7 +162,79 @@ export default function CampusCapacityPage() {
     }
   }
 
-  const handleSelectCampus = async (groupId: number) => {
+  // Fetch all rooms for a school (by upload_group_id)
+  const handleSelectSchool = async (groupId: number) => {
+    setSelectedCampus(groupId)
+    setSelectedCampusName(null)
+    setCampusGroups(new Map())
+    setSelectedBuilding(null)
+    setLoadingData(true)
+    try {
+      const { data, error } = await supabase
+        .from('campuses')
+        .select('*')
+        .eq('upload_group_id', groupId)
+        .order('campus', { ascending: true })
+        .order('building', { ascending: true })
+        .order('room', { ascending: true })
+
+      if (error) throw error
+
+      setCampusData(data || [])
+      calculateStats(data || [])
+
+      // Group by campus name
+      const groups = new Map<string, CampusRoom[]>()
+      ;(data || []).forEach((room: CampusRoom) => {
+        const campusName: string = room.campus || 'Unknown Campus'
+        if (!groups.has(campusName)) groups.set(campusName, [])
+        groups.get(campusName)!.push(room)
+      })
+      setCampusGroups(groups)
+
+      // Hide all campuses by default when a school is selected
+      const collapsedMap = new Map<string, boolean>()
+      groups.forEach((_, campusName) => {
+        collapsedMap.set(campusName, false) // false = collapsed
+      })
+      setExpandedCampuses(collapsedMap)
+    } catch (error) {
+      console.error('Error fetching campus data:', error)
+    } finally {
+      setLoadingData(false)
+    }
+  }
+
+  // When a campus is selected, show its buildings
+  const handleSelectCampus = (campusName: string) => {
+    setSelectedCampusName(campusName)
+    setSelectedBuilding(null)
+  }
+
+  // When a building is selected, show its rooms
+  const handleSelectBuilding = (buildingName: string) => {
+    setSelectedBuilding(buildingName)
+  }
+
+  // Helper: Get buildings for selected campus
+  const getBuildingsForCampus = (campusName: string) => {
+    const rooms = campusGroups.get(campusName) || []
+    const buildings = new Map<string, CampusRoom[]>()
+    rooms.forEach(room => {
+      const buildingName = room.building || 'Unknown Building'
+      if (!buildings.has(buildingName)) buildings.set(buildingName, [])
+      buildings.get(buildingName)!.push(room)
+    })
+    return buildings
+  }
+
+  // Helper: Get rooms for selected building
+  const getRoomsForBuilding = (campusName: string, buildingName: string) => {
+    const buildings = getBuildingsForCampus(campusName)
+    return buildings.get(buildingName) || []
+  }
+
+  const handleSelectCampusOld = async (groupId: number) => {
     if (selectedCampus === groupId) {
       setSelectedCampus(null)
       setCampusData([])
@@ -463,23 +549,29 @@ export default function CampusCapacityPage() {
     )
   }
 
+  // FIX: Group buildings by campus, not just by building name
   const getBuildingGroups = () => {
+    // Map: buildingKey (campus|building) -> rooms[]
     const groups = new Map<string, CampusRoom[]>()
     campusData.forEach(room => {
-      if (!groups.has(room.building)) {
-        groups.set(room.building, [])
+      // Use a composite key to ensure uniqueness per campus
+      const campusName = room.campus || 'Unknown Campus'
+      const buildingName = room.building || 'Unknown Building'
+      const buildingKey = `${campusName}|||${buildingName}`
+      if (!groups.has(buildingKey)) {
+        groups.set(buildingKey, [])
       }
-      groups.get(room.building)?.push(room)
+      groups.get(buildingKey)!.push(room)
     })
     return groups
   }
 
-  const toggleBuilding = (building: string) => {
+  const toggleBuilding = (buildingKey: string) => {
     const newExpanded = new Set(expandedBuildings)
-    if (newExpanded.has(building)) {
-      newExpanded.delete(building)
+    if (newExpanded.has(buildingKey)) {
+      newExpanded.delete(buildingKey)
     } else {
-      newExpanded.add(building)
+      newExpanded.add(buildingKey)
     }
     setExpandedBuildings(newExpanded)
   }
@@ -502,6 +594,80 @@ export default function CampusCapacityPage() {
     setShowActionsFor(showActionsFor === roomId ? null : roomId)
   }
 
+  // Helper: Arrange campusData by campus > building > rooms
+  const getCampusHierarchy = (): Map<string, Map<string, CampusRoom[]>> => {
+    // Map: campusName -> buildingName -> rooms[]
+    const hierarchy = new Map<string, Map<string, CampusRoom[]>>()
+    campusData.forEach(room => {
+      const campusName = room.campus || 'Unknown Campus'
+      const buildingName = room.building || 'Unknown Building'
+      if (!hierarchy.has(campusName)) {
+        hierarchy.set(campusName, new Map())
+      }
+      const buildingMap = hierarchy.get(campusName)!
+      if (!buildingMap.has(buildingName)) {
+        buildingMap.set(buildingName, [])
+      }
+      buildingMap.get(buildingName)!.push(room)
+    })
+    return hierarchy
+  }
+
+  // Helper: Arrange all campusData by campus > building > rooms (for diagnostics)
+  const getAllCampusHierarchy = (): Map<string, Map<string, CampusRoom[]>> => {
+    const hierarchy = new Map<string, Map<string, CampusRoom[]>>()
+    campusData.forEach(room => {
+      const campusName = room.campus || 'Unknown Campus'
+      const buildingName = room.building || 'Unknown Building'
+      if (!hierarchy.has(campusName)) {
+        hierarchy.set(campusName, new Map())
+      }
+      const buildingMap = hierarchy.get(campusName)!
+      if (!buildingMap.has(buildingName)) {
+        buildingMap.set(buildingName, [])
+      }
+      buildingMap.get(buildingName)!.push(room)
+    })
+    return hierarchy
+  }
+
+  // Helper: Calculate stats per campus
+  const getCampusStats = (): Map<string, CampusStats> => {
+    const statsMap = new Map<string, CampusStats>()
+    const hierarchy = getAllCampusHierarchy()
+    hierarchy.forEach((buildingsMap, campusName) => {
+      let totalRooms = 0
+      let totalCapacity = 0
+      let buildings = buildingsMap.size
+      buildingsMap.forEach(rooms => {
+        totalRooms += rooms.length
+        totalCapacity += rooms.reduce((sum, room) => sum + room.capacity, 0)
+      })
+      const avgCapacity = totalRooms > 0 ? Math.round(totalCapacity / totalRooms) : 0
+      statsMap.set(campusName, { totalRooms, totalCapacity, avgCapacity, buildings })
+    })
+    return statsMap
+  }
+
+  // Helper: Calculate overall stats for the selected file
+  const getFileStats = () => {
+    const totalCampuses = campusGroups.size
+    let totalBuildings = 0
+    let totalRooms = 0
+    let totalCapacity = 0
+
+    campusGroups.forEach((rooms, campusName) => {
+      const buildings = getBuildingsForCampus(campusName)
+      totalBuildings += buildings.size
+      totalRooms += rooms.length
+      totalCapacity += rooms.reduce((sum, room) => sum + room.capacity, 0)
+    })
+
+    const avgCapacity = totalRooms > 0 ? Math.round(totalCapacity / totalRooms) : 0
+
+    return { totalCampuses, totalBuildings, totalRooms, totalCapacity, avgCapacity }
+  }
+
   return (
     <div className="campus-layout">
       <MenuBar 
@@ -519,8 +685,6 @@ export default function CampusCapacityPage() {
               {successMessage}
             </div>
           )}
-
-          <div className="campus-header">
             <button 
               className="back-button"
               onClick={() => router.push('/LandingPages/QtimeHomePage')}
@@ -528,9 +692,10 @@ export default function CampusCapacityPage() {
               <ArrowLeft size={18} />
               Back to Home
             </button>
+          <div className="campus-header">
             <div className="header-title-section">
               <div className="header-icon-wrapper">
-                <Building2 className="header-large-icon" size={48} />
+                <University className="header-large-icon" size={48} />
               </div>
               <div className="header-text">
                 <h1 className="campus-title">School Capacity Overview</h1>
@@ -549,8 +714,8 @@ export default function CampusCapacityPage() {
               <div className="selection-section">
                 <div className="search-header">
                   <h2>
-                    <Building2 size={24} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '8px' }} />
-                    Select Campus
+                    <University size={24} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '8px' }} />
+                    Select School
                   </h2>
                   <div className="search-box">
                     <Search className="search-icon" size={18} />
@@ -569,10 +734,10 @@ export default function CampusCapacityPage() {
                     <div 
                       key={file.upload_group_id}
                       className={`campus-select-card ${selectedCampus === file.upload_group_id ? 'selected' : ''}`}
-                      onClick={() => handleSelectCampus(file.upload_group_id)}
+                      onClick={() => handleSelectSchool(file.upload_group_id)}
                     >
                       <div className="campus-card-icon school-icon">
-                        <Building2 size={36} />
+                        <University size={36} />
                       </div>
                       <div className="campus-card-content">
                         <h3 className="campus-card-name">{file.school_name}</h3>
@@ -617,42 +782,52 @@ export default function CampusCapacityPage() {
                     </div>
                   ) : (
                     <>
+                      {/* Stats Grid */}
                       {stats && (
                         <div className="stats-grid">
                           <div className="stat-card">
                             <div className="stat-icon">
-                              <Building2 size={28} />
+                              <Landmark size={28} /> {/* Campus icon */}
+                            </div>
+                            <div className="stat-content">
+                              <p className="stat-label">Total Campuses</p>
+                              <h3 className="stat-value">{getFileStats().totalCampuses}</h3>
+                            </div>
+                          </div>
+                          <div className="stat-card">
+                            <div className="stat-icon">
+                              <Hotel size={28} /> {/* Building icon */}
                             </div>
                             <div className="stat-content">
                               <p className="stat-label">Total Buildings</p>
-                              <h3 className="stat-value">{stats.buildings}</h3>
+                              <h3 className="stat-value">{getFileStats().totalBuildings}</h3>
                             </div>
                           </div>
                           <div className="stat-card">
                             <div className="stat-icon">
-                              <DoorOpen size={28} />
+                              <DoorOpen size={28} /> {/* Room icon */}
                             </div>
                             <div className="stat-content">
                               <p className="stat-label">Total Rooms</p>
-                              <h3 className="stat-value">{stats.totalRooms}</h3>
+                              <h3 className="stat-value">{getFileStats().totalRooms}</h3>
                             </div>
                           </div>
                           <div className="stat-card">
                             <div className="stat-icon">
-                              <Users size={28} />
+                              <Users size={28} /> {/* Capacity icon */}
                             </div>
                             <div className="stat-content">
                               <p className="stat-label">Total Capacity</p>
-                              <h3 className="stat-value">{stats.totalCapacity}</h3>
+                              <h3 className="stat-value">{getFileStats().totalCapacity}</h3>
                             </div>
                           </div>
                           <div className="stat-card">
                             <div className="stat-icon">
-                              <BarChart3 size={28} />
+                              <BarChart3 size={28} /> {/* Avg Capacity icon */}
                             </div>
                             <div className="stat-content">
                               <p className="stat-label">Avg Capacity</p>
-                              <h3 className="stat-value">{stats.avgCapacity}</h3>
+                              <h3 className="stat-value">{getFileStats().avgCapacity}</h3>
                             </div>
                           </div>
                         </div>
@@ -661,182 +836,234 @@ export default function CampusCapacityPage() {
                       <div className="data-section">
                         <div className="section-header-actions">
                           <h2 className="section-heading">
-                            <Building2 size={24} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '8px' }} />
-                            Buildings & Rooms
+                            <Landmark size={24} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '8px' }} />
+                            Campuses & Buildings
                           </h2>
-                          <button 
-                            className="add-room-button"
-                            onClick={() => setShowAddModal(true)}
-                          >
-                            <Plus size={20} />
-                            Add New Room
-                          </button>
+                          <div style={{ display: 'flex', gap: 10 }}>
+                            <button
+                              className="toggle-campuses-btn"
+                              onClick={() => setCampusesExpanded((prev) => !prev)}
+                            >
+                              {campusesExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+                              {campusesExpanded ? 'Hide Campuses' : 'Show Campuses'}
+                            </button>
+                            <button 
+                              className="add-room-button"
+                              onClick={() => setShowAddModal(true)}
+                            >
+                              <Plus size={20} />
+                              Add New Room
+                            </button>
+                          </div>
                         </div>
-                        
-                        {Array.from(getBuildingGroups().entries()).map(([building, rooms]) => {
-                          const isExpanded = expandedBuildings.has(building)
-                          const floorGroups = groupRoomsByFloor(rooms)
-                          const buildingCapacity = rooms.reduce((sum, room) => sum + room.capacity, 0)
-                          
-                          return (
-                            <div key={building} className="building-section">
-                              <div 
-                                className="building-header clickable"
-                                onClick={() => toggleBuilding(building)}
-                              >
-                                <div className="building-header-left">
-                                  <h3 className="building-name">
-                                    <span className="expand-icon">
-                                      {isExpanded ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
-                                    </span>
-                                    <Building2 size={20} style={{ display: 'inline-block', verticalAlign: 'middle', marginLeft: '4px', marginRight: '8px' }} />
-                                    {building}
-                                  </h3>
-                                  <span className="room-badge">{rooms.length} rooms</span>
-                                  <span className="capacity-badge-small">Total: {buildingCapacity}</span>
+
+                        {/* Campuses -> Buildings -> Rooms */}
+                        {campusesExpanded && Array.from(campusGroups.entries())
+                          .sort(([aName], [bName]) => aName.localeCompare(bName))
+                          .map(([campusName, rooms]) => {
+                            const buildings = getBuildingsForCampus(campusName)
+                            const isCampusExpanded = expandedCampuses.get(campusName) ?? true
+                            function toggleCampus(campusName: string): void {
+                              setExpandedCampuses(prev => {
+                              const newMap = new Map(prev)
+                              newMap.set(campusName, !(prev.get(campusName) ?? true))
+                              return newMap
+                              })
+                            }
+
+                            return (
+                              <div key={campusName} className="campus-section" style={{ marginBottom: 28 }}>
+                                <div className="campus-header" style={{ fontWeight: 600, fontSize: 20, marginBottom: 8 }}>
+                                <Landmark size={20} style={{ verticalAlign: 'middle', marginRight: 8 }} />
+                                  {campusName}
+                                  <span style={{ marginLeft: 14, color: '#888', fontSize: 15 }}>
+                                    {buildings.size} buildings
+                                  </span>
+                                  <button
+                                    className="toggle-campus-btn"
+                                    style={{ marginLeft: 'auto', marginRight: 0 }}
+                                    onClick={() => toggleCampus(campusName)}
+                                  >
+                                    {isCampusExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                                    {isCampusExpanded ? 'Hide' : 'Show'}
+                                  </button>
                                 </div>
-                                <button className="expand-button">
-                                  {isExpanded ? 'Hide' : 'Show'} Rooms
-                                </button>
-                              </div>
-                              
-                              {isExpanded && (
-                                <div className="building-content">
-                                  {Array.from(floorGroups.entries()).map(([floor, floorRooms]) => {
-                                    const floorName = floor === 1 ? '1st' : floor === 2 ? '2nd' : floor === 3 ? '3rd' : `${floor}th`
-                                    const floorCapacity = floorRooms.reduce((sum, room) => sum + room.capacity, 0)
-                                    
+                                {/* Buildings inside campus */}
+                                {isCampusExpanded && Array.from(buildings.entries())
+                                  .sort(([aName], [bName]) => aName.localeCompare(bName))
+                                  .map(([buildingName, buildingRooms]) => {
+                                    const buildingKey = `${campusName}|||${buildingName}`
+                                    const isExpanded = expandedBuildings.has(buildingKey)
+                                    const floorGroups = groupRoomsByFloor(buildingRooms)
+                                    const buildingCapacity = buildingRooms.reduce((sum, room) => sum + room.capacity, 0)
                                     return (
-                                      <div key={floor} className="floor-section">
-                                        <div className="floor-header">
-                                          <h4 className="floor-name">
-                                            <MapPin size={18} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '6px' }} />
-                                            {floorName} Floor
-                                          </h4>
-                                          <span className="floor-info">
-                                            {floorRooms.length} rooms · Capacity: {floorCapacity}
-                                          </span>
+                                      <div key={buildingKey} className="building-section" style={{ marginLeft: 24 }}>
+                                        <div 
+                                          className="building-header clickable"
+                                          onClick={() => toggleBuilding(buildingKey)}
+                                        >
+                                          <h3 className="building-name">
+                                            <span className="expand-icon">
+                                              {isExpanded ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
+                                            </span>
+                                            <Hotel size={20} style={{ display: 'inline-block', verticalAlign: 'middle', marginLeft: '4px', marginRight: '8px' }} />
+                                            {buildingName}
+                                          </h3>
+                                          <span className="room-badge">{buildingRooms.length} rooms</span>
+                                          <span className="capacity-badge-small">Total: {buildingCapacity}</span>
+                                          <button className="expand-button">
+                                            {isExpanded ? 'Hide' : 'Show'} Rooms
+                                          </button>
                                         </div>
-                                        
-                                        <div className="rooms-grid">
-                                          {floorRooms.map((room) => {
-                                            const parsed = parseRoomNumber(room.room)
-                                            const isEditing = editingRoom === room.id
-                                            const showActions = showActionsFor === room.id
-                                            
-                                            return (
-                                              <div key={room.id} className={`room-card ${isEditing ? 'editing' : ''}`}>
-                                                {isEditing ? (
-                                                  <div className="room-edit-form">
-                                                    <input
-                                                      type="text"
-                                                      value={editForm.campus}
-                                                      onChange={(e) => setEditForm({...editForm, campus: e.target.value})}
-                                                      placeholder="Campus"
-                                                      className="edit-input-small"
-                                                    />
-                                                    <input
-                                                      type="text"
-                                                      value={editForm.building}
-                                                      onChange={(e) => setEditForm({...editForm, building: e.target.value})}
-                                                      placeholder="Building"
-                                                      className="edit-input-small"
-                                                    />
-                                                    <input
-                                                      type="text"
-                                                      value={editForm.room}
-                                                      onChange={(e) => setEditForm({...editForm, room: e.target.value})}
-                                                      placeholder="Room"
-                                                      className="edit-input-small"
-                                                    />
-                                                    <input
-                                                      type="number"
-                                                      value={editForm.capacity}
-                                                      onChange={(e) => setEditForm({...editForm, capacity: parseInt(e.target.value) || 0})}
-                                                      placeholder="Capacity"
-                                                      className="edit-input-small"
-                                                    />
-                                                    <div className="edit-actions">
-                                                      <button 
-                                                        className="save-btn-small"
-                                                        onClick={() => handleEditSave(room.id!)}
-                                                      >
-                                                        <Check size={16} />
-                                                        Save
-                                                      </button>
-                                                      <button 
-                                                        className="cancel-btn-small"
-                                                        onClick={handleEditCancel}
-                                                      >
-                                                        <X size={16} />
-                                                        Cancel
-                                                      </button>
-                                                    </div>
+                                        {isExpanded && (
+                                          <div className="building-content">
+                                            {Array.from(floorGroups.entries()).map(([floor, floorRooms]) => {
+                                              const floorName = floor === 1 ? '1st' : floor === 2 ? '2nd' : floor === 3 ? '3rd' : `${floor}th`
+                                              const floorCapacity = floorRooms.reduce((sum, room) => sum + room.capacity, 0)
+                                              return (
+                                                <div key={floor} className="floor-section">
+                                                  <div className="floor-header">
+                                                    <h4 className="floor-name">
+                                                      <MapPin size={18} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '6px' }} />
+                                                      {floorName} Floor
+                                                    </h4>
+                                                    <span className="floor-info">
+                                                      {floorRooms.length} rooms · Capacity: {floorCapacity}
+                                                    </span>
                                                   </div>
-                                                ) : (
-                                                  <>
-                                                    <div className="room-icon">
-                                                      <DoorOpen size={24} />
-                                                    </div>
-                                                    <div className="room-info">
-                                                      <h4 className="room-name">{room.room}</h4>
-                                                      <p className="room-parsed">{parsed.displayName}</p>
-                                                      <p className="room-campus">
-                                                        <Building2 size={14} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '4px' }} />
-                                                        {room.campus}
-                                                      </p>
-                                                    </div>
-                                                    <div className="room-capacity-badge">
-                                                      {room.capacity}
-                                                    </div>
-                                                    
-                                                    <div className="room-options">
-                                                      <button 
-                                                        className="options-trigger"
-                                                        onClick={(e) => {
-                                                          e.stopPropagation()
-                                                          toggleActionsMenu(room.id!)
-                                                        }}
-                                                        title="Options"
-                                                      >
-                                                        <Settings size={18} />
-                                                      </button>
-                                                      
-                                                      {showActions && (
-                                                        <div className="actions-popup">
-                                                          <button 
-                                                            className="action-option edit-option"
-                                                            onClick={() => handleEditClick(room)}
-                                                          >
-                                                            <Edit2 size={16} />
-                                                            Edit Room
-                                                          </button>
-                                                          <button 
-                                                            className="action-option delete-option"
-                                                            onClick={() => handleDelete(room.id!)}
-                                                            disabled={deletingRoom === room.id}
-                                                          >
-                                                            <Trash2 size={16} />
-                                                            {deletingRoom === room.id ? 'Deleting...' : 'Delete Room'}
-                                                          </button>
+                                                  <div className="rooms-grid">
+                                                    {floorRooms.map((room) => {
+                                                      const parsed = parseRoomNumber(room.room)
+                                                      const isEditing = editingRoom === room.id
+                                                      const showActions = showActionsFor === room.id
+                                                      const usage = roomUsage.get(room.room)
+                                                      return (
+                                                        <div
+                                                          key={room.id}
+                                                          className={`room-card ${isEditing ? 'editing' : ''}`}
+                                                          onMouseLeave={() => {
+                                                            // Only close if the popup is open for this room
+                                                            if (showActionsFor === room.id) setShowActionsFor(null)
+                                                          }}
+                                                        >
+                                                          {isEditing ? (
+                                                            <div className="room-edit-form">
+                                                              <input
+                                                                type="text"
+                                                                value={editForm.campus}
+                                                                onChange={(e) => setEditForm({...editForm, campus: e.target.value})}
+                                                                placeholder="Campus"
+                                                                className="edit-input-small"
+                                                              />
+                                                              <input
+                                                                type="text"
+                                                                value={editForm.building}
+                                                                onChange={(e) => setEditForm({...editForm, building: e.target.value})}
+                                                                placeholder="Building"
+                                                                className="edit-input-small"
+                                                              />
+                                                              <input
+                                                                type="text"
+                                                                value={editForm.room}
+                                                                onChange={(e) => setEditForm({...editForm, room: e.target.value})}
+                                                                placeholder="Room"
+                                                                className="edit-input-small"
+                                                              />
+                                                              <input
+                                                                type="number"
+                                                                value={editForm.capacity}
+                                                                onChange={(e) => setEditForm({...editForm, capacity: parseInt(e.target.value) || 0})}
+                                                                placeholder="Capacity"
+                                                                className="edit-input-small"
+                                                              />
+                                                              <div className="edit-actions">
+                                                                <button 
+                                                                  className="save-btn-small"
+                                                                  onClick={() => handleEditSave(room.id!)}
+                                                                >
+                                                                  <Check size={16} />
+                                                                  Save
+                                                                </button>
+                                                                <button 
+                                                                  className="cancel-btn-small"
+                                                                  onClick={handleEditCancel}
+                                                                >
+                                                                  <X size={16} />
+                                                                  Cancel
+                                                                </button>
+                                                              </div>
+                                                            </div>
+                                                          ) : (
+                                                            <>
+                                                              <div className="room-icon">
+                                                                <DoorOpen size={24} />
+                                                              </div>
+                                                              <div className="room-info">
+                                                                <h4 className="room-name">{room.room}</h4>
+                                                                <p className="room-parsed">{parsed.displayName}</p>
+                                                                <p className="room-campus">
+                                                                  <Building2 size={14} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '4px' }} />
+                                                                  {room.campus}
+                                                                </p>
+                                                                <p className="room-seats">
+                                                                  <Users size={14} style={{ verticalAlign: 'middle', marginRight: '4px' }} />
+                                                                  Seats: {room.capacity}
+                                                                </p>
+                                                              </div>
+                                                              <div className="room-capacity-badge">
+                                                                {room.capacity}
+                                                              </div>
+                                                              
+                                                              <div className="room-options">
+                                                                <button 
+                                                                  className="options-trigger"
+                                                                  onClick={(e) => {
+                                                                    e.stopPropagation()
+                                                                    toggleActionsMenu(room.id!)
+                                                                  }}
+                                                                  title="Options"
+                                                                >
+                                                                  <Settings size={18} />
+                                                                </button>
+                                                                {showActions && (
+                                                                  <div className="actions-popup">
+                                                                    <button 
+                                                                      className="action-option edit-option"
+                                                                      onClick={() => handleEditClick(room)}
+                                                                    >
+                                                                      <Edit2 size={16} />
+                                                                      Edit Room
+                                                                    </button>
+                                                                    <button 
+                                                                      className="action-option delete-option"
+                                                                      onClick={() => handleDelete(room.id!)}
+                                                                      disabled={deletingRoom === room.id}
+                                                                    >
+                                                                      <Trash2 size={16} />
+                                                                      {deletingRoom === room.id ? 'Deleting...' : 'Delete Room'}
+                                                                    </button>
+                                                                  </div>
+                                                                )}
+                                                              </div>
+                                                            </>
+                                                          )}
                                                         </div>
-                                                      )}
-                                                    </div>
-                                                  </>
-                                                )}
-                                              </div>
-                                            )
-                                          })}
-                                        </div>
+                                                      )
+                                                    })}
+                                                  </div>
+                                                </div>
+                                              )
+                                            })}
+                                          </div>
+                                        )}
                                       </div>
                                     )
                                   })}
                                 </div>
-                              )}
-                            </div>
-                          )
-                        })}
-                      </div>
+                              )
+                            })}
+                        </div>
+                      
                     </>
                   )}
                 </>

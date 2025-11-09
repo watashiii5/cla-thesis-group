@@ -12,7 +12,10 @@ import {
   ChevronRight,
   CalendarPlus,
   Eye,
-  ClipboardList
+  ClipboardList,
+  University,
+  School,
+  CalendarCheck2
 } from 'lucide-react'
 import './Sidebar.css'
 
@@ -23,19 +26,43 @@ interface SidebarProps {
 export default function Sidebar({ isOpen }: SidebarProps) {
   const router = useRouter()
   const pathname = usePathname()
-  const [scheduleMenuOpen, setScheduleMenuOpen] = useState(false)
+  // Track open state for each submenu by index
+  const [openSubmenus, setOpenSubmenus] = useState<{ [key: number]: boolean }>({})
 
   // Auto-expand schedule menu if on a schedule-related page
   useEffect(() => {
-    if (pathname.includes('/GenerateSchedule')) {
-      setScheduleMenuOpen(true)
-    }
+    menuItems.forEach((item, idx) => {
+      if (item.hasSubmenu && item.label === 'Schedule' && pathname.includes('/GenerateSchedule')) {
+        setOpenSubmenus(prev => ({ ...prev, [idx]: true }))
+      }
+      if (item.hasSubmenu && item.label === 'School Management' && (pathname.includes('/SchoolCapacity') || pathname.includes('/SchoolSchedules'))) {
+        setOpenSubmenus(prev => ({ ...prev, [idx]: true }))
+      }
+    })
+    // eslint-disable-next-line
   }, [pathname])
 
   const menuItems = [
     { icon: Home, label: 'Home', path: '/LandingPages/QtimeHomePage' },
     { icon: Upload, label: 'Upload CSV', path: '/LandingPages/BeforeQtimeHomePage' },
-    { icon: Building2, label: 'School Capacity', path: '/LandingPages/QtimeSchoolCapacityPage' },
+    { 
+      icon: University, 
+      label: 'School Management', 
+      hasSubmenu: true,
+      submenu: [
+        { 
+          label: 'School Capacity', 
+          path: '/LandingPages/SchoolCapacity',
+          icon: School,
+          exact: true
+        },
+        { 
+          label: 'School Schedules', 
+          path: '/LandingPages/SchoolSchedules',
+          icon: CalendarCheck2,
+        },
+      ]
+    },
     { icon: Users, label: 'Participants', path: '/LandingPages/QtimeParticipantsPage' },
     { 
       icon: Calendar, 
@@ -59,11 +86,6 @@ export default function Sidebar({ isOpen }: SidebarProps) {
           path: '/LandingPages/GenerateSchedule/ParticipantSchedules',
           icon: ClipboardList
         },
-        { 
-          label: 'Campus Schedules', 
-          path: '/LandingPages/GenerateSchedule/CampusSchedules',
-          icon: Building2
-        },
       ]
     },
   ]
@@ -72,8 +94,12 @@ export default function Sidebar({ isOpen }: SidebarProps) {
     router.push(path)
   }
 
-  const toggleScheduleMenu = () => {
-    setScheduleMenuOpen(!scheduleMenuOpen)
+  // Toggle submenu by index
+  const toggleSubmenu = (idx: number) => {
+    setOpenSubmenus(prev => ({
+      ...prev,
+      [idx]: !prev[idx]
+    }))
   }
 
   const isActiveSubmenu = (subItem: any) => {
@@ -91,18 +117,18 @@ export default function Sidebar({ isOpen }: SidebarProps) {
             {item.hasSubmenu ? (
               <>
                 <button
-                  onClick={toggleScheduleMenu}
-                  className={`sidebar-item ${scheduleMenuOpen ? 'active' : ''}`}
+                  onClick={() => toggleSubmenu(index)}
+                  className={`sidebar-item ${openSubmenus[index] ? 'active' : ''}`}
                 >
                   <item.icon className="sidebar-icon" size={20} />
                   <span className="sidebar-label">{item.label}</span>
-                  {scheduleMenuOpen ? (
+                  {openSubmenus[index] ? (
                     <ChevronDown className="submenu-icon" size={16} />
                   ) : (
                     <ChevronRight className="submenu-icon" size={16} />
                   )}
                 </button>
-                {scheduleMenuOpen && (
+                {openSubmenus[index] && (
                   <div className="submenu">
                     {item.submenu?.map((subItem, subIndex) => (
                       <button
@@ -119,7 +145,7 @@ export default function Sidebar({ isOpen }: SidebarProps) {
               </>
             ) : (
               <button
-                onClick={() => handleNavigation(item.path)}
+                onClick={() => handleNavigation(item.path ?? '/')}
                 className={`sidebar-item ${pathname === item.path ? 'active' : ''}`}
               >
                 <item.icon className="sidebar-icon" size={20} />
