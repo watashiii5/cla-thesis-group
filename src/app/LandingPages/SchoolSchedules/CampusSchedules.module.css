@@ -215,106 +215,100 @@
 .roomsGrid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 20px;
+  gap: 15px;
+  margin-top: 15px;
 }
 
 .roomCard {
-  background: var(--primary-gradient);
-  border-radius: 16px;
-  padding: 20px;
+  background: white;
+  border-radius: 14px;
+  padding: 18px;
+  margin-bottom: 16px;
+  box-shadow: 0 2px 12px rgba(26,54,93,0.08);
+  transition: box-shadow 0.2s, transform 0.2s;
   cursor: pointer;
-  transition: all 0.3s ease;
-  color: white;
   position: relative;
-  overflow: hidden;
-  box-shadow: 0 5px 15px rgba(26, 54, 93, 0.3);
-}
-
-.roomCard::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0) 100%);
-  opacity: 0;
-  transition: opacity 0.3s ease;
-}
-
-.roomCard:hover::before {
-  opacity: 1;
+  color: var(--text-dark);
+  border: 1px solid #e2e8f0;
 }
 
 .roomCard:hover {
-  transform: translateY(-8px);
-  box-shadow: 0 15px 40px rgba(26, 54, 93, 0.4);
+  box-shadow: 0 8px 32px rgba(26,54,93,0.12);
+  transform: translateY(-4px);
 }
 
 .roomHeader {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 15px;
+  margin-bottom: 10px;
+  color: var(--text-dark);
 }
 
 .roomNumber {
-  font-size: 20px;
+  font-size: 17px;
   font-weight: 700;
+  color: var(--text-dark);
 }
 
 .utilizationBadge {
-  padding: 5px 12px;
-  border-radius: 12px;
+  padding: 4px 10px;
+  border-radius: 10px;
   font-size: 12px;
   font-weight: 700;
-  background: rgba(255, 255, 255, 0.2);
+  background: #e6f2ff;
+  color: var(--primary-medium);
 }
 
 .utilizationBadge.high {
   background: #f56565;
+  color: #fff;
 }
 
 .utilizationBadge.medium {
   background: #ed8936;
+  color: #fff;
 }
 
 .utilizationBadge.low {
   background: #48bb78;
+  color: #fff;
 }
 
 .roomBody {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .roomStat {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   font-size: 14px;
   font-weight: 600;
+  color: var(--text-dark);
 }
 
 .roomStat svg {
-  font-size: 18px;
+  font-size: 16px;
 }
 
 .pwdIndicator {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 5px;
-  padding: 8px 12px;
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 10px;
-  font-size: 13px;
+  gap: 6px;
+  margin-top: 4px;
+  padding: 6px 10px;
+  background: #e6f2ff;
+  border-radius: 8px;
+  font-size: 12px;
   font-weight: 600;
+  color: #48bb78;
 }
 
 .pwdIndicator svg {
-  font-size: 16px;
+  font-size: 14px;
 }
 
 /* ==================== Room View ==================== */
@@ -503,12 +497,11 @@
 }
 
 .campusSection {
-  background: #fff;
-  border-radius: 18px;
-  box-shadow: 0 8px 32px rgba(26,54,93,0.10);
-  margin-bottom: 32px;
-  padding: 28px 32px;
-  transition: box-shadow 0.2s;
+  margin-bottom: 30px;
+  background: #f8fafc;
+  padding: 20px;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
 }
 
 .campusSection:last-child {
@@ -518,42 +511,48 @@
 .campusHeaderRow {
   display: flex;
   align-items: center;
-  gap: 14px;
-  font-size: 22px;
-  font-weight: 700;
+  padding: 15px 20px;
+  background: white;
+  border-radius: 10px;
+  margin-bottom: 15px;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
   color: var(--text-dark);
-  margin-bottom: 18px;
-  background: #fff;
-  border-radius: 12px;
-  padding: 14px 18px;
-  box-shadow: 0 2px 12px rgba(26,54,93,0.06);
-  border: 1px solid #f0f4fa;
+  gap: 10px;
 }
 
-.campusHeaderRow button {
-  margin-left: auto;
+.campusHeaderRow:hover {
+  background: #f8fafc;
+}
+
+.buildingHeaderRow {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  background: white;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: var(--text-dark);
+  gap: 10px;
+}
+
+.buildingHeaderRow:hover {
+  background: #f8fafc;
 }
 
 .toggleCampusBtn {
-  background: #f7fafc;
-  color: var(--primary-medium);
-  border: 2px solid #e2e8f0;
-  padding: 8px 18px;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 700;
+  margin-left: auto;
+  background: transparent;
+  border: none;
+  padding: 5px;
   cursor: pointer;
-  transition: all 0.2s;
+  color: var(--text-medium);
   display: flex;
   align-items: center;
-  gap: 6px;
-  box-shadow: 0 2px 8px rgba(26,54,93,0.08);
-}
-
-.toggleCampusBtn:hover {
-  background: #e6f2ff;
-  border-color: var(--primary-medium);
-  color: var(--primary-medium);
+  justify-content: center;
 }
 
 /* ==================== Building Section ==================== */
@@ -604,7 +603,7 @@
   cursor: pointer;
   position: relative;
   color: var(--text-dark);
-  border: 1px solid #f0f4fa;
+  border: 1px solid #e2e8f0;
 }
 
 .roomCard:hover {
@@ -617,12 +616,13 @@
   justify-content: space-between;
   align-items: center;
   margin-bottom: 10px;
+  color: var(--text-dark);
 }
 
 .roomNumber {
   font-size: 17px;
   font-weight: 700;
-  color: var(--primary-medium);
+  color: var(--text-dark);
 }
 
 .utilizationBadge {
@@ -661,7 +661,7 @@
   gap: 8px;
   font-size: 14px;
   font-weight: 600;
-  color: var(--primary-dark);
+  color: var(--text-dark);
 }
 
 .roomStat svg {

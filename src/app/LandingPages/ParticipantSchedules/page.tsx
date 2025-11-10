@@ -350,6 +350,7 @@ function ParticipantSchedulesContent() {
         const participant = participantMap.get(assignment.participant_id)
         const batch = batchMap.get(assignment.schedule_batch_id)
 
+        // Always prefer assignment data over batch data
         return {
           id: assignment.id,
           participant_number: participant?.participant_number || 'N/A',
@@ -357,17 +358,30 @@ function ParticipantSchedulesContent() {
           email: participant?.email || 'N/A',
           is_pwd: assignment.is_pwd || false,
           batch_name: batch?.batch_name || 'N/A',
-          room: assignment.room || batch?.room || 'N/A',
+          room: assignment.room || 'N/A', // Prefer assignment room
           time_slot: batch?.time_slot || 'N/A',
-          campus: assignment.campus || batch?.campus || 'Main Campus',
-          building: assignment.building || batch?.building || 'N/A',
-          is_first_floor: assignment.is_first_floor ?? batch?.is_first_floor ?? false,
+          campus: assignment.campus || 'N/A', // Remove Main Campus fallback
+          building: assignment.building || 'N/A', // Remove fallback
+          is_first_floor: assignment.is_first_floor ?? false,
           seat_no: assignment.seat_no || 0,
           batch_date: assignment.batch_date || batch?.batch_date || null,
           start_time: assignment.start_time || batch?.start_time || null,
           end_time: assignment.end_time || batch?.end_time || null
         }
       })
+
+      // Add after the combinedData mapping
+      console.log('Sample assignments data:', assignments.slice(0, 5).map(a => ({
+        campus: a.campus,
+        building: a.building,
+        room: a.room
+      })))
+
+      console.log('Sample combined data:', combinedData.slice(0, 5).map(d => ({
+        campus: d.campus,
+        building: d.building,
+        room: d.room
+      })))
 
       console.log(`✅ Combined ${combinedData.length} schedule entries`)
 
