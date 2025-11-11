@@ -112,7 +112,7 @@ interface Stats {
   firstFloorRooms: number
   totalDays: number
   slotsPerDay: number
-  timeSlots: TimeSlotInfo[]  // ✅ UPDATED: More detailed time slot info
+  timeSlots: TimeSlotInfo[]
 }
 
 interface ScheduleDetailsModalProps {
@@ -240,6 +240,45 @@ export default function ScheduleDetailsModal({ scheduleId, isOpen, onClose }: Sc
       // Fetch room capacities
       const roomCapacityMap = await getRoomCapacities(summaryData.campus_group_id)
 
+      // Fetch batches FIRST to get actual time slots
+      const batches = await fetchAllRows('schedule_batches', {
+        schedule_summary_id: scheduleId
+      }, 'batch_number')
+
+      console.log(`✅ Fetched ${batches.length} batches`)
+
+      // ✅ CORRECT: Calculate time slot statistics from actual batch data
+      const timeSlotMap = new Map<string, TimeSlotInfo>()
+      
+      batches.forEach((batch: any) => {
+        const timeKey = `${batch.start_time}-${batch.end_time}`
+        
+        if (!timeSlotMap.has(timeKey)) {
+          timeSlotMap.set(timeKey, {
+            timeRange: formatTimeRange(batch.start_time, batch.end_time),
+            startTime: batch.start_time,
+            endTime: batch.end_time,
+            participantCount: 0,
+            batchCount: 0,
+            isActive: true
+          })
+        }
+        
+        const slotInfo = timeSlotMap.get(timeKey)!
+        slotInfo.batchCount++
+        slotInfo.participantCount += batch.participant_count || 0
+      })
+
+      // Sort time slots by start time
+      const sortedTimeSlots = Array.from(timeSlotMap.values()).sort((a, b) => 
+        a.startTime.localeCompare(b.startTime)
+      )
+
+      console.log(`📊 Found ${sortedTimeSlots.length} unique time slots:`)
+      sortedTimeSlots.forEach((slot, idx) => {
+        console.log(`   Slot ${idx + 1}: ${slot.timeRange} - ${slot.participantCount} participants in ${slot.batchCount} batches`)
+      })
+
       // Fetch assignments
       const assignments = await fetchAllRows('schedule_assignments', {
         schedule_summary_id: scheduleId
@@ -264,93 +303,26 @@ export default function ScheduleDetailsModal({ scheduleId, isOpen, onClose }: Sc
 
       const participantMap = new Map(allParticipants.map(p => [p.id, p]))
 
-      // Create assignments by batch map
-      const assignmentsByBatch = new Map<number, Participant[]>()
+      // Group assignments by batch
+      const assignmentsByBatch = new Map()
       assignments.forEach((assignment: any) => {
+        if (!assignmentsByBatch.has(assignment.schedule_batch_id)) {
+          assignmentsByBatch.set(assignment.schedule_batch_id, [])
+        }
         const participant = participantMap.get(assignment.participant_id)
         if (participant) {
-          const participantWithSeat = {
-            ...participant,
-            seat_no: assignment.seat_no
-          }
-          
-          if (!assignmentsByBatch.has(assignment.batch_id)) {
-            assignmentsByBatch.set(assignment.batch_id, [])
-          }
-          assignmentsByBatch.get(assignment.batch_id)!.push(participantWithSeat)
-        }
-      })
-
-      // Fetch batches
-      const batches = await fetchAllRows('schedule_batches', {
-        schedule_summary_id: scheduleId
-      }, 'batch_number')
-
-      console.log(`✅ Fetched ${batches.length} batches`)
-
-      // ✅ NEW: Calculate time slot statistics
-      const timeSlotMap = new Map<string, TimeSlotInfo>()
-      
-      batches.forEach((batch: any) => {
-        const timeKey = `${batch.start_time}-${batch.end_time}`
-        
-        if (!timeSlotMap.has(timeKey)) {
-          timeSlotMap.set(timeKey, {
-            timeRange: formatTimeRange(batch.start_time, batch.end_time),
-            startTime: batch.start_time,
-            endTime: batch.end_time,
-            participantCount: 0,
-            batchCount: 0,
-            isActive: false
+          assignmentsByBatch.get(assignment.schedule_batch_id).push({
+            id: participant.id,
+            participant_number: participant.participant_number,
+            name: participant.name,
+            email: participant.email,
+            is_pwd: assignment.is_pwd,
+            seat_no: assignment.seat_no,
+            province: participant.province,
+            city: participant.city
           })
         }
-        
-        const slotInfo = timeSlotMap.get(timeKey)!
-        slotInfo.batchCount++
-        slotInfo.participantCount += batch.participant_count || 0
-        slotInfo.isActive = slotInfo.participantCount > 0
       })
-
-      // Sort time slots by start time
-      const sortedTimeSlots = Array.from(timeSlotMap.values()).sort((a, b) => 
-        a.startTime.localeCompare(b.startTime)
-      )
-
-      // ✅ NEW: Generate all possible time slots based on schedule summary
-      const allPossibleSlots: TimeSlotInfo[] = []
-      if (summaryData) {
-        const duration = 3 // 3 hours per batch (you can make this dynamic)
-        const [startHour, startMin] = summaryData.start_time.split(':').map(Number)
-        const [endHour, endMin] = summaryData.end_time.split(':').map(Number)
-        
-        let currentHour = startHour
-        let currentMin = startMin
-        
-        while (currentHour < endHour || (currentHour === endHour && currentMin < endMin)) {
-          const slotStartTime = `${currentHour.toString().padStart(2, '0')}:${currentMin.toString().padStart(2, '0')}:00`
-          const nextHour = currentHour + duration
-          const slotEndTime = `${nextHour.toString().padStart(2, '0')}:${currentMin.toString().padStart(2, '0')}:00`
-          
-          const existingSlot = sortedTimeSlots.find(s => s.startTime === slotStartTime)
-          
-          if (existingSlot) {
-            allPossibleSlots.push(existingSlot)
-          } else {
-            // Empty slot
-            allPossibleSlots.push({
-              timeRange: formatTimeRange(slotStartTime, slotEndTime),
-              startTime: slotStartTime,
-              endTime: slotEndTime,
-              participantCount: 0,
-              batchCount: 0,
-              isActive: false
-            })
-          }
-          
-          currentHour = nextHour
-          if (currentHour >= endHour) break
-        }
-      }
 
       // Build campus structure
       const campusMap = new Map<string, Map<string, Map<string, Room>>>()
@@ -437,7 +409,7 @@ export default function ScheduleDetailsModal({ scheduleId, isOpen, onClose }: Sc
         firstFloorRooms: allRooms.filter((r: Room) => r.is_first_floor).length,
         totalDays: uniqueDates.size,
         slotsPerDay: Math.round(uniqueSlots.size / uniqueDates.size),
-        timeSlots: allPossibleSlots  // ✅ UPDATED: Use all possible slots
+        timeSlots: sortedTimeSlots  // ✅ Use actual time slots from batches
       })
 
       console.log('✅ Schedule details loaded successfully')
@@ -497,7 +469,6 @@ export default function ScheduleDetailsModal({ scheduleId, isOpen, onClose }: Sc
     })
   }
 
-  // ✅ NEW: CSV Export Function
   const handleExport = () => {
     if (!scheduleSummary || campuses.length === 0) {
       alert('No data to export')
@@ -516,11 +487,11 @@ export default function ScheduleDetailsModal({ scheduleId, isOpen, onClose }: Sc
       csvRows.push(`Total Unscheduled,${scheduleSummary.unscheduled_count}`)
       csvRows.push('') // Empty row
 
-      // ✅ NEW: Add time slots summary
-      csvRows.push('Time Slots Summary:')
-      csvRows.push('Time Range,Status,Participants,Batches')
+      // ✅ Add actual time slots summary
+      csvRows.push('Time Slots with Participants:')
+      csvRows.push('Time Range,Participants,Batches')
       stats.timeSlots.forEach(slot => {
-        csvRows.push(`${slot.timeRange},${slot.isActive ? 'Active' : 'Empty'},${slot.participantCount},${slot.batchCount}`)
+        csvRows.push(`${slot.timeRange},${slot.participantCount},${slot.batchCount}`)
       })
       csvRows.push('') // Empty row
 
@@ -557,10 +528,7 @@ export default function ScheduleDetailsModal({ scheduleId, isOpen, onClose }: Sc
         })
       })
 
-      // Create CSV content
       const csvContent = csvRows.join('\n')
-      
-      // Create blob and download
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
       const link = document.createElement('a')
       const url = URL.createObjectURL(blob)
@@ -595,16 +563,8 @@ export default function ScheduleDetailsModal({ scheduleId, isOpen, onClose }: Sc
     return `${start} - ${end}`
   }
 
-  const formatTimeRange = (startTime: string, endTime: string): string => {
-    return `${convertTo12Hour(startTime)} - ${convertTo12Hour(endTime)}`
-  }
-
-  const convertTo12Hour = (time24: string): string => {
-    const [hours, minutes] = time24.split(':')
-    const hour = parseInt(hours)
-    const period = hour >= 12 ? 'PM' : 'AM'
-    const hour12 = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour
-    return `${hour12}:${minutes} ${period}`
+  const formatTimeRange = (startTime: string, endTime: string) => {
+    return `${startTime} - ${endTime}`
   }
 
   const handlePrint = () => {
@@ -736,7 +696,7 @@ export default function ScheduleDetailsModal({ scheduleId, isOpen, onClose }: Sc
                     </div>
                   </div>
 
-                  {/* ✅ NEW: Time Slots Section */}
+                  {/* ✅ Time Slots Section - Only shows actual scheduled slots */}
                   {stats.timeSlots.length > 0 && (
                     <div className={styles.timeSlotsSection}>
                       <div className={styles.timeSlotsSectionHeader}>
@@ -744,22 +704,18 @@ export default function ScheduleDetailsModal({ scheduleId, isOpen, onClose }: Sc
                           <FaClock /> Expected Participant Times
                         </h3>
                         <p className={styles.timeSlotsDescription}>
-                          Time slots and their participant distribution
+                          Time slots with scheduled participants ({stats.timeSlots.length} active slot{stats.timeSlots.length !== 1 ? 's' : ''})
                         </p>
                       </div>
                       <div className={styles.timeSlotsGrid}>
                         {stats.timeSlots.map((slot, index) => (
                           <div 
                             key={index} 
-                            className={`${styles.timeSlotCard} ${slot.isActive ? styles.activeSlot : styles.emptySlot}`}
+                            className={`${styles.timeSlotCard} ${styles.activeSlot}`}
                           >
                             <div className={styles.timeSlotHeader}>
                               <div className={styles.timeSlotIcon}>
-                                {slot.isActive ? (
-                                  <FaCheckCircle className={styles.activeIcon} />
-                                ) : (
-                                  <FaTimesCircle className={styles.emptyIcon} />
-                                )}
+                                <FaCheckCircle className={styles.activeIcon} />
                               </div>
                               <div className={styles.timeSlotTime}>
                                 <span className={styles.timeSlotLabel}>Time Slot {index + 1}</span>
@@ -767,22 +723,14 @@ export default function ScheduleDetailsModal({ scheduleId, isOpen, onClose }: Sc
                               </div>
                             </div>
                             <div className={styles.timeSlotStats}>
-                              {slot.isActive ? (
-                                <>
-                                  <div className={styles.timeSlotStat}>
-                                    <FaUsers />
-                                    <span>{slot.participantCount} participants</span>
-                                  </div>
-                                  <div className={styles.timeSlotStat}>
-                                    <FaBox />
-                                    <span>{slot.batchCount} batches</span>
-                                  </div>
-                                </>
-                              ) : (
-                                <div className={styles.timeSlotEmpty}>
-                                  <span>No participants scheduled</span>
-                                </div>
-                              )}
+                              <div className={styles.timeSlotStat}>
+                                <FaUsers />
+                                <span>{slot.participantCount} participants</span>
+                              </div>
+                              <div className={styles.timeSlotStat}>
+                                <FaBox />
+                                <span>{slot.batchCount} batches</span>
+                              </div>
                             </div>
                           </div>
                         ))}
