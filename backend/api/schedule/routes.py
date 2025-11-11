@@ -53,7 +53,7 @@ class ScheduleRequest(BaseModel):
     start_date: str
     end_date: str
     start_time: str
-    end_time: str  # Changed from end_date to end_time
+    end_time: str  # ✅ FIXED: Was duplicate 'end_date'
     duration_per_batch: int
     campus_group_id: int
     participant_group_id: int
@@ -73,6 +73,85 @@ class ScheduleResponse(BaseModel):
     execution_time: float = 0
 
 # ==================== Helper Functions ====================
+
+def fetch_all_paginated(table: str, filter_column: str, filter_value: any) -> List[Dict]:
+    """
+    Fetch all rows from a table with pagination to avoid row limits.
+    
+    Args:
+        table: Table name to query
+        filter_column: Column to filter by
+        filter_value: Value to filter on
+    
+    Returns:
+        List of all matching rows
+    """
+    PAGE_SIZE = 1000
+    all_data = []
+    page = 0
+    
+    while True:
+        start = page * PAGE_SIZE
+        end = start + PAGE_SIZE - 1
+        
+        try:
+            response = sb.table(table)\
+                .select("*")\
+                .eq(filter_column, filter_value)\
+                .range(start, end)\
+                .execute()
+            
+            if not response.data:
+                break
+            
+            all_data.extend(response.data)
+            
+            # If we got less than PAGE_SIZE rows, we've reached the end
+            if len(response.data) < PAGE_SIZE:
+                break
+            
+            page += 1
+            
+        except Exception as e:
+            logger.error(f"❌ Error fetching {table} page {page}: {e}")
+            break
+    
+    logger.info(f"✅ Fetched {len(all_data)} rows from {table}")
+    return all_data
+
+def batch_insert(table: str, data: List[Dict], batch_size: int = 500) -> List[int]:
+    """
+    Insert data in batches to avoid payload limits.
+    
+    Args:
+        table: Table name
+        data: List of records to insert
+        batch_size: Number of records per batch
+    
+    Returns:
+        List of failed batch indices
+    """
+    failed_batches = []
+    total_batches = (len(data) + batch_size - 1) // batch_size
+    
+    for i in range(0, len(data), batch_size):
+        batch_num = i // batch_size + 1
+        chunk = data[i:i + batch_size]
+        
+        try:
+            response = sb.table(table).insert(chunk).execute()
+            
+            if not response.data:
+                logger.error(f"❌ Batch {batch_num}/{total_batches} failed: No data returned")
+                failed_batches.append(batch_num)
+            else:
+                logger.info(f"✅ Inserted batch {batch_num}/{total_batches} ({len(chunk)} records)")
+                
+        except Exception as e:
+            logger.error(f"❌ Batch {batch_num}/{total_batches} failed: {e}")
+            failed_batches.append(batch_num)
+    
+    return failed_batches
 
 def to_int(value) -> int:
     """Fast integer conversion with caching"""
@@ -104,7 +183,8 @@ class OptimizedScheduler:
     """Ultra-fast scheduler with O(n) complexity and batch processing"""
     
     __slots__ = ('batches', 'scheduled_ids', 'batch_no', 'warnings', 
-                 'room_cache', 'slot_cache', 'assignments')  # Added 'assignments'
+                 'room_cache', 'slot_cache', 'assignments', 'batch_assignments_map',
+                 'room_slot_usage')  # ✅ NEW: Track room usage per slot
     
     def __init__(self):
         self.batches: List[Dict] = []
@@ -113,7 +193,9 @@ class OptimizedScheduler:
         self.warnings: List[str] = []
         self.room_cache = {}
         self.slot_cache = {}
-        self.assignments = []  # Initialize assignments list
+        self.assignments = []
+        self.batch_assignments_map = {}
+        self.room_slot_usage = {}  # ✅ NEW: {(date, slot_idx, room_key): remaining_capacity}
     
     def schedule(
         self,
@@ -129,17 +211,18 @@ class OptimizedScheduler:
         lunch_break_start: str = "12:00",
         lunch_break_end: str = "13:00"
     ) -> Dict:
-        """Main scheduling algorithm - OPTIMIZED FOR 10K+ PARTICIPANTS"""
+        """Main scheduling algorithm - FULLY FIXED"""
         
         start_exec = datetime.now()
-        logger.info(f"🎯 Scheduling {len(participants)} participants across {len(rooms)} rooms")
+        logger.info(f"🎯 Starting scheduling for {len(participants)} participants")
         
-        # Pre-process and cache rooms (O(n))
+        # Pre-process and cache rooms
         first_floor_rooms, all_rooms = self._process_rooms(rooms)
         
-        # Generate dates and slots (cached)
+        # ✅ NEW: Initialize room usage tracking
         dates = self._generate_dates(start_date, end_date)
         if not dates:
+            logger.error("❌ No valid dates generated")
             return self._empty_result(len(participants))
         
         slots = self._generate_slots(
@@ -148,34 +231,101 @@ class OptimizedScheduler:
         )
         
         if not slots:
+            logger.error("❌ No valid time slots generated")
             return self._empty_result(len(participants))
         
-        total_capacity = len(dates) * len(slots)
-        logger.info(f"📅 {len(dates)} days × {len(slots)} slots = {total_capacity} total slots")
+        # ✅ NEW: Initialize room capacity tracking for each slot
+        for day in dates:
+            day_str = day.strftime("%Y-%m-%d")
+            for slot_idx in range(len(slots)):
+                for room in all_rooms:
+                    room_key = f"{room['campus']}|{room['building']}|{room['room']}"
+                    usage_key = (day_str, slot_idx, room_key)
+                    self.room_slot_usage[usage_key] = room.get('_capacity', 0)
         
-        # Separate participants by PWD status (O(n))
+        # Calculate capacity
+        total_room_capacity = sum(room.get('_capacity', 0) for room in all_rooms)
+        total_slots = len(dates) * len(slots)
+        total_capacity = total_room_capacity * total_slots
+        
+        logger.info(f"📊 CAPACITY ANALYSIS:")
+        logger.info(f"   📅 Days: {len(dates)}")
+        logger.info(f"   🕐 Slots per day: {len(slots)}")
+        logger.info(f"   ⏰ Total time slots: {total_slots}")
+        logger.info(f"   🏢 Total rooms: {len(all_rooms)}")
+        logger.info(f"   💺 Total room capacity: {total_room_capacity}")
+        logger.info(f"   🎯 TOTAL CAPACITY: {total_capacity} participants")
+        logger.info(f"   👥 Participants to schedule: {len(participants)}")
+        
+        if len(participants) > total_capacity:
+            shortage = len(participants) - total_capacity
+            logger.error(f"❌ CAPACITY EXCEEDED: Need {shortage} more spaces!")
+            self.warnings.append(
+                f"Insufficient capacity: {len(participants)} participants but only {total_capacity} spaces available. "
+                f"Need {shortage} more capacity."
+            )
+            return self._empty_result(len(participants))
+        
+        # Separate participants by PWD status
         pwd_participants, non_pwd_participants = self._separate_participants(
             participants, prioritize_pwd
         )
         
-        logger.info(f"♿ PWD: {len(pwd_participants)} | 👤 Non-PWD: {len(non_pwd_participants)}")
-        logger.info(f"🏢 1st Floor: {len(first_floor_rooms)} | All: {len(all_rooms)} rooms")
+        logger.info(f"♿ PWD participants: {len(pwd_participants)}")
+        logger.info(f"👤 Non-PWD participants: {len(non_pwd_participants)}")
+        logger.info(f"🏢 1st Floor rooms: {len(first_floor_rooms)}")
+        logger.info(f"🏢 All rooms: {len(all_rooms)}")
         
-        # PHASE 1: Schedule PWD to 1st floor (O(n))
-        pwd_idx = self._schedule_group_fast(
-            pwd_participants, first_floor_rooms, dates, slots
-        )
+        # Validate PWD capacity
+        first_floor_capacity = sum(r.get('_capacity', 0) for r in first_floor_rooms) * total_slots
+        if prioritize_pwd and len(pwd_participants) > first_floor_capacity:
+            logger.warning(f"⚠️ PWD participants ({len(pwd_participants)}) exceed 1st floor capacity ({first_floor_capacity})")
+            self.warnings.append(
+                f"PWD participants ({len(pwd_participants)}) exceed 1st floor capacity ({first_floor_capacity}). "
+                f"Some PWD participants will be assigned to upper floors."
+            )
         
-        # PHASE 2: Schedule non-PWD to all rooms (O(n))
-        non_pwd_idx = self._schedule_group_fast(
+        # ✅ FIXED: Schedule PWD first, then non-PWD (no separate phases)
+        pwd_idx = 0
+        non_pwd_idx = 0
+        
+        if prioritize_pwd and pwd_participants:
+            logger.info("🔄 PHASE 1: Scheduling PWD participants to 1st floor rooms...")
+            pwd_idx = self._schedule_group_optimized(
+                pwd_participants, first_floor_rooms, dates, slots
+            )
+            logger.info(f"✅ PWD Phase: {pwd_idx}/{len(pwd_participants)} scheduled")
+            
+            # If there are unscheduled PWD, schedule them to all rooms
+            if pwd_idx < len(pwd_participants):
+                remaining_pwd = pwd_participants[pwd_idx:]
+                logger.info(f"⚠️ Scheduling {len(remaining_pwd)} remaining PWD to all rooms...")
+                additional_pwd = self._schedule_group_optimized(
+                    remaining_pwd, all_rooms, dates, slots
+                )
+                pwd_idx += additional_pwd
+        
+        logger.info("🔄 PHASE 2: Scheduling Non-PWD participants to all rooms...")
+        non_pwd_idx = self._schedule_group_optimized(
             non_pwd_participants, all_rooms, dates, slots
         )
+        logger.info(f"✅ Non-PWD Phase: {non_pwd_idx}/{len(non_pwd_participants)} scheduled")
         
         total_scheduled = len(self.scheduled_ids)
         total_unscheduled = len(participants) - total_scheduled
         
         exec_time = (datetime.now() - start_exec).total_seconds()
-        logger.info(f"✅ Scheduled: {total_scheduled}/{len(participants)} in {exec_time:.2f}s")
+        
+        logger.info(f"")
+        logger.info(f"{'='*60}")
+        logger.info(f"✅ SCHEDULING COMPLETE")
+        logger.info(f"{'='*60}")
+        logger.info(f"📊 Total Participants: {len(participants)}")
+        logger.info(f"✅ Scheduled: {total_scheduled} ({(total_scheduled/len(participants)*100):.1f}%)")
+        logger.info(f"❌ Unscheduled: {total_unscheduled}")
+        logger.info(f"🏢 Total Batches Created: {len(self.batches)}")
+        logger.info(f"⏱️ Execution Time: {exec_time:.2f}s")
+        logger.info(f"{'='*60}")
         
         return {
             "batches": self.batches,
@@ -187,7 +337,140 @@ class OptimizedScheduler:
             "non_pwd_scheduled": non_pwd_idx,
             "non_pwd_unscheduled": len(non_pwd_participants) - non_pwd_idx,
             "warnings": self.warnings,
+            "execution_time": exec_time
         }
+    
+    def _schedule_group_optimized(self, participants: List[Dict], rooms: List[Dict], 
+                                  dates: List[date], slots: List[Dict]) -> int:
+        """
+        ✅ FULLY FIXED: Schedule participants with room tracking to prevent conflicts
+        """
+        if not participants or not rooms:
+            return 0
+        
+        idx = 0
+        total = len(participants)
+        
+        # Iterate in order: DAY → SLOT → ROOM
+        for day in dates:
+            day_str = day.strftime("%Y-%m-%d")
+            
+            for slot_idx, slot in enumerate(slots):
+                if idx >= total:
+                    logger.info(f"✅ All {total} participants scheduled!")
+                    return idx
+                
+                logger.info(f"📅 {day_str} | 🕐 Slot {slot_idx + 1}/{len(slots)}: {slot['start']}-{slot['end']}")
+                
+                # Fill rooms for this time slot
+                for room in rooms:
+                    if idx >= total:
+                        return idx
+                    
+                    room_key = f"{room['campus']}|{room['building']}|{room['room']}"
+                    usage_key = (day_str, slot_idx, room_key)
+                    
+                    # ✅ CRITICAL: Check remaining capacity for this specific slot
+                    remaining_capacity = self.room_slot_usage.get(usage_key, 0)
+                    
+                    if remaining_capacity <= 0:
+                        continue
+                    
+                    # ✅ CRITICAL: Only fill up to remaining capacity
+                    remaining_participants = total - idx
+                    batch_size = min(remaining_capacity, remaining_participants)
+                    
+                    if batch_size <= 0:
+                        continue
+                    
+                    # Get participants for this batch
+                    batch_participants = participants[idx:idx + batch_size]
+                    
+                    # Create batch
+                    self._create_batch_fast(
+                        batch_participants,
+                        room,
+                        slot,
+                        day_str
+                    )
+                    
+                    # ✅ CRITICAL: Update remaining capacity
+                    self.room_slot_usage[usage_key] -= batch_size
+                    
+                    room_capacity = room.get('_capacity', 0)
+                    utilization = (batch_size / room_capacity) * 100 if room_capacity > 0 else 0
+                    logger.info(
+                        f"   📍 {room.get('campus')} | {room.get('building')} | "
+                        f"Room {room.get('room')} | "
+                        f"Capacity: {room_capacity} | "
+                        f"Scheduled: {batch_size} | "
+                        f"Remaining: {self.room_slot_usage[usage_key]} | "
+                        f"Utilization: {utilization:.1f}% | "
+                        f"Progress: {idx + batch_size}/{total}"
+                    )
+                    
+                    idx += batch_size
+        
+        if idx < total:
+            logger.warning(f"⚠️ Only scheduled {idx}/{total} participants")
+        
+        return idx
+    
+    def _create_batch_fast(self, people: List[Dict], room: Dict, slot: Dict, day: str):
+        """Create batch with proper assignments"""
+        campus = room.get("campus", "N/A")
+        building = room.get("building", "N/A")
+        room_name = room.get("room", "N/A")
+        is_1st_floor = room.get('_is_first_floor', False)
+        capacity = room.get('_capacity', 0)
+        
+        # ✅ FIXED: Batch number is sequential across all days/slots/rooms
+        batch_name = f"Batch {self.batch_no}"
+        
+        # Create batch record
+        batch = {
+            "batch_number": self.batch_no,
+            "batch_name": batch_name,
+            "batch_date": day,
+            "campus": campus,
+            "building": building,
+            "room": room_name,
+            "is_first_floor": is_1st_floor,
+            "start_time": slot['start'],
+            "end_time": slot['end'],
+            "time_slot": f"{slot['start']} - {slot['end']}",
+            "participant_count": len(people),
+            "participant_ids": [p["id"] for p in people],
+            "has_pwd": any(p.get("is_pwd", False) for p in people),
+        }
+        
+        self.batches.append(batch)
+        
+        # ✅ FIXED: Store assignments with batch number for later mapping
+        batch_assignments = []
+        for seat_no, participant in enumerate(people, start=1):
+            assignment = {
+                "participant_id": participant["id"],
+                "seat_no": seat_no,
+                "is_pwd": participant.get("is_pwd", False),
+                "campus": campus,
+                "building": building,
+                "room": room_name,
+                "is_first_floor": is_1st_floor,
+                "start_time": slot['start'],
+                "end_time": slot['end'],
+                "batch_date": day,
+                "batch_number": self.batch_no  # Store batch number for mapping
+            }
+            batch_assignments.append(assignment)
+            self.assignments.append(assignment)
+        
+        # Store mapping for later
+        self.batch_assignments_map[self.batch_no] = batch_assignments
+        
+        # Track scheduled IDs
+        self.scheduled_ids.update(p["id"] for p in people)
+        self.batch_no += 1
     
     def _process_rooms(self, rooms: List[Dict]) -> tuple:
         """Pre-process rooms and cache floor info"""
@@ -197,6 +480,12 @@ class OptimizedScheduler:
         for room in rooms:
             building = room.get("building", "")
             room_name = room.get("room", "")
+            capacity = to_int(room.get("capacity", 0))
+            
+            # Skip rooms with 0 capacity
+            if capacity <= 0:
+                logger.warning(f"⚠️ Skipping room {building} - {room_name} (0 capacity)")
+                continue
             
             # Cache floor check
             cache_key = f"{building}_{room_name}"
@@ -205,12 +494,13 @@ class OptimizedScheduler:
             
             room_copy = room.copy()
             room_copy['_is_first_floor'] = self.room_cache[cache_key]
-            room_copy['_capacity'] = to_int(room.get("capacity"))
+            room_copy['_capacity'] = capacity
             
             all_rooms_processed.append(room_copy)
             if room_copy['_is_first_floor']:
                 first_floor.append(room_copy)
         
+        logger.info(f"🏢 Processed {len(all_rooms_processed)} rooms ({len(first_floor)} on 1st floor)")
         return first_floor, all_rooms_processed
     
     def _separate_participants(self, participants: List[Dict], prioritize: bool) -> tuple:
@@ -230,156 +520,78 @@ class OptimizedScheduler:
         return pwd, non_pwd
     
     def _generate_dates(self, start: str, end: str) -> List[date]:
-        """Generate date range (cached)"""
-        cache_key = f"{start}_{end}"
-        if cache_key in self.slot_cache:
-            return self.slot_cache[cache_key]
-        
-        start_dt = datetime.strptime(start, "%Y-%m-%d").date()
-        end_dt = datetime.strptime(end, "%Y-%m-%d").date()
-        
-        if start_dt > end_dt:
+        """Generate date range"""
+        try:
+            start_dt = datetime.strptime(start, "%Y-%m-%d").date()
+            end_dt = datetime.strptime(end, "%Y-%m-%d").date()
+            
+            if start_dt > end_dt:
+                logger.error(f"❌ Invalid date range: {start} > {end}")
+                return []
+            
+            dates = []
+            current = start_dt
+            while current <= end_dt:
+                dates.append(current)
+                current += timedelta(days=1)
+            
+            logger.info(f"📅 Generated {len(dates)} days: {start} to {end}")
+            return dates
+        except Exception as e:
+            logger.error(f"❌ Error generating dates: {e}")
             return []
-        
-        dates = []
-        current = start_dt
-        while current <= end_dt:
-            dates.append(current)
-            current += timedelta(days=1)
-        
-        self.slot_cache[cache_key] = dates
-        return dates
     
     def _generate_slots(self, start: str, end: str, duration: int, 
                         exclude_lunch: bool, lunch_start: str, lunch_end: str) -> List[Dict]:
-        """Generate time slots (cached and optimized)"""
-        cache_key = f"{start}_{end}_{duration}_{exclude_lunch}_{lunch_start}_{lunch_end}"
-        if cache_key in self.slot_cache:
-            return self.slot_cache[cache_key]
-        
-        start_h, start_m = map(int, start.split(':'))
-        end_h, end_m = map(int, end.split(':'))
-        
-        start_min = start_h * 60 + start_m
-        end_min = end_h * 60 + end_m
-        
-        lunch_start_min = 0
-        lunch_end_min = 0
-        
-        if exclude_lunch:
-            lunch_h, lunch_m = map(int, lunch_start.split(':'))
-            lunch_start_min = lunch_h * 60 + lunch_m
-            lunch_h, lunch_m = map(int, lunch_end.split(':'))
-            lunch_end_min = lunch_h * 60 + lunch_m
-        
-        slots = []
-        curr = start_min
-        
-        while curr + duration <= end_min:
-            slot_end = curr + duration
+        """Generate time slots with lunch break handling"""
+        try:
+            start_h, start_m = map(int, start.split(':'))
+            end_h, end_m = map(int, end.split(':'))
             
-            # Skip lunch break
-            if exclude_lunch and not (slot_end <= lunch_start_min or curr >= lunch_end_min):
-                if curr < lunch_end_min:
-                    curr = lunch_end_min
-                    continue
+            start_min = start_h * 60 + start_m
+            end_min = end_h * 60 + end_m
             
-            slots.append({
-                'start': f"{curr // 60:02d}:{curr % 60:02d}",
-                'end': f"{slot_end // 60:02d}:{slot_end % 60:02d}"
-            })
-            curr += duration
-        
-        self.slot_cache[cache_key] = slots
-        return slots
-    
-    def _schedule_group_fast(self, participants: List[Dict], rooms: List[Dict], 
-                            dates: List[date], slots: List[Dict]) -> int:
-        """Ultra-fast group scheduling with strict capacity enforcement"""
-        if not participants or not rooms:
-            return 0
-        
-        idx = 0
-        total = len(participants)
-        
-        for day in dates:
-            day_str = day.strftime("%Y-%m-%d")
+            if start_min >= end_min:
+                logger.error(f"❌ Invalid time range: {start} >= {end}")
+                return []
             
-            for slot in slots:
-                for room in rooms:
-                    room_capacity = room.get('_capacity', 0)
-                    if room_capacity <= 0 or idx >= total:
-                        continue
-                    
-                    # Strict capacity check
-                    remaining_participants = total - idx
-                    batch_size = min(room_capacity, remaining_participants)
-                    
-                    if batch_size <= 0:
-                        continue
-                    
-                    # Create batch with exact capacity
-                    batch_participants = participants[idx:idx + batch_size]
-                    self._create_batch_fast(
-                        batch_participants,
-                        room,
-                        slot,
-                        day_str
-                    )
-                    
-                    idx += batch_size
-                    
-                    if idx >= total:
-                        return idx
-    
-        return idx
-    
-    def _create_batch_fast(self, people: List[Dict], room: Dict, slot: Dict, day: str):
-        """Create batch with assignments"""
-        campus = room.get("campus", "N/A")
-        building = room.get("building", "N/A")
-        room_name = room.get("room", "N/A")
-        is_1st_floor = room.get('_is_first_floor', False)
-        
-        # Create batch record
-        batch = {
-            "batch_number": self.batch_no,
-            "batch_name": f"Batch {self.batch_no}",
-            "batch_date": day,
-            "campus": campus,
-            "building": building,
-            "room": room_name,
-            "is_first_floor": is_1st_floor,
-            "start_time": slot['start'],
-            "end_time": slot['end'],
-            "time_slot": f"{slot['start']} - {slot['end']}",
-            "participant_count": len(people),
-            "participant_ids": [p["id"] for p in people],
-            "has_pwd": any(p.get("is_pwd", False) for p in people),
-        }
-        
-        # Add batch to list
-        self.batches.append(batch)
-        
-        # Create assignments for each participant
-        for seat_no, participant in enumerate(people, start=1):
-            assignment = {
-                "participant_id": participant["id"],
-                "seat_no": seat_no,
-                "is_pwd": participant.get("is_pwd", False),
-                "campus": campus,
-                "building": building, 
-                "room": room_name,
-                "is_first_floor": is_1st_floor,
-                "start_time": slot['start'],
-                "end_time": slot['end'],
-                "batch_date": day
-            }
-            self.assignments.append(assignment)  # No need to check for attribute existence
-        
-        # Track scheduled IDs
-        self.scheduled_ids.update(p["id"] for p in people)
-        self.batch_no += 1
+            lunch_start_min = 0
+            lunch_end_min = 0
+            
+            if exclude_lunch:
+                lunch_h, lunch_m = map(int, lunch_start.split(':'))
+                lunch_start_min = lunch_h * 60 + lunch_m
+                lunch_h, lunch_m = map(int, lunch_end.split(':'))
+                lunch_end_min = lunch_h * 60 + lunch_m
+            
+            slots = []
+            curr = start_min
+            
+            while curr + duration <= end_min:
+                slot_end = curr + duration
+                
+                # Skip if slot overlaps with lunch
+                if exclude_lunch:
+                    if curr < lunch_end_min and slot_end > lunch_start_min:
+                        # Slot overlaps with lunch, skip to after lunch
+                        if curr < lunch_end_min:
+                            curr = lunch_end_min
+                            continue
+                
+                slots.append({
+                    'start': f"{curr // 60:02d}:{curr % 60:02d}",
+                    'end': f"{slot_end // 60:02d}:{slot_end % 60:02d}"
+                })
+                curr += duration
+            
+            logger.info(f"🕐 Generated {len(slots)} time slots (duration: {duration}min)")
+            if exclude_lunch:
+                logger.info(f"   Lunch break: {lunch_start} - {lunch_end}")
+            
+            return slots
+        except Exception as e:
+            logger.error(f"❌ Error generating slots: {e}")
+            return []
     
     def _empty_result(self, total: int) -> Dict:
         return {
@@ -391,99 +603,42 @@ class OptimizedScheduler:
             "pwd_unscheduled": 0,
             "non_pwd_scheduled": 0,
             "non_pwd_unscheduled": total,
-            "warnings": ["No scheduling possible - check date/time configuration"],
+            "warnings": self.warnings if self.warnings else ["Scheduling failed - check configuration"],
+            "execution_time": 0
         }
-
-# ==================== Database Operations ====================
-
-def fetch_all_paginated(table: str, filter_col: str, filter_val: int, page_size: int = 1000):
-    """Fetch ALL rows with improved pagination"""
-    all_data = []
-    offset = 0
-    
-    while True:
-        try:
-            response = sb.table(table)\
-                .select('*')\
-                .eq(filter_col, filter_val)\
-                .range(offset, offset + page_size - 1)\
-                .execute()
-            
-            if not response.data:
-                break
-                
-            all_data.extend(response.data)
-            if len(response.data) < page_size:
-                break
-                
-            offset += page_size
-
-            # Log progress
-            logger.info(f"Fetched {len(all_data)} records from {table}")
-                
-        except Exception as e:
-            logger.error(f"Error fetching data: {e}")
-            raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
-    
-    logger.info(f"Total {len(all_data)} records fetched from {table}")
-    return all_data
-
-def batch_insert(table: str, data: List[Dict], batch_size: int = 100):
-    """Batch insert with chunking and retry logic"""
-    total = len(data)
-    failed_chunks = []
-    
-    for i in range(0, total, batch_size):
-        chunk = data[i:i + batch_size]
-        try:
-            response = sb.table(table).insert(chunk).execute()
-            if hasattr(response, 'error') and response.error:
-                failed_chunks.append(chunk)
-        except Exception as e:
-            logger.error(f"Batch insert failed: {e}")
-            failed_chunks.append(chunk)
-    
-    return failed_chunks
 
 # ==================== Endpoints ====================
 
 @router.post("/schedule")
 async def schedule_event(req: ScheduleRequest):
     try:
-        logger.info("Starting schedule generation...")
+        logger.info("="*60)
+        logger.info("🚀 STARTING SCHEDULE GENERATION")
+        logger.info("="*60)
+        logger.info(f"Event: {req.event_name}")
+        logger.info(f"Type: {req.event_type}")
+        logger.info(f"Date Range: {req.start_date} to {req.end_date}")
+        logger.info(f"Time: {req.start_time} - {req.end_time}")
+        logger.info(f"Duration per batch: {req.duration_per_batch} minutes")
+        logger.info(f"Exclude lunch: {req.exclude_lunch_break}")
+        if req.exclude_lunch_break:
+            logger.info(f"Lunch break: {req.lunch_break_start} - {req.lunch_break_end}")
+        logger.info(f"Prioritize PWD: {req.prioritize_pwd}")
         
-        # Fetch ALL data first
-        logger.info(f"Fetching rooms for campus group {req.campus_group_id}")
+        # Fetch ALL data
+        logger.info(f"\n📥 Fetching data from database...")
         rooms = fetch_all_paginated("campuses", "upload_group_id", req.campus_group_id)
-        
-        logger.info(f"Fetching participants for group {req.participant_group_id}")
         participants = fetch_all_paginated("participants", "upload_group_id", req.participant_group_id)
 
         if not rooms:
-            raise HTTPException(status_code=404, detail="No rooms found")
+            raise HTTPException(status_code=404, detail="No rooms found for this campus group")
         if not participants:
-            raise HTTPException(status_code=404, detail="No participants found")
+            raise HTTPException(status_code=404, detail="No participants found for this participant group")
 
-        logger.info(f"Starting scheduling for {len(participants)} participants across {len(rooms)} rooms")
-        
-        # Validate total capacity
-        total_slots = len(rooms) * (
-            (datetime.strptime(req.end_date, "%Y-%m-%d") - 
-             datetime.strptime(req.start_date, "%Y-%m-%d")).days + 1
-        ) * (
-            (datetime.strptime(req.end_time, "%H:%M") - 
-             datetime.strptime(req.start_time, "%H:%M")).seconds // (req.duration_per_batch * 60)
-        )
-        
-        total_capacity = sum(room.get("capacity", 0) for room in rooms) * total_slots
-        
-        if len(participants) > total_capacity:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Total participants ({len(participants)}) exceeds maximum capacity ({total_capacity})"
-            )
+        logger.info(f"✅ Fetched {len(rooms)} rooms")
+        logger.info(f"✅ Fetched {len(participants)} participants")
 
-        # Initialize scheduler and run algorithm
+        # Initialize scheduler and run
         scheduler = OptimizedScheduler()
         result = scheduler.schedule(
             rooms=rooms,
@@ -495,19 +650,28 @@ async def schedule_event(req: ScheduleRequest):
             duration_per_batch=req.duration_per_batch,
             prioritize_pwd=req.prioritize_pwd,
             exclude_lunch_break=req.exclude_lunch_break,
-            lunch_break_start=req.lunch_break_start, 
+            lunch_break_start=req.lunch_break_start,
             lunch_break_end=req.lunch_break_end
         )
 
-        # Create schedule summary first
+        # ✅ FIXED: Check if scheduling was successful
+        if result["scheduled_count"] == 0:
+            logger.error("❌ No participants were scheduled!")
+            raise HTTPException(
+                status_code=400,
+                detail="Scheduling failed: " + "; ".join(result.get("warnings", ["Unknown error"]))
+            )
+
+        # Create schedule summary
+        logger.info("\n💾 Saving to database...")
         summary_data = {
             "event_name": req.event_name,
             "event_type": req.event_type,
             "schedule_date": req.schedule_date,
             "start_time": req.start_time,
             "end_time": req.end_time,
-            "scheduled_count": result.get("scheduled_count", 0),
-            "unscheduled_count": result.get("unscheduled_count", 0),
+            "scheduled_count": result["scheduled_count"],
+            "unscheduled_count": result["unscheduled_count"],
             "campus_group_id": req.campus_group_id,
             "participant_group_id": req.participant_group_id
         }
@@ -517,57 +681,71 @@ async def schedule_event(req: ScheduleRequest):
             raise HTTPException(status_code=500, detail="Failed to create schedule summary")
         
         summary_id = summary_response.data[0]["id"]
+        logger.info(f"✅ Created schedule summary (ID: {summary_id})")
 
-        # Insert batches with summary ID
-        if result.get("batches"):
+        # Insert batches
+        if result["batches"]:
             batches_data = []
             for batch in result["batches"]:
                 batch["schedule_summary_id"] = summary_id
                 batches_data.append(batch)
             
-            # Insert batches and get their IDs
             batches_response = sb.table("schedule_batches").insert(batches_data).execute()
             if not batches_response.data:
                 raise HTTPException(status_code=500, detail="Failed to create batches")
 
-            # Create batch ID mapping
+            logger.info(f"✅ Created {len(batches_response.data)} batches")
+
+            # ✅ FIXED: Create batch ID mapping using batch_number
             batch_id_map = {
-                b["batch_number"]: b["id"] 
-                for b in batches_response.data
+                batch["batch_number"]: batch["id"]
+                for batch in batches_response.data
             }
 
-            # Create assignments with proper IDs
+            # ✅ FIXED: Create assignments with correct batch IDs
             assignments_data = []
-            for idx, assignment in enumerate(scheduler.assignments):
-                batch_number = (idx // assignment["seat_no"]) + 1
+            for assignment in scheduler.assignments:
+                batch_number = assignment["batch_number"]
                 batch_id = batch_id_map.get(batch_number)
+                
                 if batch_id:
-                    assignment["schedule_summary_id"] = summary_id
-                    assignment["schedule_batch_id"] = batch_id
-                    assignments_data.append(assignment)
+                    assignment_copy = assignment.copy()
+                    assignment_copy["schedule_summary_id"] = summary_id
+                    assignment_copy["schedule_batch_id"] = batch_id
+                    del assignment_copy["batch_number"]  # Remove temporary field
+                    assignments_data.append(assignment_copy)
 
-            # Insert assignments in batches
+            # Insert assignments
             if assignments_data:
-                failed_chunks = batch_insert("schedule_assignments", assignments_data)
+                logger.info(f"💾 Inserting {len(assignments_data)} assignments...")
+                failed_chunks = batch_insert("schedule_assignments", assignments_data, batch_size=500)
+                
                 if failed_chunks:
-                    logger.warning(f"Some assignment insertions failed: {len(failed_chunks)} chunks")
+                    logger.error(f"❌ Failed to insert {len(failed_chunks)} assignment chunks")
+                else:
+                    logger.info(f"✅ All assignments inserted successfully")
+
+        logger.info("\n" + "="*60)
+        logger.info("✅ SCHEDULE GENERATION COMPLETE")
+        logger.info("="*60)
 
         return ScheduleResponse(
             schedule_summary_id=summary_id,
-            scheduled_count=result.get("scheduled_count", 0),
-            unscheduled_count=result.get("unscheduled_count", 0),
-            total_batches=len(result.get("batches", [])),
+            scheduled_count=result["scheduled_count"],
+            unscheduled_count=result["unscheduled_count"],
+            total_batches=len(result["batches"]),
             warnings=result.get("warnings", []),
-            pwd_stats=result.get("pwd_stats", {}),
+            pwd_stats={
+                "pwd_scheduled": result.get("pwd_scheduled", 0),
+                "pwd_unscheduled": result.get("pwd_unscheduled", 0),
+                "non_pwd_scheduled": result.get("non_pwd_scheduled", 0),
+                "non_pwd_unscheduled": result.get("non_pwd_unscheduled", 0)
+            },
             execution_time=result.get("execution_time", 0)
         )
 
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.exception("Schedule generation failed")
+        logger.exception("❌ Schedule generation failed")
         raise HTTPException(status_code=500, detail=f"Scheduling failed: {str(e)}")
-
-@router.post("/send-batch-emails")
-async def send_batch_emails(data: dict):
-    """Send batch email notifications"""
-    logger.info(f"📧 Email notifications for schedule {data.get('schedule_id')}")
-    return {"message": "Email notifications queued successfully"}

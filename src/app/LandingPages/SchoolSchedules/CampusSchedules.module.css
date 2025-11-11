@@ -929,14 +929,65 @@
   transition: all 0.3s ease;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   box-shadow: 0 4px 15px rgba(26, 54, 93, 0.3);
+  position: relative;
+  min-width: 180px;
 }
 
-.viewButton:hover {
+.viewButton:hover:not(:disabled) {
   transform: translateY(-2px);
   box-shadow: 0 6px 20px rgba(26, 54, 93, 0.4);
 }
+
+.viewButton:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.viewButton.loading {
+  background: #2c5282;
+  cursor: wait;
+}
+
+/* ✅ NEW: Button Spinner */
+.buttonSpinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { 
+    transform: rotate(360deg); 
+  }
+}
+
+/* ==================== Card Hover States ==================== */
+.scheduleCard:hover:not(.loadingCard) {
+  transform: translateY(-8px);
+  box-shadow: 0 15px 50px rgba(0, 0, 0, 0.15);
+  border-color: var(--primary-medium);
+}
+
+/* Disable hover when loading */
+.scheduleCard.loadingCard:hover {
+  transform: translateY(-8px);
+  cursor: wait;
+}
+
+/* ==================== Schedule Card Loading States ==================== */
+.scheduleCard.loadingCard {
+  border-color: var(--primary-medium);
+  box-shadow: 0 10px 40px rgba(44, 82, 130, 0.2);
+}
+
+/* ...rest of existing styles... */
 
 /* ==================== Empty State ==================== */
 .emptyState {

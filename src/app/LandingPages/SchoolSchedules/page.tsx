@@ -142,6 +142,27 @@ function formatDateTime(dateString: string, timeString: string): string {
   }
 }
 
+// Add this helper function after formatDateTime and before SchoolSchedulesContent
+async function getRoomCapacities(campusGroupId: number) {
+  try {
+    const campusRooms = await fetchAllRows('campuses', {
+      upload_group_id: campusGroupId
+    })
+    
+    // Create a lookup map: "campus|building|room" -> capacity
+    const capacityMap = new Map<string, number>()
+    campusRooms.forEach(room => {
+      const key = `${room.campus}|${room.building}|${room.room}`
+      capacityMap.set(key, room.capacity)
+    })
+    
+    return capacityMap
+  } catch (error) {
+    console.error('Error fetching room capacities:', error)
+    return new Map<string, number>()
+  }
+}
+
 function SchoolSchedulesContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -150,6 +171,7 @@ function SchoolSchedulesContent() {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [loading, setLoading] = useState(true)
   const [loadingSchedule, setLoadingSchedule] = useState(false)
+  const [loadingScheduleId, setLoadingScheduleId] = useState<number | null>(null) // ✅ NEW: Track which card is loading
   const [schedulesList, setSchedulesList] = useState<ScheduleSummary[]>([])
   const [selectedScheduleId, setSelectedScheduleId] = useState<number | null>(null)
   const [buildings, setBuildings] = useState<Building[]>([])
@@ -165,13 +187,11 @@ function SchoolSchedulesContent() {
     totalParticipants: 0,
     avgUtilization: 0,
     pwdCount: 0,
-    firstFloorRooms: 0 // ✅ NEW
+    firstFloorRooms: 0
   })
 
-  // Campus logic states
   const [expandedCampuses, setExpandedCampuses] = useState<Set<string>>(new Set())
   const [expandedBuildings, setExpandedBuildings] = useState<Set<string>>(new Set())
-
   const [campuses, setCampuses] = useState<Campus[]>([])
 
   useEffect(() => {
@@ -300,6 +320,7 @@ function SchoolSchedulesContent() {
 
   const fetchCampusSchedule = async (scheduleId: number) => {
     setLoadingSchedule(true)
+    setLoadingScheduleId(scheduleId) // ✅ NEW: Set the loading schedule ID
     try {
       console.log(`📥 Fetching campus schedule for ID: ${scheduleId}`)
 
@@ -326,15 +347,18 @@ function SchoolSchedulesContent() {
 
       setScheduleSummary(summaryWithName)
 
-      // 1. First fetch assignments and participant data
+      // ✅ Fetch actual room capacities from campuses table
+      const roomCapacityMap = await getRoomCapacities(summaryData.campus_group_id)
+
+      // Fetch assignments
       const assignments = await fetchAllRows('schedule_assignments', {
         schedule_summary_id: scheduleId
       })
 
-      // Get unique participant IDs from assignments
-      const participantIds = [...new Set(assignments.map(a => a.participant_id))]
+      console.log(`✅ Fetched ${assignments.length} assignments`)
 
-      // Fetch all participants in chunks to avoid query size limits
+      // Fetch participants
+      const participantIds = [...new Set(assignments.map(a => a.participant_id))]
       const CHUNK_SIZE = 1000
       let allParticipants: any[] = []
       
@@ -348,8 +372,14 @@ function SchoolSchedulesContent() {
         if (data) allParticipants = [...allParticipants, ...data]
       }
 
-      // Create participant lookup map
       const participantMap = new Map(allParticipants.map(p => [p.id, p]))
+
+      // Fetch batches
+      const batches = await fetchAllRows('schedule_batches', {
+        schedule_summary_id: scheduleId
+      }, 'batch_number')
+
+      console.log(`✅ Fetched ${batches.length} batches`)
 
       // Group assignments by batch
       const assignmentsByBatch = new Map()
@@ -370,133 +400,106 @@ function SchoolSchedulesContent() {
         }
       })
 
-      // 2. Get unique campus/building combinations from assignments
-      const campusStructure = new Map<string, Set<string>>()
-      assignments.forEach(assignment => {
-        if (!campusStructure.has(assignment.campus)) {
-          campusStructure.set(assignment.campus, new Set())
-        }
-        campusStructure.get(assignment.campus)?.add(assignment.building)
-      })
+      // ✅ FIXED: Build structure correctly - one room can have multiple batches
+      const campusMap = new Map<string, Map<string, Map<string, Room>>>()
 
-      // 3. Create campus -> building -> room mapping
-      const campusMap = new Map<string, Map<string, Room[]>>()
-      
-      // Initialize structure
-      campusStructure.forEach((buildings, campus) => {
-        campusMap.set(campus, new Map())
-        buildings.forEach(building => {
-          campusMap.get(campus)?.set(building, [])
-        })
-      })
+      // Process each batch
+      batches.forEach(batch => {
+        const campus = batch.campus
+        const building = batch.building
+        const room = batch.room
 
-      // 4. Map batches to assignments
-      const batches = await fetchAllRows('schedule_batches', {
-        schedule_summary_id: scheduleId
-      })
-
-      // Create batch lookup map
-      const batchMap = new Map(batches.map(batch => [batch.id, batch]))
-
-      // 5. Process assignments and group by campus/building
-      assignments.forEach(assignment => {
-        const batch = batchMap.get(assignment.schedule_batch_id)
-        if (!batch) return
-
-        const campus = assignment.campus
-        const building = assignment.building
-        const room = assignment.room
-
+        // Initialize nested structure
         if (!campusMap.has(campus)) {
           campusMap.set(campus, new Map())
         }
         if (!campusMap.get(campus)?.has(building)) {
-          campusMap.get(campus)?.set(building, [])
+          campusMap.get(campus)?.set(building, new Map())
         }
+        
+        const buildingMap = campusMap.get(campus)!.get(building)!
+        
+        // Get actual capacity from campuses table
+        const roomKey = `${campus}|${building}|${room}`
+        const actualCapacity = roomCapacityMap.get(roomKey) || 0
 
-        // Find existing room or create new one
-        const rooms = campusMap.get(campus)?.get(building) || []
-        let existingRoom = rooms.find(r => r.room === room)
-
-        if (!existingRoom) {
-          existingRoom = {
-            id: assignment.id,
+        // ✅ FIXED: Get or create room (rooms can have multiple batches)
+        if (!buildingMap.has(room)) {
+          buildingMap.set(room, {
+            id: batch.id,
             room: room,
-            capacity: batch.capacity || 0, // Get capacity from batch
+            capacity: actualCapacity,  // ✅ This is the ROOM capacity, not building
             building: building,
             campus: campus,
-            is_first_floor: assignment.is_first_floor,
+            is_first_floor: batch.is_first_floor,
             batches: [],
             totalParticipants: 0,
             utilizationRate: 0
-          }
-          rooms.push(existingRoom)
+          })
         }
 
-        // Add batch to room and update room stats
-        const existingBatch = existingRoom.batches.find(b => b.id === batch.id)
-        if (!existingBatch) {
-          const batchParticipants = assignmentsByBatch.get(batch.id) || []
-          existingRoom.batches.push({
-            ...batch,
-            campus: assignment.campus,
-            building: assignment.building,
-            room: assignment.room,
-            is_first_floor: assignment.is_first_floor,
-            participants: batchParticipants.sort((a: any, b: any) => a.seat_no - b.seat_no),
-            capacity: batch.capacity || 0
-          })
-          
-          // Update room stats after adding batch
-          existingRoom.totalParticipants = existingRoom.batches.reduce(
-            (sum, b) => sum + (b.participants?.length || 0), 
-            0
-          )
-          
-          const maxPossibleParticipants = existingRoom.capacity * existingRoom.batches.length
-          existingRoom.utilizationRate = maxPossibleParticipants > 0
-            ? Math.round((existingRoom.totalParticipants / maxPossibleParticipants) * 100)
-            : 0
-        }
+        const roomObj = buildingMap.get(room)!
+
+        // Add batch with participants
+        const batchParticipants = assignmentsByBatch.get(batch.id) || []
+        roomObj.batches.push({
+          ...batch,
+          participants: batchParticipants.sort((a: any, b: any) => a.seat_no - b.seat_no),
+          capacity: actualCapacity  // ✅ ROOM capacity per batch
+        })
       })
 
-      // 6. Convert to array structure and update state
+      // ✅ FIXED: Calculate utilization correctly
+      campusMap.forEach((buildingMap) => {
+        buildingMap.forEach((roomMap) => {
+          roomMap.forEach((room) => {
+            // Total participants across all batches in this room
+            room.totalParticipants = room.batches.reduce(
+              (sum, b) => sum + (b.participants?.length || 0),
+              0
+            )
+            
+            // ✅ FIXED: Max capacity = room capacity × number of batches
+            const maxCapacity = room.capacity * room.batches.length
+            
+            room.utilizationRate = maxCapacity > 0
+              ? Math.round((room.totalParticipants / maxCapacity) * 100)
+              : 0
+            
+            console.log(
+              `📊 ${room.campus} | ${room.building} | Room ${room.room}: ` +
+              `${room.totalParticipants}/${maxCapacity} = ${room.utilizationRate}% ` +
+              `(${room.batches.length} batches × ${room.capacity} capacity)`
+            )
+          })
+        })
+      })
+
+      // Convert to array structure
       const campusesArray = Array.from(campusMap.entries()).map(([campusName, buildingMap]) => ({
         name: campusName,
-        buildings: Array.from(buildingMap.entries()).map(([buildingName, rooms]) => ({
+        buildings: Array.from(buildingMap.entries()).map(([buildingName, roomMap]) => ({
           name: buildingName,
           campus: campusName,
-          rooms: rooms
+          rooms: Array.from(roomMap.values())
         }))
       }))
 
-      console.log('Campus structure:', campusesArray)
+      console.log('📊 Final campus structure:', campusesArray)
       setCampuses(campusesArray)
 
-      // Update stats calculation
-      const totalRooms = campusesArray.reduce(
-        (sum, campus) => sum + campus.buildings.reduce(
-          (bSum, building) => bSum + building.rooms.length, 
-          0
-        ), 
-        0
-      )
+      // Calculate stats
+      const allRooms = campusesArray
+        .flatMap((campus: Campus) => campus.buildings)
+        .flatMap((building: Building) => building.rooms)
 
-      // ✅ UPDATED: Calculate stats with first floor count
+      const totalRooms = allRooms.length
       const totalBatches = batches.length
       const totalParticipants = assignments.length
       const pwdCount = assignments.filter((a: any) => a.is_pwd).length
-      const firstFloorRooms = campusesArray
-        .flatMap((campus: Campus) => campus.buildings)
-        .flatMap((building: Building) => building.rooms)
-        .filter((room: Room) => room.is_first_floor).length
+      const firstFloorRooms = allRooms.filter((room: Room) => room.is_first_floor).length
       const avgUtilization = totalRooms > 0
-        ? Math.round(
-            campusesArray
-              .flatMap((campus: Campus) => campus.buildings)
-              .flatMap((building: Building) => building.rooms)
-              .reduce((sum: number, room: Room) => sum + room.utilizationRate, 0) / totalRooms
-          )
+        ? Math.round(allRooms.reduce((sum: number, room: Room) => sum + room.utilizationRate, 0) / totalRooms)
         : 0
 
       setStats({
@@ -516,6 +519,7 @@ function SchoolSchedulesContent() {
       console.error('❌ Error fetching campus schedule:', error)
     } finally {
       setLoadingSchedule(false)
+      setLoadingScheduleId(null) // ✅ NEW: Clear loading state
     }
   }
 
@@ -561,6 +565,50 @@ function SchoolSchedulesContent() {
       schedule.school_name?.toLowerCase().includes(searchTerm.toLowerCase())
     )
   }
+
+  // Given start/end + lunch + duration, derive slot count used in utilization if needed
+  function computeSlotsForDay(start: string, end: string, durationMin: number, excludeLunch: boolean, lunchStart?: string, lunchEnd?: string) {
+    const toMin = (t: string) => {
+      const [h,m] = t.split(':').map(Number)
+      return h*60 + m
+    }
+    const windows: Array<[number, number]> = []
+    const st = toMin(start), et = toMin(end)
+    if (excludeLunch && lunchStart && lunchEnd) {
+      const ls = toMin(lunchStart), le = toMin(lunchEnd)
+      if (st < ls) windows.push([st, ls])
+      if (le < et) windows.push([le, et])
+    } else {
+      windows.push([st, et])
+    }
+    let slots = 0
+    for (const [ws, we] of windows) {
+      const len = we - ws
+      if (len >= durationMin) slots += Math.floor(len / durationMin)
+    }
+    return slots
+  }
+
+  // When computing room.utilizationRate, use the actual number of slots in the day
+  // Example usage inside your processing (after you know summary start/end + duration):
+  const slotCount = computeSlotsForDay(
+    scheduleSummary?.start_time || '09:00',
+    scheduleSummary?.end_time || '16:00',
+    /* durationMin */ 180,
+    /* excludeLunch */ true,
+    '12:00',
+    '13:00'
+  )
+  // total capacity per room for the day:
+  // 'room' is not available in this scope; provide a helper to compute utilization for any room when you have it.
+  function computeRoomUtilization(room: Room, slotCount: number) {
+    const dayCapacityPerRoom = (room.capacity || 0) * slotCount
+    return dayCapacityPerRoom > 0
+      ? Math.round((room.totalParticipants / dayCapacityPerRoom) * 100)
+      : 0
+  }
+  // Example usage (call this when iterating rooms):
+  // room.utilizationRate = computeRoomUtilization(room, slotCount)
 
   if (loading) {
     return (
@@ -616,8 +664,13 @@ function SchoolSchedulesContent() {
                 {getFilteredSchedules().map((schedule) => (
                   <div
                     key={schedule.id}
-                    className={styles.scheduleCard}
-                    onClick={() => handleScheduleSelect(schedule.id)}
+                    className={`${styles.scheduleCard} ${loadingScheduleId === schedule.id ? styles.loadingCard : ''}`}
+                    onClick={() => !loadingScheduleId && handleScheduleSelect(schedule.id)}
+                    style={{ 
+                      cursor: loadingScheduleId ? 'wait' : 'pointer',
+                      opacity: loadingScheduleId && loadingScheduleId !== schedule.id ? 0.5 : 1,
+                      pointerEvents: loadingScheduleId ? 'none' : 'auto'
+                    }}
                   >
                     <div className={styles.scheduleCardHeader}>
                       <h3 className={styles.scheduleEventName}>
@@ -650,8 +703,21 @@ function SchoolSchedulesContent() {
                       )}
                     </div>
                     <div className={styles.scheduleCardFooter}>
-                      <button className={styles.viewButton}>
-                        View School Layout →
+                      {/* ✅ UPDATED: Button with loading state */}
+                      <button 
+                        className={`${styles.viewButton} ${loadingScheduleId === schedule.id ? styles.loading : ''}`}
+                        disabled={!!loadingScheduleId}
+                      >
+                        {loadingScheduleId === schedule.id ? (
+                          <>
+                            <div className={styles.buttonSpinner}></div>
+                            Loading...
+                          </>
+                        ) : (
+                          <>
+                            View School Layout →
+                          </>
+                        )}
                       </button>
                     </div>
                   </div>
@@ -823,7 +889,7 @@ function SchoolSchedulesContent() {
                                   <div className={styles.roomsGrid}>
                                     {building.rooms.map((room) => (
                                       <div
-                                        key={room.id}
+                                        key={`${room.campus}-${room.building}-${room.room}`}
                                         className={styles.roomCard}
                                         onClick={() => handleRoomClick(room)}
                                       >
@@ -846,17 +912,18 @@ function SchoolSchedulesContent() {
                                         <div className={styles.roomBody}>
                                           <div className={styles.roomStat}>
                                             <FaUsers />
+                                            {/* ✅ FIXED: Show correct capacity calculation */}
                                             <span>
-                                              {room.totalParticipants} / {room.capacity > 0 ? (room.capacity * room.batches.length) : room.totalParticipants}
+                                              {room.totalParticipants} / {room.capacity * room.batches.length}
                                             </span>
                                           </div>
                                           <div className={styles.roomStat}>
                                             <FaBox />
-                                            <span>{room.batches.length} batches</span>
+                                            <span>{room.batches.length} batch{room.batches.length !== 1 ? 'es' : ''}</span>
                                           </div>
                                           <div className={styles.roomStat}>
-                                            <FaBuilding />
-                                            <span>{room.campus}</span>
+                                            <FaDoorOpen />
+                                            <span>{room.capacity} per batch</span>
                                           </div>
                                           {room.batches.some(b => b.has_pwd) && (
                                             <div className={styles.pwdIndicator}>

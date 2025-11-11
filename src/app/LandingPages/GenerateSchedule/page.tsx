@@ -1,13 +1,19 @@
 'use client'
-
-import styles from './GenerateSchedule.module.css'
-import { useEffect, useState, useRef } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabaseClient'
+import styles from './GenerateSchedule.module.css'
 import MenuBar from '@/app/components/MenuBar'
 import Sidebar from '@/app/components/Sidebar'
+import { createClient } from '@supabase/supabase-js'
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000'
+// Initialize Supabase (client-side) safely
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+const supabase = supabaseUrl && supabaseAnonKey ? createClient(supabaseUrl, supabaseAnonKey) : null
+const getSupabase = () => {
+  if (!supabase) throw new Error('Supabase client not initialized. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.')
+  return supabase
+}
 
 interface CampusFile {
   upload_group_id: number
@@ -70,18 +76,17 @@ async function fetchAllRows(table: string, filters: any = {}) {
     const from = page * PAGE_SIZE
     const to = from + PAGE_SIZE - 1
 
-    let query = supabase
+    let query = getSupabase()
       .from(table)
       .select('*')
       .range(from, to)
       .order('id', { ascending: true })
 
     for (const [key, value] of Object.entries(filters)) {
-      query = query.eq(key, value)
+      query = query.eq(key as string, value as any)
     }
 
     const { data, error } = await query
-
     if (error) throw error
     if (!data || data.length === 0) {
       hasMore = false
@@ -109,24 +114,24 @@ export default function GenerateSchedulePage() {
     eventName: '',
     eventType: 'Admission_Test',
     scheduleDate: '',
-    startTime: '08:00',
+    startTime: '09:00',
     endDate: '',
-    endTime: '18:00',
-    durationPerBatch: 60,
-    durationUnit: 'minutes',
-    prioritizePWD: true,
+    endTime: '16:00',
+    durationPerBatch: 3,
+    durationUnit: 'hours',
+    prioritizePWD: false,
     emailNotification: false,
     excludeLunchBreak: true,
     lunchBreakStart: '12:00',
-    lunchBreakEnd: '13:00'
+    lunchBreakEnd: '13:00',
   })
   const [scheduleResult, setScheduleResult] = useState<ScheduleResult | null>(null)
   const [showResults, setShowResults] = useState(false)
-  const [pwdCounts, setPwdCounts] = useState<{[key: number]: number}>({})
-  const [roomData, setRoomData] = useState<{[key: number]: any[]}>({})
+  const [pwdCounts, setPwdCounts] = useState<{ [key: number]: number }>({})
+  const [roomData, setRoomData] = useState<{ [key: number]: any[] }>({})
   const [timer, setTimer] = useState(0)
   const [timerActive, setTimerActive] = useState(false)
-  const timerRef = useRef<NodeJS.Timeout | null>(null)
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => { fetchData() }, [])
   useEffect(() => {
@@ -136,7 +141,7 @@ export default function GenerateSchedulePage() {
   }, [config.scheduleDate])
 
   const fetchPwdCount = async (uploadGroupId: number) => {
-    const { count, error } = await supabase
+    const { count, error } = await getSupabase()
       .from('participants')
       .select('*', { count: 'exact', head: false })
       .eq('upload_group_id', uploadGroupId)
@@ -194,6 +199,25 @@ export default function GenerateSchedulePage() {
     return lunchMinutes > 0 ? lunchMinutes : 0
   }
 
+  // ✅ ADD THIS NEW FUNCTION
+  const getSlotsPerDay = () => {
+    if (!config.startTime || !config.endTime) return 0
+    
+    const [startHour, startMin] = config.startTime.split(':').map(Number)
+    const [endHour, endMin] = config.endTime.split(':').map(Number)
+    
+    let dailyMinutes = (endHour * 60 + endMin) - (startHour * 60 + startMin)
+    
+    // Subtract lunch break
+    dailyMinutes -= getLunchBreakMinutes()
+    
+    const durationInMinutes = getDurationInMinutes()
+    
+    if (dailyMinutes <= 0 || durationInMinutes <= 0) return 0
+    
+    return Math.floor(dailyMinutes / durationInMinutes)
+  }
+
   const getTotalAvailableMinutes = () => {
     if (!config.scheduleDate || !config.endDate) return 0
     const startDate = new Date(config.scheduleDate)
@@ -205,27 +229,6 @@ export default function GenerateSchedulePage() {
     dailyMinutes -= getLunchBreakMinutes()
     const totalDays = daysDiff + 1
     return Math.max(0, dailyMinutes * totalDays)
-  }
-
-  const isFirstFloor = (building: string, room: string): boolean => {
-    const roomClean = room.toLowerCase().trim()
-    const buildingClean = building.toLowerCase().trim()
-    const combined = `${buildingClean} ${roomClean}`
-    const digits = room.match(/\d+/g)?.join('') || ''
-    if (digits && digits.length >= 3) {
-      const floorDigit = digits[0]
-      return floorDigit === '1'
-    }
-    const firstFloorIndicators = [
-      '1f', '1st floor', 'first floor', 'ground floor', 
-      'ground', 'g floor', 'gf', 'floor 1', 'level 1', 'l1',
-      'first', '1st', 'one'
-    ]
-    for (const indicator of firstFloorIndicators) {
-      if (combined.includes(indicator)) return true
-    }
-    if (roomClean.startsWith('1') && roomClean.length > 1 && !/\d/.test(roomClean[1])) return true
-    return false
   }
 
   const fetchRoomsForCampus = async (uploadGroupId: number) => {
@@ -255,7 +258,7 @@ export default function GenerateSchedulePage() {
     setLoading(true)
     try {
       const campusData = await fetchAllRows('campuses')
-      const campusGrouped = campusData.reduce((acc: any[], curr) => {
+      const campusGrouped = campusData.reduce((acc: any[], curr: any) => {
         const existing = acc.find(item => item.upload_group_id === curr.upload_group_id)
         if (existing) {
           existing.row_count++
@@ -272,7 +275,7 @@ export default function GenerateSchedulePage() {
         return acc
       }, [])
       const participantData = await fetchAllRows('participants')
-      const participantGrouped = participantData.reduce((acc: any[], curr) => {
+      const participantGrouped = participantData.reduce((acc: any[], curr: any) => {
         const existing = acc.find(item => item.upload_group_id === curr.upload_group_id)
         if (existing) {
           existing.row_count++
@@ -288,7 +291,7 @@ export default function GenerateSchedulePage() {
       }, [])
       setCampusFiles(campusGrouped || [])
       setParticipantFiles(participantGrouped || [])
-      const pwdCountsMap: {[key: number]: number} = {}
+      const pwdCountsMap: { [key: number]: number } = {}
       for (const group of participantGrouped) {
         const count = await fetchPwdCount(group.upload_group_id)
         pwdCountsMap[group.upload_group_id] = count
@@ -304,120 +307,83 @@ export default function GenerateSchedulePage() {
   const validateCampusData = async () => {
     if (!config.campusGroupId) return { isValid: false, error: 'No campus group selected' }
     const campusData = await fetchAllRows('campuses', { upload_group_id: config.campusGroupId })
-    const invalidRows = campusData.filter(row => 
+    const invalidRows = campusData.filter((row: any) =>
       !row.campus || !row.building || !row.room || row.campus.trim() === '' || row.building.trim() === '' || row.room.trim() === ''
     )
     if (invalidRows.length > 0) {
-      const errorDetails = invalidRows.map(row => 
+      const errorDetails = invalidRows.map((row: any) =>
         `Row ID ${row.id}: Campus="${row.campus || 'null'}", Building="${row.building || 'null'}", Room="${row.room || 'null'}"`
       ).join('\n')
-      return { 
-        isValid: false, 
-        error: `Incomplete campus data detected in your uploaded sheet. The following rows have blank/null values for campus, building, or room:\n\n${errorDetails}\n\nPlease update your Excel file and re-upload to fix these blanks before generating the schedule.` 
+      return {
+        isValid: false,
+        error: `Incomplete campus data detected in your uploaded sheet. The following rows have blank/null values for campus, building, or room:\n\n${errorDetails}\n\nPlease update your Excel file and re-upload to fix these blanks before generating the schedule.`
       }
     }
     return { isValid: true, error: '' }
   }
 
   const handleGenerateSchedule = async () => {
-    const effectiveEndDate = config.endDate || config.scheduleDate
-
-    // Capacity check
-    const estimate = getCapacityEstimate()
-    if (estimate && !estimate.canAccommodate) {
-      alert(
-        `❌ Cannot generate schedule: Participant count (${estimate.participants}) exceeds total capacity (${estimate.totalCapacity}).\n\n` +
-        `Add more rooms or extend the schedule duration.`
-      )
+    if (!config.campusGroupId || !config.participantGroupId) {
+      alert('Select campus and participant groups')
+      return
+    }
+    if (!config.scheduleDate) {
+      alert('Pick a schedule date')
       return
     }
 
-    if (
-      !config.campusGroupId ||
-      !config.participantGroupId ||
-      !config.eventName ||
-      !config.scheduleDate
-    ) {
-      alert('Please fill Campus, Participant Group, Event Name and Schedule Date.')
-      return
-    }
-    const validation = await validateCampusData()
-    if (!validation.isValid) {
-      alert(validation.error)
-      return
-    }
-    if (!config.endDate) {
-      setConfig(prev => ({ ...prev, endDate: effectiveEndDate }))
-    }
-    const tempConfig = { ...config, endDate: effectiveEndDate }
-    const startDate = new Date(tempConfig.scheduleDate)
-    const endDate = new Date(tempConfig.endDate)
-    let isValid = false
-    let errorMessage = ''
-    if (startDate > endDate) {
-      errorMessage = 'End date must be on or after start date'
-    } else if (tempConfig.scheduleDate === tempConfig.endDate) {
-      const startDateTime = new Date(`${tempConfig.scheduleDate}T${tempConfig.startTime}`)
-      const endDateTime = new Date(`${tempConfig.endDate}T${tempConfig.endTime}`)
-      if (endDateTime <= startDateTime) {
-        errorMessage = 'End time must be after start time on the same day'
-      } else {
-        isValid = true
-      }
-    } else {
-      isValid = true
-    }
-    if (!isValid) {
-      alert(errorMessage)
-      return
-    }
-    const requestBody = {
-  campusGroupId: Number(config.campusGroupId),
-  participantGroupId: Number(config.participantGroupId),
-  eventName: config.eventName.trim(),
-  eventType: config.eventType,
-  scheduleDate: config.scheduleDate,
-  startDate: config.scheduleDate,  // ✅ ADD THIS LINE
-  endDate: effectiveEndDate,
-  startTime: config.startTime,
-  endTime: config.endTime,
-  durationPerBatch: getDurationInMinutes(),
-  prioritizePWD: Boolean(config.prioritizePWD),
-  emailNotification: Boolean(config.emailNotification),
-  excludeLunchBreak: Boolean(config.excludeLunchBreak),
-  lunchBreakStart: config.lunchBreakStart,
-  lunchBreakEnd: config.lunchBreakEnd
-}
     setScheduling(true)
     setTimerActive(true)
-    setScheduleResult(null)
+    setTimer(0) // ✅ Reset timer
+
+    const durationMinutes =
+      config.durationUnit === 'hours' ? config.durationPerBatch * 60 : config.durationPerBatch
+
+    const body = {
+      campusGroupId: config.campusGroupId,
+      participantGroupId: config.participantGroupId,
+      eventName: config.eventName,
+      eventType: config.eventType,
+      scheduleDate: config.scheduleDate,
+      startDate: config.scheduleDate,
+      endDate: config.endDate || config.scheduleDate,
+      startTime: config.startTime,
+      endTime: config.endTime,
+      durationPerBatch: durationMinutes,
+      prioritizePWD: config.prioritizePWD,
+      emailNotification: config.emailNotification,
+      excludeLunchBreak: config.excludeLunchBreak,
+      lunchBreakStart: config.lunchBreakStart,
+      lunchBreakEnd: config.lunchBreakEnd,
+    }
+
     try {
-      const res = await fetch(`/api/schedule/generate`, {
+      const res = await fetch('/api/schedule/generate', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify(requestBody)
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
       })
       if (!res.ok) {
-        const text = await res.text()
-        throw new Error(`Server responded ${res.status}: ${text}`)
+        const txt = await res.text()
+        throw new Error(txt || `HTTP ${res.status}`)
       }
       const data = await res.json()
+      
+      // ✅ FIXED: Backend returns execution_time in seconds already
       setScheduleResult({
         success: true,
-        message: 'Schedule generated',
+        message: 'Schedule generated successfully',
         scheduled_count: data.scheduled_count ?? 0,
         unscheduled_count: data.unscheduled_count ?? 0,
-        execution_time: data.execution_time ?? 0,
+        execution_time: data.execution_time ?? 0, // Already in seconds from backend
         schedule_data: data.assignments ?? [],
         schedule_summary_id: data.schedule_summary_id,
         pwd_stats: data.pwd_stats ?? undefined
       })
       setShowResults(true)
-    } catch (error: any) {
-      alert(`Failed to generate schedule: ${error.message || error}`)
+    } catch (e: any) {
+      console.error(e)
+      alert(`Failed to generate schedule: ${e.message || e}`)
     } finally {
       setScheduling(false)
       setTimerActive(false)
@@ -438,18 +404,10 @@ export default function GenerateSchedulePage() {
     try {
       const response = await fetch('/api/schedule/send-batch-emails', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          schedule_id: scheduleResult.schedule_summary_id
-        })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ schedule_id: scheduleResult.schedule_summary_id })
       })
-
-      if (!response.ok) {
-        throw new Error('Failed to send emails')
-      }
-
+      if (!response.ok) throw new Error('Failed to send emails')
       const result = await response.json()
       alert(`✅ ${result.message}`)
     } catch (error) {
@@ -465,18 +423,14 @@ export default function GenerateSchedulePage() {
 
   const getScheduleDurationDisplay = () => {
     if (!config.scheduleDate || !config.endDate || !isValidDateRange()) return ''
-    
     const start = new Date(`${config.scheduleDate}T${config.startTime}`)
     const end = new Date(`${config.endDate}T${config.endTime}`)
     const diffMs = end.getTime() - start.getTime()
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
     const diffHours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
     const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60))
-    
     if (diffDays === 0) {
-      if (diffHours === 0) {
-        return `Same day event (${diffMinutes} minutes)`
-      }
+      if (diffHours === 0) return `Same day event (${diffMinutes} minutes)`
       return `Same day event (${diffHours}h ${diffMinutes}m)`
     } else if (diffDays === 1) {
       return `2-day event`
@@ -486,33 +440,30 @@ export default function GenerateSchedulePage() {
   }
 
   const getCapacityEstimate = () => {
-    const [firstFloorCount, upperFloorCount, avgCapacity, firstFloorCapacity, upperFloorCapacity] =
-      separateRoomsByFloor(config.campusGroupId!, roomData);
+    const [firstFloorCount, upperFloorCount, _avgCapacity, firstFloorCapacity, upperFloorCapacity] =
+      separateRoomsByFloor(config.campusGroupId!, roomData)
 
-    const durationInMinutes = getDurationInMinutes();
-    const totalMinutes = getTotalAvailableMinutes();
-    const slotsPerDay = Math.floor(totalMinutes / durationInMinutes);
-    const days = getDays();
+    const durationInMinutes = getDurationInMinutes()
 
-    // PWD phase: only first floor rooms
-    const pwdCapacity = firstFloorCapacity * slotsPerDay * days;
-    // Non-PWD phase: all rooms
-    const nonPwdCapacity = (firstFloorCapacity + upperFloorCapacity) * slotsPerDay * days;
-    const totalCapacity = nonPwdCapacity; // If all rooms used after PWD phase
+    // Correct calculation: compute slots per day, then multiply to compute total capacity
+    const slotsPerDay = getSlotsPerDay()
+    const totalMinutesAllDays = getTotalAvailableMinutes()
+    const days = getDays()
 
-    // Get participant counts
-    const participantGroup = participantFiles.find(p => p.upload_group_id === config.participantGroupId);
-    const pwdCount = participantGroup ? pwdCounts[participantGroup.upload_group_id] || 0 : 0;
-    const nonPwdCount = participantGroup ? (participantGroup.row_count - pwdCount) : 0;
-    const participants = participantGroup ? participantGroup.row_count : 0;
+    const pwdCapacity = firstFloorCapacity * slotsPerDay * days
+    const nonPwdCapacity = (firstFloorCapacity + upperFloorCapacity) * slotsPerDay * days
+    const totalCapacity = nonPwdCapacity
 
-    // Exceeded flags
-    const pwdExceeded = pwdCount > pwdCapacity;
-    const nonPwdExceeded = nonPwdCount > nonPwdCapacity;
-    const canAccommodate = totalCapacity >= participants;
+    const participantGroup = participantFiles.find(p => p.upload_group_id === config.participantGroupId)
+    const pwdCount = participantGroup ? (pwdCounts[participantGroup.upload_group_id] || 0) : 0
+    const nonPwdCount = participantGroup ? (participantGroup.row_count - pwdCount) : 0
+    const participants = participantGroup ? participantGroup.row_count : 0
 
-    // Room count
-    const roomCount = firstFloorCount + upperFloorCount;
+    const pwdExceeded = pwdCount > pwdCapacity
+    const nonPwdExceeded = nonPwdCount > nonPwdCapacity
+    const canAccommodate = totalCapacity >= participants
+
+    const roomCount = firstFloorCount + upperFloorCount
 
     return {
       pwdCapacity,
@@ -528,7 +479,7 @@ export default function GenerateSchedulePage() {
       nonPwdExceeded,
       nonPwdCount,
       canAccommodate
-    };
+    }
   }
 
   useEffect(() => {
@@ -545,13 +496,13 @@ export default function GenerateSchedulePage() {
 
   return (
     <div className={styles.scheduleLayout}>
-      <MenuBar 
-        onToggleSidebar={() => setSidebarOpen(!sidebarOpen)} 
+      <MenuBar
+        onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
         showSidebarToggle={true}
         showAccountIcon={true}
       />
       <Sidebar isOpen={sidebarOpen} />
-      
+
       <main className={`${styles.scheduleMain} ${!sidebarOpen ? styles.fullWidth : ''}`}>
         <div className={styles.scheduleContainer}>
           <div className={styles.scheduleHeader}>
@@ -604,24 +555,6 @@ export default function GenerateSchedulePage() {
             </div>
           ) : showResults && scheduleResult ? (
             <div className={styles.resultsSection}>
-              <div className={`${styles.resultsBanner} ${scheduleResult.success ? styles.success : styles.error}`}>
-                <span className={styles.resultsIcon}>
-                  {scheduleResult.success ? (
-                    <svg viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/>
-                    </svg>
-                  ) : (
-                    <svg viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z"/>
-                    </svg>
-                  )}
-                </span>
-                <div className={styles.resultsInfo}>
-                  <h2>{scheduleResult.message}</h2>
-                  <p>Execution time: {scheduleResult.execution_time}s</p>
-                </div>
-              </div>
-
               <div className={styles.statsGrid}>
                 <div className={`${styles.statCard} ${styles.success}`}>
                   <div className={styles.statIcon}>
@@ -653,8 +586,54 @@ export default function GenerateSchedulePage() {
                   </div>
                   <div className={styles.statContent}>
                     <p className={styles.statLabel}>Processing Time</p>
-                    <h3 className={styles.statValue}>{scheduleResult.execution_time}s</h3>
+                    {/* ✅ FIXED: Format time properly - backend sends seconds */}
+                    <h3 className={styles.statValue}>
+                      {(() => {
+                        const seconds = scheduleResult.execution_time || 0
+                        if (seconds < 1) {
+                          return `${(seconds * 1000).toFixed(0)}ms`
+                        } else if (seconds < 60) {
+                          return `${seconds.toFixed(2)}s`
+                        } else {
+                          const minutes = Math.floor(seconds / 60)
+                          const remainingSeconds = (seconds % 60).toFixed(0)
+                          return `${minutes}m ${remainingSeconds}s`
+                        }
+                      })()}
+                    </h3>
                   </div>
+                </div>
+              </div>
+
+              {/* ✅ FIXED: Also update the banner message */}
+              <div className={`${styles.resultsBanner} ${scheduleResult.success ? styles.success : styles.error}`}>
+                <span className={styles.resultsIcon}>
+                  {scheduleResult.success ? (
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/>
+                    </svg>
+                  ) : (
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z"/>
+                    </svg>
+                  )}
+                </span>
+                <div className={styles.resultsInfo}>
+                  <h2>{scheduleResult.message || 'Schedule Generated Successfully'}</h2>
+                  <p>
+                    Execution time: {(() => {
+                      const seconds = scheduleResult.execution_time || 0
+                      if (seconds < 1) {
+                        return `${(seconds * 1000).toFixed(0)}ms`
+                      } else if (seconds < 60) {
+                        return `${seconds.toFixed(2)}s`
+                      } else {
+                        const minutes = Math.floor(seconds / 60)
+                        const remainingSeconds = (seconds % 60).toFixed(0)
+                        return `${minutes}m ${remainingSeconds}s`
+                      }
+                    })()}
+                  </p>
                 </div>
               </div>
 
@@ -961,8 +940,23 @@ export default function GenerateSchedulePage() {
                       checked={config.prioritizePWD}
                       onChange={(e) => setConfig({...config, prioritizePWD: e.target.checked})}
                     />
-                    <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
-                      <path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.5 16c-.83 0-1.5-.67-1.5-1.5S5.67 13 6.5 13s1.5.67 1.5 1.5S7.33 16 6.5 16zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z"/>
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"          // fixed
+                      strokeLinecap="round"    // fixed
+                      strokeLinejoin="round"   // fixed
+                      className="lucide lucide-accessibility-icon lucide-accessibility"
+                    >
+                      <circle cx="16" cy="4" r="1" />
+                      <path d="m18 19 1-7-6 1" />
+                      <path d="m5 8 3-3 5.5 3-2.36 3.5" />
+                      <path d="M4.24 14.5a5 5 0 0 0 6.88 6" />
+                      <path d="M13.76 17.5a5 5 0 0 0-6.88-6" />
                     </svg>
                     <span>Prioritize PWD Participants (Scheduled First)</span>
                   </label>
@@ -1109,52 +1103,48 @@ export default function GenerateSchedulePage() {
   )
 }
 
-function separateRoomsByFloor(campusGroupId: number, roomData: {[key: number]: any[]}): [number, number, number, number, number] {
-  // Use roomData from state
-  const rooms = roomData[campusGroupId] || [];
-  let firstFloorCount = 0;
-  let upperFloorCount = 0;
-  let firstFloorCapacity = 0;
-  let upperFloorCapacity = 0;
-  let totalCapacity = 0;
+// Uses the module-scoped isFirstFloor below
+function separateRoomsByFloor(campusGroupId: number, roomData: { [key: number]: any[] }): [number, number, number, number, number] {
+  const rooms = roomData[campusGroupId] || []
+  let firstFloorCount = 0
+  let upperFloorCount = 0
+  let firstFloorCapacity = 0
+  let upperFloorCapacity = 0
+  let totalCapacity = 0
 
   rooms.forEach(room => {
-    const cap = Number(room.capacity) || 0;
-    totalCapacity += cap;
+    const cap = Number(room.capacity) || 0
+    totalCapacity += cap
     if (isFirstFloor(room.building, room.room)) {
-      firstFloorCount++;
-      firstFloorCapacity += cap;
+      firstFloorCount++
+      firstFloorCapacity += cap
     } else {
-      upperFloorCount++;
-      upperFloorCapacity += cap;
+      upperFloorCount++
+      upperFloorCapacity += cap
     }
-  });
+  })
 
-  const avgCapacity = rooms.length > 0 ? Math.round(totalCapacity / rooms.length) : 0;
-
-  return [firstFloorCount, upperFloorCount, avgCapacity, firstFloorCapacity, upperFloorCapacity];
+  const avgCapacity = rooms.length > 0 ? Math.round(totalCapacity / rooms.length) : 0
+  return [firstFloorCount, upperFloorCount, avgCapacity, firstFloorCapacity, upperFloorCapacity]
 }
 
 function isFirstFloor(building: string, room: string): boolean {
-  const roomStr = (room || '').toLowerCase().trim();
-  const buildingStr = (building || '').toLowerCase().trim();
-  const combined = `${buildingStr} ${roomStr}`;
+  const roomStr = (room || '').toLowerCase().trim()
+  const buildingStr = (building || '').toLowerCase().trim()
+  const combined = `${buildingStr} ${roomStr}`
 
-  // Check for common first floor indicators
   const indicators = [
-    '1f', '1st floor', 'first floor', 'ground floor', 'ground', 'g floor', 'gf', 'floor 1', 'level 1', 'l1', 'first', '1st', 'one'
-  ];
+    '1f', '1st floor', 'first floor', 'ground floor', 'ground',
+    'g floor', 'gf', 'floor 1', 'level 1', 'l1', 'first', '1st', 'one'
+  ]
   for (const indicator of indicators) {
-    if (combined.includes(indicator)) return true;
+    if (combined.includes(indicator)) return true
   }
 
-  // Check if room number starts with 1 (e.g., 101, 102)
-  const digits = roomStr.match(/\d+/g)?.join('') || '';
-  if (digits && digits.length >= 3 && digits[0] === '1') return true;
+  const digits = roomStr.match(/\d+/g)?.join('') || ''
+  if (digits && digits.length >= 3 && digits[0] === '1') return true
+  if (roomStr.startsWith('1') && roomStr.length > 1 && !/\d/.test(roomStr[1])) return true
 
-  // Check if room string starts with '1' and next char is not a digit (e.g., '1A')
-  if (roomStr.startsWith('1') && roomStr.length > 1 && !/\d/.test(roomStr[1])) return true;
-
-  return false;
+  return false
 }
 
