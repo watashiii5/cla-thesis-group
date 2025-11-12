@@ -110,6 +110,11 @@ export default function CSVGenerator() {
   const [participantCount, setParticipantCount] = useState(1)
   const [pwdCount, setPwdCount] = useState(0)
   const [participantData, setParticipantData] = useState<Participant[]>([])
+  const [isGenerating, setIsGenerating] = useState(false) // ✅ NEW: Loading state
+
+  // ✅ NEW: Pagination state
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage, setItemsPerPage] = useState(50)
 
   // Generate random campus data
   const generateRandomCampus = (campusIndex: number): Campus => {
@@ -153,7 +158,7 @@ export default function CSVGenerator() {
     }
   }
 
-  // Generate random participant data
+  // ✅ UPDATED: Generate random participant data with better performance
   const generateRandomParticipant = (index: number, isPWD: boolean): Participant => {
     const currentYear = new Date().getFullYear()
     const participantNumber = `${currentYear}${String(index + 1).padStart(6, '0')}`
@@ -178,18 +183,50 @@ export default function CSVGenerator() {
     }
   }
 
-  const generateAllParticipants = (totalCount: number, pwdAmount: number) => {
+  // ✅ UPDATED: Async generation with progress for large datasets
+  const generateAllParticipants = async (totalCount: number, pwdAmount: number) => {
+    setIsGenerating(true)
+    
+    // ✅ For small counts, generate immediately
+    if (totalCount <= 1000) {
+      const newData: Participant[] = []
+      const indices = Array.from({ length: totalCount }, (_, i) => i)
+      const shuffledIndices = indices.sort(() => Math.random() - 0.5)
+      const pwdIndices = new Set(shuffledIndices.slice(0, pwdAmount))
+      
+      for (let i = 0; i < totalCount; i++) {
+        const isPWD = pwdIndices.has(i)
+        newData.push(generateRandomParticipant(i, isPWD))
+      }
+      
+      setParticipantData(newData)
+      setIsGenerating(false)
+      return
+    }
+
+    // ✅ For large counts, generate in batches to prevent UI freeze
+    const BATCH_SIZE = 1000
     const newData: Participant[] = []
     const indices = Array.from({ length: totalCount }, (_, i) => i)
     const shuffledIndices = indices.sort(() => Math.random() - 0.5)
     const pwdIndices = new Set(shuffledIndices.slice(0, pwdAmount))
     
-    for (let i = 0; i < totalCount; i++) {
-      const isPWD = pwdIndices.has(i)
-      newData.push(generateRandomParticipant(i, isPWD))
+    for (let i = 0; i < totalCount; i += BATCH_SIZE) {
+      // Generate batch
+      const batchEnd = Math.min(i + BATCH_SIZE, totalCount)
+      for (let j = i; j < batchEnd; j++) {
+        const isPWD = pwdIndices.has(j)
+        newData.push(generateRandomParticipant(j, isPWD))
+      }
+      
+      // Update UI every batch
+      setParticipantData([...newData])
+      
+      // Let UI breathe
+      await new Promise(resolve => setTimeout(resolve, 0))
     }
     
-    setParticipantData(newData)
+    setIsGenerating(false)
   }
 
   useEffect(() => {
@@ -291,7 +328,7 @@ export default function CSVGenerator() {
     setCampuses(newCampuses)
   }
 
-  // Participant Management Functions
+  // ✅ UPDATED: Participant Management Functions - Remove 10,000 limit
   const updateParticipantCount = (count: string) => {
     const parsedCount = parseInt(count)
     if (isNaN(parsedCount) || parsedCount < 1) {
@@ -301,7 +338,7 @@ export default function CSVGenerator() {
       return
     }
     
-    const newCount = Math.max(1, Math.min(10000, parsedCount))
+    const newCount = Math.max(1, parsedCount) // ✅ Removed max limit
     setParticipantCount(newCount)
     const adjustedPwdCount = Math.min(pwdCount, newCount)
     setPwdCount(adjustedPwdCount)
@@ -362,6 +399,64 @@ export default function CSVGenerator() {
     a.click()
     window.URL.revokeObjectURL(url)
   }
+
+  // ✅ NEW: Pagination calculations
+  const totalPages = Math.ceil(participantData.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const endIndex = Math.min(startIndex + itemsPerPage, participantData.length)
+  const currentPageData = participantData.slice(startIndex, endIndex)
+
+  // ✅ NEW: Generate page numbers with ellipsis
+  const getPageNumbers = () => {
+    const pages: (number | string)[] = []
+    const maxVisiblePages = 7
+
+    if (totalPages <= maxVisiblePages) {
+      // Show all pages if total is small
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i)
+      }
+    } else {
+      // Always show first page
+      pages.push(1)
+
+      if (currentPage > 3) {
+        pages.push('...')
+      }
+
+      // Show pages around current page
+      const start = Math.max(2, currentPage - 1)
+      const end = Math.min(totalPages - 1, currentPage + 1)
+
+      for (let i = start; i <= end; i++) {
+        pages.push(i)
+      }
+
+      if (currentPage < totalPages - 2) {
+        pages.push('...')
+      }
+
+      // Always show last page
+      pages.push(totalPages)
+    }
+
+    return pages
+  }
+
+  // ✅ NEW: Pagination handlers
+  const goToPage = (page: number) => {
+    setCurrentPage(Math.max(1, Math.min(page, totalPages)))
+  }
+
+  const goToFirstPage = () => setCurrentPage(1)
+  const goToLastPage = () => setCurrentPage(totalPages)
+  const goToPreviousPage = () => setCurrentPage(prev => Math.max(1, prev - 1))
+  const goToNextPage = () => setCurrentPage(prev => Math.min(totalPages, prev + 1))
+
+  // ✅ Reset to page 1 when participant count or data changes
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [participantCount, participantData.length])
 
   return (
     <div className="csv-container">
@@ -616,10 +711,10 @@ export default function CSVGenerator() {
                 <input
                   type="number"
                   min="1"
-                  max="10000"
                   value={participantCount}
                   onChange={(e) => updateParticipantCount(e.target.value)}
                   className="csv-count-input"
+                  disabled={isGenerating}
                 />
               </label>
               <label className="csv-count-label">
@@ -631,19 +726,62 @@ export default function CSVGenerator() {
                   value={pwdCount}
                   onChange={(e) => updatePwdCount(e.target.value)}
                   className="csv-count-input"
+                  disabled={isGenerating}
                 />
               </label>
-              <button onClick={regenerateParticipants} className="regenerate-button">
-                🔄 Regenerate Data
+              <button 
+                onClick={regenerateParticipants} 
+                className="regenerate-button"
+                disabled={isGenerating}
+              >
+                {isGenerating ? '⏳ Generating...' : '🔄 Regenerate Data'}
               </button>
             </div>
           </div>
 
+          {/* ✅ NEW: Performance warning for large datasets */}
+          {participantCount > 10000 && (
+            <div className="warning-banner">
+              ⚠️ Generating {participantCount.toLocaleString()} participants. This may take a moment and affect browser performance.
+            </div>
+          )}
+
           <div className="participant-info">
             <p>✨ All participant data is automatically generated with random Filipino names, emails, and Philippine locations</p>
             <p>🎲 PWD participants are randomly distributed among the total count</p>
-            <p>📊 Current: {participantCount} participants ({pwdCount} PWD, {participantCount - pwdCount} Non-PWD)</p>
+            <p>📊 Current: {participantCount.toLocaleString()} participants ({pwdCount.toLocaleString()} PWD, {(participantCount - pwdCount).toLocaleString()} Non-PWD)</p>
+            {isGenerating && (
+              <p className="generating-text">⏳ Generating {participantData.length.toLocaleString()} / {participantCount.toLocaleString()} participants...</p>
+            )}
           </div>
+
+          {/* ✅ NEW: Pagination Controls Top */}
+          {participantData.length > 0 && (
+            <div className="pagination-header">
+              <div className="pagination-info">
+                Showing {startIndex + 1}-{endIndex} of {participantData.length.toLocaleString()} participants
+              </div>
+              <div className="pagination-controls">
+                <label className="items-per-page-label">
+                  Items per page:
+                  <select 
+                    value={itemsPerPage} 
+                    onChange={(e) => {
+                      setItemsPerPage(Number(e.target.value))
+                      setCurrentPage(1)
+                    }}
+                    className="items-per-page-select"
+                  >
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                    <option value={200}>200</option>
+                    <option value={500}>500</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+          )}
 
           <div className="csv-table-container">
             <table className="csv-table">
@@ -660,9 +798,10 @@ export default function CSVGenerator() {
                 </tr>
               </thead>
               <tbody>
-                {participantData.map((row, index) => (
-                  <tr key={index} className={row.pwd === 'Yes' ? 'pwd-row' : ''}>
-                    <td className="csv-td">{index + 1}</td>
+                {/* ✅ UPDATED: Show only current page data */}
+                {currentPageData.map((row, index) => (
+                  <tr key={startIndex + index} className={row.pwd === 'Yes' ? 'pwd-row' : ''}>
+                    <td className="csv-td">{startIndex + index + 1}</td>
                     <td className="csv-td">{row.participantNumber}</td>
                     <td className="csv-td">{row.name}</td>
                     <td className="csv-td">
@@ -680,8 +819,91 @@ export default function CSVGenerator() {
             </table>
           </div>
 
-          <button onClick={generateParticipantCSV} className="csv-download-button">
-            📥 Download Participant CSV
+          {/* ✅ NEW: Pagination Controls Bottom */}
+          {participantData.length > itemsPerPage && (
+            <div className="pagination-container">
+              <div className="pagination-buttons">
+                <button 
+                  className="pagination-button"
+                  onClick={goToFirstPage}
+                  disabled={currentPage === 1}
+                  title="First page"
+                >
+                  ⏮️
+                </button>
+                <button 
+                  className="pagination-button"
+                  onClick={goToPreviousPage}
+                  disabled={currentPage === 1}
+                  title="Previous page"
+                >
+                  ◀️
+                </button>
+
+                <div className="pagination-numbers">
+                  {getPageNumbers().map((page, index) => (
+                    page === '...' ? (
+                      <span key={`ellipsis-${index}`} className="pagination-ellipsis">
+                        ...
+                      </span>
+                    ) : (
+                      <button
+                        key={page}
+                        className={`pagination-number ${currentPage === page ? 'active' : ''}`}
+                        onClick={() => goToPage(page as number)}
+                      >
+                        {page}
+                      </button>
+                    )
+                  ))}
+                </div>
+
+                <button 
+                  className="pagination-button"
+                  onClick={goToNextPage}
+                  disabled={currentPage === totalPages}
+                  title="Next page"
+                >
+                  ▶️
+                </button>
+                <button 
+                  className="pagination-button"
+                  onClick={goToLastPage}
+                  disabled={currentPage === totalPages}
+                  title="Last page"
+                >
+                  ⏭️
+                </button>
+              </div>
+
+              <div className="pagination-jump">
+                <label>
+                  Go to page:
+                  <input
+                    type="number"
+                    min="1"
+                    max={totalPages}
+                    value={currentPage}
+                    onChange={(e) => {
+                      const page = parseInt(e.target.value)
+                      if (!isNaN(page)) {
+                        goToPage(page)
+                      }
+                    }}
+                    className="pagination-jump-input"
+                  />
+                </label>
+                <span className="pagination-total">of {totalPages.toLocaleString()}</span>
+              </div>
+            </div>
+          )}
+
+          <button 
+            onClick={generateParticipantCSV} 
+            className="csv-download-button"
+            disabled={isGenerating}
+          >
+            📥 Download Participant CSV ({participantData.length.toLocaleString()} rows)
           </button>
         </div>
       </main>
